@@ -37,6 +37,7 @@ El diseño de interfaces del sistema fue realizado utilizando la herramienta Fig
 
 🔗 Enlace al prototipo:
 https://www.figma.com/proto/5ISeb2fQWrzTScAifnd99E/Front-End-AccesoSEN?node-id=0-1&t=E8nmX54nrDKj1U2T-1
+https://accesosen.vercel.app
 
 Debido a que Figma no permite una exportación directa de prototipos a repositorios GitHub, el prototipado se referencia mediante:
 
