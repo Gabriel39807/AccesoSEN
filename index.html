@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AccesoSEN - Prototipo</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <section class="mobile-screen login-screen" id="loginView">
+        <div class="login-content">
+            <div class="login-header">
+                <div class="logo-circle">
+                    <span>SENA</span>
+                </div>
+                <h1 class="role-title">Aprendiz</h1>
+                <p class="subtitle">Ingresa tu documento de identidad</p>
+            </div>
+
+            <form class="login-form">
+                
+                <div class="input-group">
+                    <label>Documento de Identidad</label>
+                    <div class="input-wrapper">
+                        <input type="number" placeholder="Ingresa tu cédula o documento" value="10526485154">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Contraseña</label>
+                    <div class="input-wrapper error-border"> <input type="password" value="............">
+                        <i class="ph ph-eye toggle-pass"></i>
+                    </div>
+                    <span class="error-text">Documento o contraseña incorrecto. Inténtalo de nuevo.</span>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-container">
+                        <input type="checkbox"> Recordarme
+                    </label>
+                    <a href="#" class="link">¿Olvidaste tu contraseña?</a>
+                </div>
+
+                <button type="button" class="btn-primary" onclick="switchScreen()">Iniciar Sesión</button>
+            </form>
+
+            <div class="login-footer">
+                <p>¿Primera vez aquí? Tu contraseña inicial son los últimos 4 dígitos de tu documento</p>
+                <a href="#" class="link help-link">¿Necesitas ayuda? Contacta administración</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="mobile-screen dashboard-screen hidden" id="dashboardView">
+        
+        <header class="top-header">
+            <h2>Panel Aprendiz</h2>
+            <i class="ph ph-sign-out logout-icon"></i>
+        </header>
+
+        <div class="scroll-content">
+            
+            <div class="card profile-card">
+                <div class="avatar">
+                    <i class="ph-fill ph-user-circle"></i>
+                </div>
+                <div class="profile-info">
+                    <h3>Juan Pérez Garcia</h3>
+                    <p class="doc-text">Documento: 1053814567</p>
+                    <p class="program-text">Análisis y Desarrollo de Software</p>
+                    <small>Sede Principal - CEGAFE</small>
+                </div>
+            </div>
+
+            <div class="section-header">
+                <h3>Mis Equipos</h3>
+                <a href="#" class="link">Ver todos</a>
+            </div>
+
+            <div class="card item-card">
+                <div class="icon-box">
+                    <i class="ph ph-laptop"></i>
+                </div>
+                <div class="item-details">
+                    <h4>Portátil HP</h4>
+                    <span>Serial: ABC1234</span>
+                </div>
+                <button class="btn-icon-add">+</button>
+            </div>
+
+            <h3 class="section-title-mt">Notificaciones Recientes</h3>
+
+            <div class="card notification-card border-green">
+                <h4>Ingreso Registrado</h4>
+                <p>Ingresaste al centro de formación a las 8:00 A.M</p>
+            </div>
+
+            <div class="card notification-card border-orange">
+                <h4>Anuncio General</h4>
+                <p>Recuerda actualizar tus datos personales en la sección de perfil.</p>
+            </div>
+        </div>
+
+        <nav class="bottom-nav">
+            <a href="#" class="nav-item active">
+                <i class="ph-fill ph-house"></i>
+                <span>Inicio</span>
+            </a>
+            <a href="#" class="nav-item">
+                <i class="ph ph-laptop"></i>
+                <span>Mis equipos</span>
+            </a>
+            <a href="#" class="nav-item">
+                <i class="ph ph-user"></i>
+                <span>Mi perfil</span>
+            </a>
+        </nav>
+
+    </section>
+
+    <script>
+        function switchScreen() {
+            document.getElementById('loginView').classList.add('hidden');
+            document.getElementById('dashboardView').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
