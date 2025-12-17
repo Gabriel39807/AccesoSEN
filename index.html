@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AccesoSEN - Con Base de Datos</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <section id="login-view" class="mobile-screen login-screen">
+        <div class="login-content">
+            <div class="header-center">
+                <div class="logo-circle">SENA</div>
+                <h1 class="role-title">Aprendiz</h1>
+                <p class="subtitle">Ingreso con Base de Datos</p>
+            </div>
+
+            <form onsubmit="event.preventDefault(); handleLogin();">
+                <div class="input-group">
+                    <label>Correo Electrónico</label> <div class="input-wrapper">
+                        <input type="email" id="login-email" placeholder="aprendiz@sena.edu.co" required>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Contraseña</label>
+                    <div class="input-wrapper" id="pass-wrapper">
+                        <input type="password" id="login-pass" placeholder="******" required>
+                        <i class="ph ph-eye toggle-icon" onclick="togglePass('login-pass')"></i>
+                    </div>
+                    <small id="login-error" class="error-msg hidden">Credenciales incorrectas.</small>
+                </div>
+
+                <div class="form-options">
+                    <label><input type="checkbox"> Recordarme</label>
+                    <span class="link" onclick="switchView('recovery-view')">¿Olvidaste tu contraseña?</span>
+                </div>
+
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+            </form>
+        </div>
+    </section>
+
+  <section id="recovery-view" class="mobile-screen hidden padding-screen">
+    
+    <div id="rec-step-1">
+        <div class="header-back">
+            <i class="ph ph-caret-left" onclick="switchView('login-view')" style="font-size: 1.5rem;"></i>
+            <h3>Recuperar Contraseña</h3>
+        </div>
+        <p class="text-sm mb-20 text-center">Ingresa tu correo institucional y te enviaremos un código de verificación.</p>
+        
+        <div class="input-group">
+            <label>Correo institucional</label>
+            <div class="input-wrapper">
+                <input type="email" id="rec-email" placeholder="ejemplo@sena.edu.co">
+            </div>
+        </div>
+        <button class="btn-primary mt-20" onclick="goToStep2()">Enviar Código</button>
+    </div>
+
+    <div id="rec-step-2" class="hidden text-center">
+        <div class="header-back">
+            <i class="ph ph-caret-left" onclick="goToStep1()"></i>
+            <h3>Verificación</h3>
+        </div>
+        <p class="text-sm mb-20">Ingresa el código de 5 dígitos enviado a tu correo.</p>
+        
+        <div class="code-container">
+            <input type="text" maxlength="1" class="code-input" id="c1" onkeyup="moveFocus(this, 'c2')">
+            <input type="text" maxlength="1" class="code-input" id="c2" onkeyup="moveFocus(this, 'c3')">
+            <input type="text" maxlength="1" class="code-input" id="c3" onkeyup="moveFocus(this, 'c4')">
+            <input type="text" maxlength="1" class="code-input" id="c4" onkeyup="moveFocus(this, 'c5')">
+            <input type="text" maxlength="1" class="code-input" id="c5" onkeyup="verifyCodeInput()">
+        </div>
+        
+        <small id="code-error" class="error-msg hidden mt-20">Código incorrecto. Inténtalo de nuevo.</small>
+        
+        <button class="btn-primary mt-20" onclick="verifyCodeInput()">Verificar</button>
+        <p class="text-xs mt-20 link">¿No recibiste el código? Reenviar</p>
+    </div>
+
+    <div id="rec-step-3" class="hidden">
+        <div class="header-back">
+            <i class="ph ph-caret-left" onclick="goToStep2()"></i>
+            <h3>Establecer nueva contraseña</h3>
+        </div>
+        <p class="text-sm mb-20">Crea una nueva contraseña. Asegúrate que sea diferente a las anteriores.</p>
+
+        <div class="input-group">
+            <label>Contraseña</label>
+            <div class="input-wrapper">
+                <input type="password" id="new-pass-1" onkeyup="validateLive()">
+                <i class="ph ph-eye toggle-icon" onclick="togglePass('new-pass-1')"></i>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Confirmar contraseña</label>
+            <div class="input-wrapper">
+                <input type="password" id="new-pass-2" onkeyup="validateLive()">
+                <i class="ph ph-eye toggle-icon" onclick="togglePass('new-pass-2')"></i>
+            </div>
+            <small id="pass-match-error" class="error-msg hidden">Las contraseñas no coinciden.</small>
+        </div>
+
+        <div class="requirements-list">
+            <p>La contraseña debe contener:</p>
+            <div id="req-len" class="req-item"><i class="ph ph-x-circle red"></i> Mínimo 8 caracteres</div>
+            <div id="req-may" class="req-item"><i class="ph ph-x-circle red"></i> Una letra mayúscula</div>
+            <div id="req-num" class="req-item"><i class="ph ph-x-circle red"></i> Un número</div>
+        </div>
+
+        <button class="btn-primary mt-20" onclick="finishRecovery()">Actualizar Contraseña</button>
+    </div>
+
+    <div id="rec-step-4" class="hidden text-center pt-50">
+        <div class="success-icon">
+            <i class="ph-fill ph-check"></i>
+        </div>
+        <h2 class="mt-20 mb-20">¡Éxito!</h2>
+        <p class="text-sm mb-20">¡Felicidades! Su contraseña ha sido actualizada correctamente.</p>
+        <button class="btn-primary" onclick="switchView('login-view')">Ir a Iniciar Sesión</button>
+    </div>
+</section>
+
+ <section id="dashboard-view" class="mobile-screen dashboard-screen hidden">
+    <header class="top-header-original">
+        <div class="header-content">
+            <div class="logo-circle-small"></div>
+            <h2>Panel Aprendiz</h2>
+        </div>
+        <button class="btn-logout-capsule" onclick="handleLogout()">
+            Cerrar Sesión <i class="ph ph-sign-out"></i>
+        </button>
+    </header>
+
+    <div class="scroll-content">
+        <div class="card profile-card-large">
+            <div class="avatar-center"><i class="ph-fill ph-user-circle"></i></div>
+            <h3 class="profile-name" id="user-email-display">Cargando...</h3>
+            
+            <div class="profile-details">
+                <div class="detail-row">
+                    <i class="ph ph-user"></i>
+                    <div>
+                        <span class="label">Documento</span>
+                        <p class="value" id="user-doc-display">1053814567</p>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <i class="ph ph-qr-code"></i>
+                    <div>
+                        <span class="label">Programa</span>
+                        <p class="value">Análisis y Desarrollo de Software</p>
+                    </div>
+                </div>
+                <div class="detail-row">
+                    <i class="ph ph-buildings"></i>
+                    <div>
+                        <span class="label">Sede Principal</span>
+                        <p class="value">CEGAFE</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h3>Mis Equipos</h3>
+            <span class="link-green">Ver todos</span>
+        </div>
+        
+        <div id="equipos-list">
+            </div>
+
+        <div class="dashed-btn-container" onclick="toggleModal(true)">
+            <div class="dashed-btn">
+                <div class="circle-plus">+</div>
+                <span>Registrar nuevo</span>
+            </div>
+        </div>
+
+        <h3 class="section-title">Notificaciones Recientes</h3>
+        
+        <div class="card notification-item">
+            <div class="icon-circle-green">
+                <i class="ph ph-arrow-right"></i>
+            </div>
+            <div class="notif-content">
+                <h4>Ingreso Registrado</h4>
+                <p>Ingresaste al centro de formación a las 8:00 A.M</p>
+            </div>
+        </div>
+
+        <div class="card notification-item">
+            <div class="icon-circle-green">
+                <i class="ph ph-megaphone"></i>
+            </div>
+            <div class="notif-content">
+                <h4>Anuncio General</h4>
+                <p>Recuerda actualizar tus datos personales en la sección de perfil.</p>
+            </div>
+        </div>
+
+        <h3 class="section-title">Accesos Rápidos</h3>
+        <div class="quick-grid">
+            <div class="card quick-card">
+                <div class="icon-circle-light"><i class="ph ph-clock-counter-clockwise"></i></div>
+                <span>Historial de ingresos</span>
+            </div>
+            <div class="card quick-card">
+                <div class="icon-circle-light"><i class="ph ph-question"></i></div>
+                <span>Ayuda y Soporte</span>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <div class="nav-item active"><i class="ph-fill ph-house"></i>Inicio</div>
+        <div class="nav-item"><i class="ph ph-laptop"></i>Mis equipos</div>
+        <div class="nav-item"><i class="ph ph-user"></i>Mi perfil</div>
+    </nav>
+</section>
+
+    <div id="modal-equipo" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Registrar en Firestore</h3>
+                <i class="ph ph-x" onclick="toggleModal(false)"></i>
+            </div>
+            <form onsubmit="event.preventDefault(); addEquipoToDB();">
+                <div class="input-group">
+                    <label>Nombre del Equipo</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="eq-nombre" placeholder="Ej: Portátil Dell" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Serial</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="eq-serial" placeholder="Ej: ABC-123" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary mt-20">Guardar en Nube</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
