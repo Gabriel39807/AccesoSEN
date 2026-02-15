@@ -40,15 +40,23 @@ El sistema permite registrar **entradas, salidas, equipos tecnológicos, turnos 
 SADI/
 │
 ├── services/
-│ └── api/ # Backend Django + DRF
+│   └── api/              # Backend Django + DRF
 │
 ├── apps/
-│ ├── web/ # Frontend Web (React)
-│ └── mobile-rn/ # App móvil (React Native + Expo)
+│   ├── web/              # Frontend Web (Next.js)
+│   └── mobile-rn/        # App móvil (React Native + Expo)
 │
 └── README.md
 ```
 
+
+---
+# 🔄 Flujo General
+
+- Cliente (Web / Mobile) →
+- API REST (Django + DRF) →
+- Base de datos PostgreSQL →
+- Respuesta autenticada vía JWT
 
 ---
 
@@ -94,6 +102,7 @@ SADI/
   - Mínimo 8 caracteres
   - 1 mayúscula
   - 1 número
+- Control de acceso por rol
 
 ---
 
@@ -109,6 +118,7 @@ SADI/
 
 ## 🌐 Frontend Web
 - React
+- Next.js
 - TailwindCSS
 - Axios
 - React Router
@@ -163,18 +173,31 @@ SADI/
 ```bash
 cd services/api
 python -m venv .venv
-.venv\Scripts\activate  # Windows
+# Windows
+.venv\Scripts\activate
+# Mac/Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
 python manage.py migrate
+python manage.py createsuperuser
 python manage.py runserver
 ```
 
-## 🌐 Frontend Web
+Servidor por defecto:
+
+```cpp
+http://127.0.0.1:8000/
+```
+## 🌐 Frontend Web (Next.js)
 
 ```bash
 cd apps/web
 npm install
-npm start
+npm run dev
+```
+```arduino
+http://localhost:3000
 ```
 
 ## 📱 App Móvil (Expo)
@@ -185,9 +208,9 @@ npm install
 npx expo start
 ```
 
-## 🔑 Variables de Entorno (.env)
+## 🔑 Variables de Entorno (Backend)
 
-Ejemplo backend
+Archivo .env:
 
 ```bash
 DEBUG=True
@@ -258,6 +281,15 @@ DATABASE_PORT=5433
 🔄 Optimización de rendimiento  
 🔄 Preparación para producción  
 
+---
+
+# 🗺️ Próximas Mejoras
+
+- Implementación de CI/CD
+- Tests unitarios y de integración
+- Sistema de auditoría avanzada
+- Despliegue en entorno cloud
+  
 ---
 
 # 📍 Centro de Formación
