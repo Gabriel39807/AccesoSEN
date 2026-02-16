@@ -152,7 +152,7 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
     </div>
   );
 }
-`r`nexport default function AdminEquiposPage() {
+export default function AdminEquiposPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   const [equipos, setEquipos] = useState<Equipo[]>([]);

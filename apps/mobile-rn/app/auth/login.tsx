@@ -29,6 +29,14 @@ export default function LoginScreen() {
   const [intentos, setIntentos] = useState(0);
   const [bloqueadoHasta, setBloqueadoHasta] = useState<number | null>(null);
 
+  function onUsernameChange(value: string) {
+    setUsername(value.replace(/\D/g, "").slice(0, 10));
+  }
+
+  function onPasswordChange(value: string) {
+    setPassword(value.slice(0, 20));
+  }
+
   const now = Date.now();
   const bloqueado = bloqueadoHasta ? now < bloqueadoHasta : false;
   const restante = useMemo(() => {
@@ -39,6 +47,14 @@ export default function LoginScreen() {
   async function onSubmit() {
     setError(null);
     if (bloqueado) return;
+    if (!/^\d{1,10}$/.test(username.trim())) {
+      setError("El documento debe ser numerico y maximo de 10 digitos.");
+      return;
+    }
+    if (!password || password.length > 20) {
+      setError("La contrasena debe tener maximo 20 caracteres.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -80,17 +96,17 @@ export default function LoginScreen() {
       <FadeInCard delay={70}>
         <View style={{ gap: 10 }}>
           <InputField
-            label={rol === "guarda" ? "Usuario" : "Documento o usuario"}
+            label="Documento"
             value={username}
-            onChangeText={setUsername}
+            onChangeText={onUsernameChange}
             autoCapitalize="none"
-            placeholder={rol === "guarda" ? "guarda.carlos" : "1053444048"}
+            placeholder="1053444048"
           />
 
           <InputField
             label="Contrasena"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={onPasswordChange}
             placeholder="********"
             secureTextEntry={!show}
           />

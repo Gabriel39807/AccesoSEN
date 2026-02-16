@@ -12,19 +12,35 @@ export function GuardLoginScreen() {
   const [password, setPassword] = useState("");
 
   const [sede, setSede] = useState<Sede>("CEGAFE");
-  const [jornada, setJornada] = useState<Jornada>("MAÑANA");
+  const [jornada, setJornada] = useState<Jornada>("TARDE");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function onUsernameChange(value: string) {
+    setUsername(value.replace(/\D/g, "").slice(0, 10));
+  }
+
+  function onPasswordChange(value: string) {
+    setPassword(value.slice(0, 20));
+  }
+
   async function onSubmit() {
     setError(null);
+    if (!/^\d{1,10}$/.test(username.trim())) {
+      setError("El documento debe ser numerico y maximo de 10 digitos.");
+      return;
+    }
+    if (!password || password.length > 20) {
+      setError("La contrasena debe tener maximo 20 caracteres.");
+      return;
+    }
+
     setLoading(true);
     try {
       await signInGuarda({ username: username.trim(), password, sede, jornada });
-      // No navegamos manual: App cambia de stack cuando user.rol == guarda
     } catch (e: any) {
-      setError(e?.message || "No se pudo iniciar sesión.");
+      setError(e?.message || "No se pudo iniciar sesion.");
     } finally {
       setLoading(false);
     }
@@ -32,31 +48,29 @@ export function GuardLoginScreen() {
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12, justifyContent: "center" }}>
-      <Text style={{ fontSize: 24, fontWeight: "800", textAlign: "center" }}>
-        Personal de Seguridad
-      </Text>
-      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu usuario y contraseña</Text>
+      <Text style={{ fontSize: 24, fontWeight: "800", textAlign: "center" }}>Personal de Seguridad</Text>
+      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu documento y contrasena</Text>
 
       <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#eee" }}>
-        <Text style={{ fontWeight: "700", marginBottom: 6 }}>Usuario</Text>
+        <Text style={{ fontWeight: "700", marginBottom: 6 }}>Documento</Text>
         <TextInput
           value={username}
-          onChangeText={setUsername}
-          placeholder="guardia.carlos"
+          onChangeText={onUsernameChange}
+          placeholder="1053444048"
           autoCapitalize="none"
+          keyboardType="number-pad"
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 
-        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Contraseña</Text>
+        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Contrasena</Text>
         <TextInput
           value={password}
-          onChangeText={setPassword}
-          placeholder="Ingresa tu contraseña"
+          onChangeText={onPasswordChange}
+          placeholder="Ingresa tu contrasena"
           secureTextEntry
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 
-        {/* Backend requiere sede + jornada */}
         <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Sede</Text>
         <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12 }}>
           <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
@@ -70,7 +84,6 @@ export function GuardLoginScreen() {
         <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Turno</Text>
         <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12 }}>
           <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-            <Picker.Item label="Mañana" value="MAÑANA" />
             <Picker.Item label="Tarde" value="TARDE" />
             <Picker.Item label="Noche" value="NOCHE" />
           </Picker>
@@ -91,10 +104,6 @@ export function GuardLoginScreen() {
         >
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800" }}>Iniciar Turno</Text>}
         </Pressable>
-
-        <Text style={{ textAlign: "center", marginTop: 12, opacity: 0.6 }}>
-          Importante: Recuerda registrar tu salida al finalizar el turno
-        </Text>
       </View>
     </View>
   );

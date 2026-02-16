@@ -24,9 +24,29 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<"admin" | "student">("admin");
 
+  function onUsernameChange(value: string) {
+    if (role === "student") {
+      setUsername(value.replace(/\D/g, "").slice(0, 10));
+      return;
+    }
+    setUsername(value);
+  }
+
+  function onPasswordChange(value: string) {
+    setPassword(value.slice(0, 20));
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (role === "student" && !/^\d{1,10}$/.test(username.trim())) {
+      setError("Para aprendices, el documento debe ser numerico y maximo de 10 digitos.");
+      return;
+    }
+    if (!password || password.length > 20) {
+      setError("La contrasena debe tener maximo 20 caracteres.");
+      return;
+    }
     setLoading(true);
     try {
       const tokenRes = await api.post("/api/token/", { username, password });
@@ -34,9 +54,23 @@ export default function LoginPage() {
 
       const meRes = await api.get<MeResponse>("/api/me/");
       const rol = meRes.data.usuario.rol;
-      if (rol === "admin") router.replace("/admin/usuarios");
-      else if (rol === "aprendiz") router.replace("/aprendiz/inicio");
-      else {
+
+      if (role === "admin" && rol !== "admin") {
+        await clearTokens();
+        setError("Este modulo solo permite credenciales de administrador.");
+        return;
+      }
+      if (role === "student" && rol !== "aprendiz") {
+        await clearTokens();
+        setError("Este modulo solo permite credenciales de aprendiz.");
+        return;
+      }
+
+      if (rol === "admin") {
+        router.replace("/admin/usuarios");
+      } else if (rol === "aprendiz") {
+        router.replace("/aprendiz/inicio");
+      } else {
         await clearTokens();
         setError("El rol guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
       }
@@ -104,8 +138,9 @@ export default function LoginPage() {
                 className="h-12 w-full rounded-2xl border bg-slate-50 px-4 outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200"
                 placeholder={role === "admin" ? "admin@sena.edu.co" : "Ingresa tu documento"}
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => onUsernameChange(e.target.value)}
                 inputMode={role === "student" ? "numeric" : "email"}
+                maxLength={role === "student" ? 10 : 80}
               />
             </div>
 
@@ -116,7 +151,8 @@ export default function LoginPage() {
                 className="h-12 w-full rounded-2xl border bg-slate-50 px-4 outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200"
                 placeholder="********"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => onPasswordChange(e.target.value)}
+                maxLength={20}
               />
             </div>
 
