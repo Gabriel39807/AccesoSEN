@@ -81,22 +81,78 @@ function Badge({
 function StatSkeleton() {
   return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
 }
-function TableSkeleton({ rows = 8 }: { rows?: number }) {
+function TableSkeleton({ rows = 7 }: { rows?: number }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-      <div className="px-4 py-3 border-b">
-        <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
+      {/* Barra superior: Mostrando... + paginación (skeleton) */}
+      <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="h-4 w-64 rounded sadi-skeleton" />
+
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-24 rounded-xl sadi-skeleton" />
+          <div className="h-4 w-24 rounded sadi-skeleton" />
+          <div className="h-8 w-24 rounded-xl sadi-skeleton" />
+        </div>
       </div>
-      <div className="p-4 space-y-3">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
-        ))}
+
+      {/* Tabla */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          {/* Mantener el header real da contexto y se ve más “producto” */}
+          <thead className="bg-gray-50 border-b">
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Marca / Modelo</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Propietario</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Motivo</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {Array.from({ length: rows }).map((_, i) => (
+              <tr key={i} className="border-b">
+                {/* Serial */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-24 rounded sadi-skeleton" />
+                </td>
+
+                {/* Marca / Modelo (dos líneas) */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-32 rounded sadi-skeleton" />
+                  <div className="mt-2 h-3 w-24 rounded sadi-skeleton" />
+                </td>
+
+                {/* Propietario (dos líneas) */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-40 rounded sadi-skeleton" />
+                  <div className="mt-2 h-3 w-20 rounded sadi-skeleton" />
+                </td>
+
+                {/* Estado (pill) */}
+                <td className="px-4 py-3">
+                  <div className="h-6 w-24 rounded-full sadi-skeleton" />
+                </td>
+
+                {/* Motivo */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-28 rounded sadi-skeleton" />
+                </td>
+
+                {/* Acciones (botón a la derecha) */}
+                <td className="px-4 py-3 text-right">
+                  <div className="ml-auto h-8 w-24 rounded-xl sadi-skeleton" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
-
-export default function AdminEquiposPage() {
+`r`nexport default function AdminEquiposPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   const [equipos, setEquipos] = useState<Equipo[]>([]);
@@ -503,5 +559,6 @@ export default function AdminEquiposPage() {
     </div>
   );
 }
+
 
 
