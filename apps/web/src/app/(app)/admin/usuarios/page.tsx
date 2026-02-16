@@ -70,15 +70,98 @@ function StatSkeleton() {
 
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
-      <div className="p-4 space-y-3">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
-        ))}
+    <>
+      {/* Tabla skeleton (misma “caja” que tu tabla real) */}
+      <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
+        <table className="min-w-full text-sm">
+          {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
+          <thead className="bg-emerald-50 text-emerald-900">
+            <tr className="text-left">
+              <th className="p-3">ID</th>
+              <th className="p-3">Usuario</th>
+              <th className="p-3">Nombre</th>
+              <th className="p-3">Rol</th>
+              <th className="p-3">Estado</th>
+              <th className="p-3">Documento</th>
+              <th className="p-3">Sede</th>
+              <th className="p-3">Programa</th>
+              <th className="p-3">Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y">
+            {Array.from({ length: rows }).map((_, i) => (
+              <tr key={i} className="hover:bg-emerald-50/40 transition">
+                {/* ID */}
+                <td className="p-3">
+                  <div className="h-4 w-10 rounded sadi-skeleton" />
+                </td>
+
+                {/* Usuario (2 líneas: username + email) */}
+                <td className="p-3">
+                  <div className="h-4 w-28 rounded sadi-skeleton" />
+                  <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
+                </td>
+
+                {/* Nombre */}
+                <td className="p-3">
+                  <div className="h-4 w-36 rounded sadi-skeleton" />
+                </td>
+
+                {/* Rol (pill + select como en tu UI real) */}
+                <td className="p-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-6 w-24 rounded-full sadi-skeleton" />
+                    <div className="h-10 w-28 rounded-xl sadi-skeleton" />
+                  </div>
+                </td>
+
+                {/* Estado (pill + select) */}
+                <td className="p-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-6 w-24 rounded-full sadi-skeleton" />
+                    <div className="h-10 w-28 rounded-xl sadi-skeleton" />
+                  </div>
+                </td>
+
+                {/* Documento */}
+                <td className="p-3">
+                  <div className="h-4 w-24 rounded sadi-skeleton" />
+                </td>
+
+                {/* Sede */}
+                <td className="p-3">
+                  <div className="h-4 w-20 rounded sadi-skeleton" />
+                </td>
+
+                {/* Programa */}
+                <td className="p-3">
+                  <div className="h-4 w-32 rounded sadi-skeleton" />
+                </td>
+
+                {/* Acciones (botón) */}
+                <td className="p-3">
+                  <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      {/* Paginación skeleton (misma caja que tu paginación real) */}
+      <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border p-3 mt-4">
+        <div className="h-4 w-40 rounded sadi-skeleton" />
+
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+          <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+        </div>
+      </div>
+    </>
   );
 }
+
 
 export default function AdminUsuariosPage() {
   // data
@@ -509,7 +592,7 @@ export default function AdminUsuariosPage() {
 
         {/* Table */}
         {loadingTable ? (
-          <TableSkeleton />
+          <TableSkeleton rows={Math.min(8, pageSize)} />
         ) : (
           <>
             <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
