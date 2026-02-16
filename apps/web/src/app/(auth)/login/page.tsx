@@ -17,10 +17,8 @@ type MeResponse = {
 
 export default function LoginPage() {
   const router = useRouter();
-
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,25 +26,17 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
-      // 1) Login -> tokens
       const tokenRes = await api.post("/api/token/", { username, password });
-      saveTokens({
-        access: tokenRes.data.access,
-        refresh: tokenRes.data.refresh,
-      });
+      saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh });
 
-      // 2) /api/me -> rol
       const meRes = await api.get<MeResponse>("/api/me/");
       const rol = meRes.data.usuario.rol;
-
-      // 3) Redirección por rol
       if (rol === "admin") router.replace("/admin/usuarios");
       else if (rol === "aprendiz") router.replace("/aprendiz/inicio");
       else router.replace("/login");
     } catch (err: any) {
-      setError(err?.response?.data?.detail ?? "Credenciales inválidas");
+      setError(err?.response?.data?.message ?? err?.response?.data?.motivo ?? "Credenciales invalidas.");
     } finally {
       setLoading(false);
     }
@@ -56,7 +46,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-6">
         <h1 className="text-2xl font-bold mb-4">Login SADI</h1>
-
         <form onSubmit={onSubmit} className="space-y-3">
           <input
             className="w-full border rounded-lg p-2"
@@ -64,7 +53,6 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
-
           <input
             className="w-full border rounded-lg p-2"
             placeholder="password"
@@ -72,15 +60,10 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-
-          <button
-            disabled={loading}
-            className="w-full bg-black text-white rounded-lg p-2 disabled:opacity-50"
-          >
+          <button disabled={loading} className="w-full bg-black text-white rounded-lg p-2 disabled:opacity-50">
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-
         {error && <p className="text-red-600 mt-3">{error}</p>}
       </div>
     </div>

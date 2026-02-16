@@ -1,6 +1,6 @@
 import axios from "axios";
 import { API_URL } from "../config";
-import { getAccessToken, clearTokens } from "../storage/tokens";
+import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "../storage/tokens";
 
 export class UiError extends Error {
   code?: string;
@@ -13,50 +13,88 @@ export class UiError extends Error {
 
 export const api = axios.create({
   baseURL: API_URL,
-  timeout: 15000, // evita “se demora resto de tiempo”
+  timeout: 15000,
 });
 
-// Attach token
+let refreshing: Promise<string | null> | null = null;
+
+function mapCodeToMessage(code?: string, fallback?: string) {
+  const map: Record<string, string> = {
+    INVALID_CREDENTIALS: "Usuario o contrasena invalidos.",
+    ACCOUNT_LOCKED_15MIN: "Tu cuenta esta temporalmente bloqueada. Intenta en 15 minutos.",
+    ACCOUNT_DISABLED_SECURITY: "Tu cuenta esta deshabilitada por seguridad. Contacta al administrador.",
+    OTP_INVALID: "El codigo OTP no es valido.",
+    OTP_EXPIRED: "El codigo OTP expiro. Solicita uno nuevo.",
+    OTP_TOO_MANY_ATTEMPTS: "Demasiados intentos con OTP. Solicita uno nuevo.",
+    TURNO_REQUIRED: "Debes iniciar turno para continuar.",
+    TURNO_ALREADY_ACTIVE: "Ya tienes un turno activo.",
+    ACCESO_INCONSISTENTE_EQUIPO: "Inconsistencia de equipos en el registro de acceso.",
+    NETWORK_ERROR: "No se pudo conectar al servidor.",
+  };
+  return (code && map[code]) || fallback || "Ocurrio un error. Intenta nuevamente.";
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (!refreshing) {
+    refreshing = (async () => {
+      const refresh = await getRefreshToken();
+      if (!refresh) return null;
+      const r = await axios.post(`${API_URL}/api/token/refresh/`, { refresh });
+      const nextAccess = r?.data?.access as string | undefined;
+      const nextRefresh = (r?.data?.refresh as string | undefined) || refresh;
+      if (!nextAccess) return null;
+      await saveTokens(nextAccess, nextRefresh);
+      return nextAccess;
+    })().finally(() => {
+      refreshing = null;
+    });
+  }
+  return refreshing;
+}
+
 api.interceptors.request.use(async (config) => {
   const token = await getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// UI-friendly errors
 api.interceptors.response.use(
   (r) => r,
   async (error) => {
-    // Sin respuesta => red / timeout / dns
+    const original = error?.config || {};
+    if (error?.response?.status === 401 && !original._retry && !String(original?.url || "").includes("/api/token/")) {
+      original._retry = true;
+      try {
+        const nextAccess = await refreshAccessToken();
+        if (nextAccess) {
+          original.headers = original.headers || {};
+          original.headers.Authorization = `Bearer ${nextAccess}`;
+          return api.request(original);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     if (!error.response) {
       if (error.code === "ECONNABORTED") {
-        throw new UiError("El servidor está tardando demasiado. Intenta de nuevo.", "TIMEOUT");
+        throw new UiError("El servidor esta tardando demasiado. Intenta de nuevo.", "NETWORK_ERROR");
       }
-      throw new UiError("No se pudo conectar al servidor. Revisa tu Wi-Fi y que el servidor esté encendido.", "NETWORK");
+      throw new UiError(mapCodeToMessage("NETWORK_ERROR"), "NETWORK_ERROR");
     }
 
     const status = error.response.status;
-    const data = error.response.data;
+    const data = error.response.data || {};
+    const code = data.code as string | undefined;
+    const message = (data.message as string | undefined) || (data.motivo as string | undefined);
 
-    // Mensajes del backend (si existen)
-    const motivo = typeof data?.motivo === "string" ? data.motivo : null;
-
-    if (status === 401) {
-      // Caso login: credenciales
-      if (error.config?.url?.includes("/api/token/")) {
-        throw new UiError("Usuario o contraseña incorrectos.", "BAD_CREDENTIALS");
-      }
-      // Caso token vencido
+    if (status === 401 || status === 423) {
       await clearTokens();
-      throw new UiError("Tu sesión expiró. Inicia sesión nuevamente.", "SESSION_EXPIRED");
+      throw new UiError(mapCodeToMessage(code, message), code || "INVALID_CREDENTIALS");
     }
-
-    if (status === 403) throw new UiError(motivo ?? "No tienes permisos para hacer esto.", "FORBIDDEN");
-    if (status === 404) throw new UiError(motivo ?? "No encontramos lo que buscas.", "NOT_FOUND");
-    if (status >= 500) throw new UiError("Error del servidor. Intenta más tarde.", "SERVER_ERROR");
-
-    // 400/422 validación
-    if (motivo) throw new UiError(motivo, "VALIDATION");
-    throw new UiError("Ocurrió un error. Verifica los datos e intenta nuevamente.", "GENERIC");
+    if (status === 403) throw new UiError(mapCodeToMessage(code, message), code || "FORBIDDEN");
+    if (status === 404) throw new UiError(mapCodeToMessage(code, message), code || "NOT_FOUND");
+    if (status >= 500) throw new UiError("Error del servidor. Intenta mas tarde.", "SERVER_ERROR");
+    throw new UiError(mapCodeToMessage(code, message), code || "VALIDATION_ERROR");
   }
 );

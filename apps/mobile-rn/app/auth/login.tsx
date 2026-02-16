@@ -49,8 +49,12 @@ export default function LoginScreen() {
         sede: rol === "guarda" ? sede : undefined,
         jornada: rol === "guarda" ? jornada : undefined,
       });
-
-      router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
+      const mustChange = useSessionStore.getState().user?.must_change_password;
+      if (rol === "aprendiz" && mustChange) {
+        router.replace("/auth/first-password" as any);
+      } else {
+        router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
+      }
     } catch (e: any) {
       setError(e?.message || "No se pudo iniciar sesión.");
 

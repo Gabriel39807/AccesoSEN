@@ -7,6 +7,7 @@ export type Usuario = {
   id: number;
   username: string;
   rol: Rol;
+  must_change_password?: boolean;
   first_name?: string;
   last_name?: string;
   documento?: string | null;
@@ -26,8 +27,13 @@ export async function me() {
   return r.data as { permitido: boolean; motivo: string | null; usuario: Usuario };
 }
 
-export async function passwordResetRequest(email: string) {
-  const r = await api.post("/api/auth/password-reset/request/", { email });
+export async function passwordResetRequest(email: string, channel: "email" | "whatsapp" = "email") {
+  const r = await api.post("/api/auth/password-reset/request/", { email, channel });
+  return r.data as { permitido: boolean; motivo: string | null; mensaje?: string };
+}
+
+export async function changeInitialPassword(current_password: string, new_password: string) {
+  const r = await api.post("/api/auth/change-initial-password/", { current_password, new_password });
   return r.data as { permitido: boolean; motivo: string | null; mensaje?: string };
 }
 

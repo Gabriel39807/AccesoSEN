@@ -6,6 +6,7 @@ import { GuardStackParamList } from "../../navigation/GuardStack";
 import * as Accesos from "../../api/accesos";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ScanQr">;
+const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
 
 export function ScanQrScreen({ navigation }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -75,7 +76,7 @@ export function ScanQrScreen({ navigation }: Props) {
       <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#eee", flex: 1 }}>
         <CameraView
           style={{ flex: 1 }}
-          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+          barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
           onBarcodeScanned={(res) => {
             if (!canScan) return;
             setScanned(true);

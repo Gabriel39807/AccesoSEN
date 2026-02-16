@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Usuario, Acceso, Equipo, Turno
-from .models import Notificacion
+from .models import Notificacion, PasswordResetOTP
 
 # =========================
 # USUARIOS
@@ -22,22 +22,31 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "documento",
             "estado",
             "sede_principal",
+            "jornada",
             "programa_formacion",
+            "telefono",
+            "must_change_password",
         ]
+        read_only_fields = ["must_change_password"]
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
+        auto_password = False
 
         # Si NO mandan password, por default lo ponemos como los últimos 4 del documento (si existe)
         if password is None:
             doc = (validated_data.get("documento") or "").strip()
-            if len(doc) >= 4:
+            if len(doc) >= 6:
+                password = doc[-6:]
+            elif len(doc) >= 4:
                 password = doc[-4:]
             else:
                 password = "1234"  # fallback simple (puedes cambiarlo)
+            auto_password = True
 
         user = Usuario(**validated_data)
         user.set_password(password)
+        user.must_change_password = auto_password
         user.save()
         return user
 
@@ -185,6 +194,11 @@ class NotificacionSerializer(serializers.ModelSerializer):
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
+    channel = serializers.ChoiceField(
+        choices=PasswordResetOTP.Channel.choices,
+        default=PasswordResetOTP.Channel.EMAIL,
+        required=False,
+    )
 
     def validate_email(self, value):
         return value.strip().lower()
@@ -192,7 +206,12 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 class PasswordResetVerifySerializer(serializers.Serializer):
     email = serializers.EmailField()
-    otp = serializers.CharField(min_length=6, max_length=6)
+    otp = serializers.CharField(min_length=5, max_length=5)
+    channel = serializers.ChoiceField(
+        choices=PasswordResetOTP.Channel.choices,
+        default=PasswordResetOTP.Channel.EMAIL,
+        required=False,
+    )
 
     def validate_email(self, value):
         return value.strip().lower()
@@ -203,11 +222,29 @@ class PasswordResetVerifySerializer(serializers.Serializer):
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    otp = serializers.CharField(min_length=6, max_length=6)
+    otp = serializers.CharField(min_length=5, max_length=5)
     new_password = serializers.CharField(min_length=4, max_length=128)
+    channel = serializers.ChoiceField(
+        choices=PasswordResetOTP.Channel.choices,
+        default=PasswordResetOTP.Channel.EMAIL,
+        required=False,
+    )
 
     def validate_email(self, value):
         return value.strip().lower()
 
     def validate_otp(self, value):
         return value.strip()
+
+
+class ImportAprendicesValidateSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class ImportAprendicesConfirmSerializer(serializers.Serializer):
+    import_id = serializers.CharField(max_length=128)
+
+
+class ChangeInitialPasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(min_length=4, max_length=128)
+    new_password = serializers.CharField(min_length=8, max_length=128)

@@ -11,6 +11,7 @@ export type MeUser = {
   last_name?: string;
   email?: string;
   documento?: string | null;
+  must_change_password?: boolean;
   estado?: "activo" | "bloqueado" | string;
   sede_principal?: string | null;
   programa_formacion?: string | null;

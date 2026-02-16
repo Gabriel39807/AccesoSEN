@@ -8,7 +8,10 @@ export default function RoleSelection() {
 
   React.useEffect(() => {
     if (user?.rol === "guarda") router.replace({ pathname: "/guard/home" } as any);
-    if (user?.rol === "aprendiz") router.replace({ pathname: "/aprendiz/home" } as any);
+    if (user?.rol === "aprendiz") {
+      if (user?.must_change_password) router.replace({ pathname: "/auth/first-password" } as any);
+      else router.replace({ pathname: "/aprendiz/home" } as any);
+    }
   }, [user]);
 
   return (

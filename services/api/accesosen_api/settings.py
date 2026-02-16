@@ -13,6 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from pathlib import Path
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -161,7 +162,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accesos.auth_jwt.SadiJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -171,6 +172,21 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,  # puedes cambiarlo a 25/50
     "EXCEPTION_HANDLER": "accesos.exceptions.ui_exception_handler",
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=20),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": True,
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "sadi-cache",
+    }
 }
 
 # =========================
@@ -186,3 +202,23 @@ EMAIL_HOST_USER = os.getenv("DJANGO_EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("DJANGO_EMAIL_HOST_PASSWORD", "")
 
 DEFAULT_FROM_EMAIL = os.getenv("DJANGO_DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@sadi.local")
+
+# Compatibilidad con claves EMAIL_* en .env (prioridad sobre DJANGO_EMAIL_*)
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", EMAIL_BACKEND)
+EMAIL_HOST = os.getenv("EMAIL_HOST", EMAIL_HOST)
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", str(EMAIL_PORT)))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", str(EMAIL_USE_TLS)).lower() == "true"
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "false").lower() == "true"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", EMAIL_HOST_USER)
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", EMAIL_HOST_PASSWORD)
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", DEFAULT_FROM_EMAIL)
+
+# =========================
+# WHATSAPP (TWILIO)
+# =========================
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER", "")
+WHATSAPP_PROVIDER = os.getenv("WHATSAPP_PROVIDER", "").lower().strip()
+if not WHATSAPP_PROVIDER and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_NUMBER:
+    WHATSAPP_PROVIDER = "twilio"

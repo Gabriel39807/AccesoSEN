@@ -25,7 +25,9 @@ function prettyTitle(pathname: string) {
   if (p.startsWith("/aprendiz/equipos/")) return "Detalle del equipo";
   if (p.startsWith("/aprendiz/equipos")) return "Mis equipos";
   if (p.startsWith("/aprendiz/accesos")) return "Historial de ingresos";
+  if (p.startsWith("/aprendiz/mi-qr")) return "Mi QR";
   if (p.startsWith("/aprendiz/perfil")) return "Mi perfil";
+  if (p.startsWith("/aprendiz/primer-acceso")) return "Primer acceso";
   if (p.startsWith("/aprendiz/ayuda")) return "Ayuda y soporte";
   if (p.startsWith("/aprendiz/estado")) return "Estado";
   return "Aprendiz";
@@ -81,6 +83,7 @@ export default function AprendizShell({
     { href: "/aprendiz/inicio", label: "Inicio" },
     { href: "/aprendiz/equipos", label: "Mis equipos" },
     { href: "/aprendiz/accesos", label: "Historial" },
+    { href: "/aprendiz/mi-qr", label: "Mi QR" },
     { href: "/aprendiz/perfil", label: "Mi perfil" },
     { href: "/aprendiz/ayuda", label: "Ayuda" },
   ] as const;
