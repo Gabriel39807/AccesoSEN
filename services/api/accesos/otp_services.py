@@ -69,11 +69,15 @@ def send_password_reset_email(to_email: str, code: str):
     msg.send(fail_silently=False)
 
 
-def _normalize_e164(phone: str) -> str:
+def normalize_phone_e164(phone: str) -> str:
     raw = (phone or "").strip()
     raw = raw.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     if raw.startswith("00"):
         raw = f"+{raw[2:]}"
+    # Soporte UX Colombia: 10 digitos => +57XXXXXXXXXX
+    only_digits = re.sub(r"[^\d]", "", raw)
+    if not raw.startswith("+") and len(only_digits) == 10:
+        raw = f"+57{only_digits}"
     if not raw.startswith("+"):
         raise ValueError("El telefono debe estar en formato internacional E.164, por ejemplo +573001112233.")
     if not E164_REGEX.match(raw):
@@ -86,7 +90,7 @@ def send_password_reset_whatsapp(phone: str, code: str):
     if not provider:
         raise RuntimeError("WHATSAPP_PROVIDER no configurado.")
 
-    normalized_to = _normalize_e164(phone)
+    normalized_to = normalize_phone_e164(phone)
     to = f"whatsapp:{normalized_to}"
 
     if provider == "console":

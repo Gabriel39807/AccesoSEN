@@ -40,26 +40,12 @@ export default function MiQrPage() {
     };
   }, []);
 
-  async function downloadQr() {
-    try {
-      const r = await api.get("/api/aprendiz/mi-qr/descargar/", { responseType: "blob" });
-      const blobUrl = window.URL.createObjectURL(r.data);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = `sadi-mi-qr-${doc || "aprendiz"}.png`;
-      a.click();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo descargar el QR.");
-    }
-  }
-
   return (
     <div className="space-y-5">
       <div className="rounded-3xl border bg-white p-5 shadow-sm">
         <h2 className="text-lg font-extrabold text-zinc-900">Mi QR</h2>
         <p className="mt-1 text-sm text-zinc-600">
-          Este codigo esta firmado digitalmente para reducir falsificacion.
+          Este codigo contiene tu numero de documento.
         </p>
       </div>
 
@@ -77,13 +63,6 @@ export default function MiQrPage() {
             <div className="rounded-2xl border bg-white p-4">
               <img src={`data:image/png;base64,${pngBase64}`} alt="Mi QR SADI" className="mx-auto h-72 w-72" />
             </div>
-
-            <button
-              onClick={downloadQr}
-              className="inline-block rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
-            >
-              Descargar QR (offline)
-            </button>
           </div>
         )}
       </div>

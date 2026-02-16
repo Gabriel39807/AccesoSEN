@@ -1,15 +1,10 @@
 import React, { useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { router } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
 import * as Accesos from "../../src/api/accesos";
+import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
 
@@ -18,6 +13,7 @@ export default function ScanScreen() {
 
   const [documento, setDocumento] = useState("");
   const [scanned, setScanned] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -36,187 +32,111 @@ export default function ScanScreen() {
 
     try {
       const data = await Accesos.validarDocumento(clean);
-
-      // Cache simple para la pantalla de confirmación
       Accesos.__cache.set(clean, data);
-
-      // FIX: typed routes no acepta params aquí (aunque la ruta exista)
-      router.push(
-        {
-          pathname: "/guard/confirmacion",
-          params: { status: "ok", documento: clean },
-        } as any
-      );
+      router.push({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean } } as any);
     } catch (e: any) {
       const status = e?.response?.status;
 
       if (status === 404) {
-        router.push(
-          {
-            pathname: "/guard/confirmacion",
-            params: { status: "notfound", documento: clean },
-          } as any
-        );
+        router.push({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
       } else {
-        const motivo =
-          e?.response?.data?.motivo ||
-          e?.response?.data?.detail ||
-          "Acceso denegado.";
-
-        router.push(
-          {
-            pathname: "/guard/confirmacion",
-            params: { status: "denied", documento: clean, motivo },
-          } as any
-        );
+        const motivo = e?.response?.data?.motivo || e?.response?.data?.detail || "Acceso denegado.";
+        router.push({ pathname: "/guard/confirmacion", params: { status: "denied", documento: clean, motivo } } as any);
       }
     } finally {
       setLoading(false);
     }
   }
 
+  function reiniciarLectura() {
+    setScanned(false);
+    setLoading(false);
+    setMsg(null);
+    setDocumento("");
+    setCameraKey((v) => v + 1);
+  }
+
   if (!permission) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <ActivityIndicator />
-      </View>
+      </ModernScreen>
     );
   }
 
   if (!permission.granted) {
     return (
-      <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: "900" }}>
-          Permiso de cámara requerido
-        </Text>
-        <Text style={{ opacity: 0.7 }}>
-          Para escanear el QR del carnet debes permitir el acceso a la cámara.
-        </Text>
-        <Pressable
-          onPress={requestPermission}
-          style={{
-            backgroundColor: "#16a34a",
-            padding: 14,
-            borderRadius: 999,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "900" }}>Dar permiso</Text>
-        </Pressable>
-      </View>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
+        <FadeInCard>
+          <TitleBlock title="Permiso de camara" subtitle="Para escanear QR o codigo de barras debes habilitar la camara." />
+          <View style={{ marginTop: 10 }}>
+            <ModernButton label="Dar permiso" onPress={requestPermission} />
+          </View>
+        </FadeInCard>
+      </ModernScreen>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <View
-        style={{
-          flex: 1,
-          borderRadius: 16,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: "#eee",
-        }}
-      >
-              {/* Marco visual */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            width: 240,
-            height: 240,
-            marginLeft: -120,
-            marginTop: -120,
-            borderRadius: 24,
-            borderWidth: 4,
-            borderColor: "rgba(22,163,74,0.95)",
-          }}
-        />
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            width: 220,
-            height: 220,
-            marginLeft: -110,
-            marginTop: -110,
-            borderRadius: 20,
-            borderWidth: 2,
-            borderColor: "rgba(255,255,255,0.85)",
-          }}
-        />
-
-        <CameraView
-          style={{ flex: 1 }}
-          barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
-          onBarcodeScanned={(res) => {
-            if (!canScan) return;
-            setScanned(true);
-            setDocumento(res.data);
-            validar(res.data);
-          }}
-        />
-
-        <View
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            right: 12,
-            backgroundColor: "rgba(255,255,255,0.85)",
-            padding: 10,
-            borderRadius: 12,
-          }}
-        >
-          <Text style={{ textAlign: "center", fontWeight: "900" }}>
-            Alinea el QR del carnet dentro del marco
-          </Text>
+    <ModernScreen scroll>
+      <FadeInCard delay={0}>
+        <Pill text="SCANNER INTELIGENTE" />
+        <View style={{ marginTop: 8 }}>
+          <TitleBlock title="Escanear" subtitle="Alinea QR o codigo de barras dentro del marco." />
         </View>
-      </View>
+      </FadeInCard>
 
-      <TextInput
-        value={documento}
-        onChangeText={setDocumento}
-        placeholder="Documento (ej: 1053444048)"
-        keyboardType="numeric"
-        style={{
-          borderWidth: 1,
-          borderColor: "#eee",
-          borderRadius: 14,
-          padding: 12,
-          backgroundColor: "#fff",
-        }}
-      />
+      <FadeInCard delay={70} style={{ padding: 10 }}>
+        <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#e2e8f0", height: 360 }}>
+          <CameraView
+            key={cameraKey}
+            style={{ flex: 1 }}
+            barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
+            onBarcodeScanned={(res) => {
+              if (!canScan) return;
+              setScanned(true);
+              setDocumento((res.data || "").trim());
+              setMsg("Codigo detectado. Pulsa Validar o Leer otro QR.");
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: 230,
+              height: 230,
+              marginLeft: -115,
+              marginTop: -115,
+              borderWidth: 3,
+              borderColor: "rgba(20,184,166,0.95)",
+              borderRadius: 20,
+            }}
+          />
+        </View>
+      </FadeInCard>
 
-      {msg ? <Text style={{ color: "red" }}>{msg}</Text> : null}
+      <FadeInCard delay={120}>
+        <InputField
+          label="Documento"
+          value={documento}
+          onChangeText={setDocumento}
+          placeholder="1053444048"
+          keyboardType="numeric"
+        />
 
-      <Pressable
-        disabled={loading}
-        onPress={() => validar(documento)}
-        style={{
-          backgroundColor: loading ? "#6b7280" : "#e5e7eb",
-          padding: 14,
-          borderRadius: 999,
-          alignItems: "center",
-        }}
-      >
-        {loading ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={{ fontWeight: "900" }}>Digitar</Text>
-        )}
-      </Pressable>
+        {msg ? (
+          <Text style={{ color: msg.toLowerCase().includes("detectado") ? "#0f766e" : "#b91c1c", marginTop: 8 }}>{msg}</Text>
+        ) : null}
 
-      <Pressable
-        onPress={() => setScanned(false)}
-        style={{ padding: 10, alignItems: "center" }}
-      >
-        <Text style={{ opacity: 0.7 }}>Volver a escanear</Text>
-      </Pressable>
-    </View>
+        <View style={{ gap: 8, marginTop: 10 }}>
+          <ModernButton label={loading ? "Validando..." : "Validar"} disabled={loading} onPress={() => validar(documento)} />
+          <ModernButton label="Leer otro QR" tone="light" onPress={reiniciarLectura} />
+        </View>
+
+        {loading ? <ActivityIndicator style={{ marginTop: 8 }} /> : null}
+      </FadeInCard>
+    </ModernScreen>
   );
 }

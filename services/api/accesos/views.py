@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import io
 import re
+from urllib.parse import unquote
 from uuid import uuid4
 
 import qrcode
@@ -80,23 +81,41 @@ def _initial_password_from_documento(documento: str, digits: int = 6) -> str:
 
 
 def _build_aprendiz_qr_value(user: Usuario) -> str:
-    payload = {
-        "typ": "aprendiz_qr",
-        "uid": user.id,
-        "doc": user.documento,
-        "ts": int(timezone.now().timestamp()),
-    }
-    token = signing.dumps(payload, salt="sadi.aprendiz.qr")
-    return f"SADI1:{token}"
+    # QR simple solicitado: solo numero de documento.
+    return str(user.documento or "").strip()
 
 
 def _extract_documento_from_scan(raw_value: str) -> str:
-    raw = (raw_value or "").strip()
+    raw = unquote((raw_value or "").strip())
     if not raw:
         return ""
 
-    if raw.startswith("SADI1:"):
-        token = raw[6:]
+    # Normaliza variantes comunes de lectura de camara
+    normalized = raw.replace("：", ":").strip()
+    match = re.search(r"(?:^|\s)(SADI1\s*:\s*.+)$", normalized, flags=re.IGNORECASE)
+    signed_candidate = match.group(1).strip() if match else normalized
+
+    upper_candidate = signed_candidate.upper()
+
+    # v2 robusto: SADI1B64:<base64url(signed_doc)>
+    if upper_candidate.startswith("SADI1B64:"):
+        token = signed_candidate.split(":", 1)[1]
+        token = re.sub(r"\s+", "", token)
+        try:
+            padding = "=" * (-len(token) % 4)
+            signed_doc = base64.urlsafe_b64decode((token + padding).encode("ascii")).decode("utf-8")
+            doc = signing.TimestampSigner(salt="sadi.aprendiz.qr.doc").unsign(
+                signed_doc,
+                max_age=60 * 60 * 24 * 365,
+            )
+            return str(doc).strip()
+        except Exception:
+            raise ValidationError({"documento": "QR invalido."})
+
+    # v1 legacy: SADI1:<django-signing token>
+    if upper_candidate.startswith("SADI1:"):
+        token = signed_candidate.split(":", 1)[1]
+        token = re.sub(r"\s+", "", token)  # algunos lectores insertan saltos/espacios
         data = signing.loads(token, salt="sadi.aprendiz.qr", max_age=60 * 60 * 24 * 365)
         if not isinstance(data, dict) or data.get("typ") != "aprendiz_qr" or not data.get("doc"):
             raise ValidationError({"documento": "QR invalido."})
@@ -104,6 +123,31 @@ def _extract_documento_from_scan(raw_value: str) -> str:
 
     digits_only = re.sub(r"[^\d]", "", raw)
     return digits_only or raw
+
+
+def _phone_digits(value: str) -> str:
+    return re.sub(r"[^\d]", "", value or "")
+
+
+def _find_user_for_password_reset(channel: str, email: str = "", telefono: str = "") -> Usuario | None:
+    if channel == PasswordResetOTP.Channel.WHATSAPP:
+        if telefono:
+            input_digits = _phone_digits(telefono)
+            if input_digits:
+                candidates = Usuario.objects.exclude(telefono__isnull=True).exclude(telefono="")
+                for u in candidates.only("id", "telefono"):
+                    user_digits = _phone_digits(u.telefono or "")
+                    if not user_digits:
+                        continue
+                    # Match robusto ante formatos distintos (+57, espacios, guiones, etc.)
+                    if user_digits == input_digits or user_digits.endswith(input_digits) or input_digits.endswith(user_digits):
+                        return u
+        if email:
+            return Usuario.objects.filter(email__iexact=email).first()
+        return None
+    if not email:
+        return None
+    return Usuario.objects.filter(email__iexact=email).first()
 
 
 class MeView(APIView):
@@ -159,7 +203,7 @@ class AprendizMiQRView(APIView):
             {
                 "qr_value": qr_value,
                 "documento": user.documento,
-                "algoritmo": "django-signing+timestamp",
+                "algoritmo": "documento-plain",
                 "qr_png_base64": png_b64,
             }
         )
@@ -205,11 +249,12 @@ class PasswordResetRequestView(APIView):
         s = PasswordResetRequestSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        email = s.validated_data["email"]
+        email = s.validated_data.get("email", "")
+        telefono = s.validated_data.get("telefono", "")
         channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
         ip = get_client_ip(request)
 
-        user = Usuario.objects.filter(email__iexact=email).first()
+        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
         if user:
             k_user = [str(user.id), channel]
             k_ip = [ip, channel]
@@ -253,11 +298,12 @@ class PasswordResetVerifyView(APIView):
         s = PasswordResetVerifySerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        email = s.validated_data["email"]
+        email = s.validated_data.get("email", "")
+        telefono = s.validated_data.get("telefono", "")
         otp = s.validated_data["otp"]
         channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
 
-        user = Usuario.objects.filter(email__iexact=email).first()
+        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
         if not user:
             return error_response(
                 code=ErrorCode.OTP_INVALID,
@@ -310,12 +356,13 @@ class PasswordResetConfirmView(APIView):
         s = PasswordResetConfirmSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        email = s.validated_data["email"]
+        email = s.validated_data.get("email", "")
+        telefono = s.validated_data.get("telefono", "")
         otp = s.validated_data["otp"]
         new_password = s.validated_data["new_password"]
         channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
 
-        user = Usuario.objects.filter(email__iexact=email).first()
+        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
         if not user:
             return error_response(
                 code=ErrorCode.OTP_INVALID,

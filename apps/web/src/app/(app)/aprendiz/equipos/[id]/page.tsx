@@ -292,10 +292,6 @@ export default function AprendizEquipoDetallePage() {
               {editing && (
                 <div className="mt-5 rounded-3xl border bg-white p-5">
                   <h3 className="text-sm font-extrabold text-zinc-900">Editar información</h3>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Nota: si el backend restringe esta acción, verás un error de permisos.
-                  </p>
-
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="text-xs font-semibold text-zinc-700">Serial</label>

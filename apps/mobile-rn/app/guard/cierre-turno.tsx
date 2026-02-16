@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, Alert } from "react-native";
+import { ActivityIndicator, Alert, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Turnos from "../../src/api/turnos";
 import { useSessionStore } from "../../src/store/session";
+import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 export default function CierreTurno() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -11,10 +12,7 @@ export default function CierreTurno() {
   const finalizarTurno = useSessionStore((s) => s.finalizarTurno);
 
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<null | {
-    turno: Turnos.Turno;
-    resumen: { ingresos: number; salidas: number; total: number };
-  }>(null);
+  const [data, setData] = useState<null | { turno: Turnos.Turno; resumen: { ingresos: number; salidas: number; total: number } }>(null);
 
   async function load() {
     setLoading(true);
@@ -29,78 +27,80 @@ export default function CierreTurno() {
     }
   }
 
-  useEffect(() => { if (id) load(); }, [id]);
+  useEffect(() => {
+    if (id) load();
+  }, [id]);
 
   async function confirmarCierre() {
-    Alert.alert(
-      "Confirmar cierre",
-      "¿Seguro que deseas finalizar el turno?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Finalizar",
-          style: "destructive",
-          onPress: async () => {
-            await finalizarTurno();
-            router.replace("/guard/turno-finalizado" as any);
-          },
+    Alert.alert("Confirmar cierre", "Seguro que deseas finalizar el turno?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Finalizar",
+        style: "destructive",
+        onPress: async () => {
+          await finalizarTurno();
+          router.replace("/guard/turno-finalizado" as any);
         },
-      ]
-    );
+      },
+    ]);
   }
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <ActivityIndicator />
-      </View>
+      </ModernScreen>
     );
   }
 
   if (!data) {
     return (
-      <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 12 }}>
-        <Text style={{ fontSize: 20, fontWeight: "900", textAlign: "center" }}>No se pudo cargar el resumen</Text>
-        <Pressable onPress={load} style={{ backgroundColor: "#111827", padding: 14, borderRadius: 999, alignItems: "center" }}>
-          <Text style={{ color: "#fff", fontWeight: "900" }}>Reintentar</Text>
-        </Pressable>
-      </View>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
+        <FadeInCard>
+          <TitleBlock title="No se pudo cargar" subtitle="El resumen del turno no esta disponible." />
+          <View style={{ marginTop: 12, gap: 8 }}>
+            <ModernButton label="Reintentar" tone="dark" onPress={load} />
+            <ModernButton label="Volver" tone="light" onPress={() => router.back()} />
+          </View>
+        </FadeInCard>
+      </ModernScreen>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 14 }}>
-      <Text style={{ fontSize: 24, fontWeight: "900", textAlign: "center" }}>Cierre de turno</Text>
+    <ModernScreen scroll>
+      <FadeInCard>
+        <Pill text="CIERRE DE TURNO" />
+        <View style={{ marginTop: 8 }}>
+          <TitleBlock title="Resumen operativo" subtitle={`Sede ${data.turno.sede} - Jornada ${data.turno.jornada}`} />
+        </View>
+      </FadeInCard>
 
-      <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: "#eee", borderRadius: 16, padding: 14, gap: 8 }}>
-        <Text style={{ fontWeight: "900" }}>Resumen</Text>
-        <Text style={{ opacity: 0.8 }}>Sede: {data.turno.sede} • Jornada: {data.turno.jornada}</Text>
-        <Text style={{ opacity: 0.8 }}>Inicio: {new Date(data.turno.inicio).toLocaleString()}</Text>
-        {data.turno.fin ? <Text style={{ opacity: 0.8 }}>Fin: {new Date(data.turno.fin).toLocaleString()}</Text> : null}
-
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-          <View style={{ flex: 1, borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12 }}>
-            <Text style={{ opacity: 0.7 }}>Ingresos</Text>
-            <Text style={{ fontSize: 20, fontWeight: "900" }}>{data.resumen.ingresos}</Text>
+      <FadeInCard delay={70}>
+        <Text style={{ color: "#475569" }}>Inicio: {new Date(data.turno.inicio).toLocaleString()}</Text>
+        {data.turno.fin ? <Text style={{ color: "#475569" }}>Fin: {new Date(data.turno.fin).toLocaleString()}</Text> : null}
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#64748b" }}>Ingresos</Text>
+            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0f172a" }}>{data.resumen.ingresos}</Text>
           </View>
-          <View style={{ flex: 1, borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12 }}>
-            <Text style={{ opacity: 0.7 }}>Salidas</Text>
-            <Text style={{ fontSize: 20, fontWeight: "900" }}>{data.resumen.salidas}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#64748b" }}>Salidas</Text>
+            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0f172a" }}>{data.resumen.salidas}</Text>
           </View>
-          <View style={{ flex: 1, borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12 }}>
-            <Text style={{ opacity: 0.7 }}>Total</Text>
-            <Text style={{ fontSize: 20, fontWeight: "900" }}>{data.resumen.total}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: "#64748b" }}>Total</Text>
+            <Text style={{ fontSize: 22, fontWeight: "900", color: "#0f172a" }}>{data.resumen.total}</Text>
           </View>
         </View>
-      </View>
+      </FadeInCard>
 
-      <Pressable onPress={confirmarCierre} style={{ backgroundColor: "#dc2626", padding: 14, borderRadius: 999, alignItems: "center" }}>
-        <Text style={{ color: "#fff", fontWeight: "900" }}>Confirmar cierre</Text>
-      </Pressable>
-
-      <Pressable onPress={() => router.back()} style={{ padding: 10, alignItems: "center" }}>
-        <Text style={{ opacity: 0.7 }}>Volver</Text>
-      </Pressable>
-    </View>
+      <FadeInCard delay={120}>
+        <View style={{ gap: 8 }}>
+          <ModernButton label="Confirmar cierre" tone="danger" onPress={confirmarCierre} />
+          <ModernButton label="Volver" tone="light" onPress={() => router.back()} />
+        </View>
+      </FadeInCard>
+    </ModernScreen>
   );
 }

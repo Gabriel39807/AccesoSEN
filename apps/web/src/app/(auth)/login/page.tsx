@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { saveTokens } from "@/lib/auth";
+import { clearTokens, saveTokens } from "@/lib/auth";
 
 type MeResponse = {
   permitido: boolean;
@@ -34,7 +34,10 @@ export default function LoginPage() {
       const rol = meRes.data.usuario.rol;
       if (rol === "admin") router.replace("/admin/usuarios");
       else if (rol === "aprendiz") router.replace("/aprendiz/inicio");
-      else router.replace("/login");
+      else {
+        await clearTokens();
+        setError("El rol guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
+      }
     } catch (err: any) {
       setError(err?.response?.data?.message ?? err?.response?.data?.motivo ?? "Credenciales invalidas.");
     } finally {
@@ -64,6 +67,13 @@ export default function LoginPage() {
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
+        <button
+          type="button"
+          onClick={() => router.push("/password-recovery")}
+          className="mt-3 w-full rounded-lg border p-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+        >
+          Olvide mi contrasena
+        </button>
         {error && <p className="text-red-600 mt-3">{error}</p>}
       </div>
     </div>

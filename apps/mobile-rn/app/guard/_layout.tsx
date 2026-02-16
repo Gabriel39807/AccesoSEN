@@ -4,7 +4,7 @@ export default function GuardLayout() {
   return (
     <Stack screenOptions={{ headerTitleAlign: "center" }}>
       <Stack.Screen name="home" options={{ title: "Dashboard" }} />
-      <Stack.Screen name="scan" options={{ title: "Escanear QR" }} />
+      <Stack.Screen name="scan" options={{ title: "Escanear QR / Barras" }} />
       <Stack.Screen name="confirmacion" options={{ title: "Resultado" }} />
 
       <Stack.Screen name="historial" options={{ title: "Historial" }} />

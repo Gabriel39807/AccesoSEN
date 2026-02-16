@@ -1,8 +1,13 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f4f7fb;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-border: #e2e8f0;
+  --primary: #0f766e;
+  --primary-strong: #115e59;
 }
 
 @theme inline {
@@ -20,7 +25,11 @@
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(16, 185, 129, 0.12), transparent 28%),
+    radial-gradient(circle at 92% 0%, rgba(14, 165, 233, 0.11), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, var(--background) 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Manrope", sans-serif;
 }

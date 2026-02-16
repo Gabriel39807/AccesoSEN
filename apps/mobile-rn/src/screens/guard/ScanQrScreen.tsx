@@ -13,6 +13,7 @@ export function ScanQrScreen({ navigation }: Props) {
 
   const [documento, setDocumento] = useState("");
   const [scanned, setScanned] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -46,6 +47,14 @@ export function ScanQrScreen({ navigation }: Props) {
     }
   }
 
+  function reiniciarLectura() {
+    setScanned(false);
+    setLoading(false);
+    setMsg(null);
+    setDocumento("");
+    setCameraKey((v) => v + 1);
+  }
+
   if (!permission) {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -59,7 +68,7 @@ export function ScanQrScreen({ navigation }: Props) {
       <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 12 }}>
         <Text style={{ fontSize: 18, fontWeight: "800" }}>Permiso de cámara requerido</Text>
         <Text style={{ opacity: 0.7 }}>
-          Para escanear el QR del carnet debes permitir el acceso a la cámara.
+          Para escanear QR o codigo de barras debes permitir el acceso a la camara.
         </Text>
         <Pressable
           onPress={requestPermission}
@@ -75,19 +84,19 @@ export function ScanQrScreen({ navigation }: Props) {
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
       <View style={{ borderRadius: 16, overflow: "hidden", borderWidth: 1, borderColor: "#eee", flex: 1 }}>
         <CameraView
+          key={cameraKey}
           style={{ flex: 1 }}
           barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
           onBarcodeScanned={(res) => {
             if (!canScan) return;
             setScanned(true);
-            setDocumento(res.data);
-            // Puedes auto-validar si quieres:
-            // validar();
+            setDocumento((res.data || "").trim());
+            setMsg("Codigo detectado. Pulsa Digitar para validar o Leer otro QR.");
           }}
         />
         <View style={{ position: "absolute", top: 12, left: 12, right: 12, backgroundColor: "rgba(255,255,255,0.85)", padding: 10, borderRadius: 12 }}>
           <Text style={{ textAlign: "center", fontWeight: "700" }}>
-            Alinea el código QR del carnet dentro del marco
+            Alinea el QR o codigo de barras dentro del marco
           </Text>
         </View>
       </View>
@@ -111,10 +120,10 @@ export function ScanQrScreen({ navigation }: Props) {
       </Pressable>
 
       <Pressable
-        onPress={() => setScanned(false)}
+        onPress={reiniciarLectura}
         style={{ padding: 10, alignItems: "center" }}
       >
-        <Text style={{ opacity: 0.7 }}>Volver a escanear</Text>
+        <Text style={{ opacity: 0.7 }}>Leer otro QR</Text>
       </Pressable>
     </View>
   );
