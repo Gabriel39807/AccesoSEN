@@ -11,19 +11,21 @@ class UsuarioAdmin(UserAdmin):
         "rol",
         "documento",
         "sede_principal",
+        "jornada",
         "programa_formacion",
+        "telefono",
         "estado",
         "is_staff",
         "is_active",
     )
     list_filter = ("rol", "estado", "is_staff", "is_active")
-    search_fields = ("username", "email", "documento", "first_name", "last_name", "programa_formacion")
+    search_fields = ("username", "email", "documento", "first_name", "last_name", "programa_formacion", "telefono")
 
     fieldsets = UserAdmin.fieldsets + (
-        ("SADI", {"fields": ("rol", "documento", "sede_principal", "programa_formacion", "estado")}),
+        ("SADI", {"fields": ("rol", "documento", "sede_principal", "jornada", "programa_formacion", "telefono", "estado")}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ("SADI", {"fields": ("rol", "documento", "sede_principal", "programa_formacion", "estado")}),
+        ("SADI", {"fields": ("rol", "documento", "sede_principal", "jornada", "programa_formacion", "telefono", "estado")}),
     )
 
 

@@ -22,7 +22,7 @@ export function GuardStackNavigator() {
   return (
     <Stack.Navigator>
       <Stack.Screen name="GuardHome" component={GuardHomeScreen} options={{ title: "Panel Personal de Seguridad" }} />
-      <Stack.Screen name="ScanQr" component={ScanQrScreen} options={{ title: "Escanear QR" }} />
+      <Stack.Screen name="ScanQr" component={ScanQrScreen} options={{ title: "Escanear QR / Barras" }} />
       <Stack.Screen name="Confirmacion" component={ConfirmacionScreen} options={{ title: "Confirmacion" }} />
       <Stack.Screen name="TurnoFinalizado" component={TurnoFinalizadoScreen} options={{ title: "" }} />
     </Stack.Navigator>

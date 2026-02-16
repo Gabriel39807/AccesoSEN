@@ -57,7 +57,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('sede', models.CharField(choices=[('CEGAFE', 'CEGAFE'), ('SANTA_CLARA', 'SANTA CLARA'), ('ITEDRIS', 'ITEDRIS'), ('GASTRONOMIA', 'GASTRONOMIA')], max_length=30)),
-                ('jornada', models.CharField(choices=[('MANANA', 'Mañana'), ('TARDE', 'Tarde'), ('NOCHE', 'Noche')], max_length=20)),
+                ('jornada', models.CharField(choices=[('MAÑANA', 'Mañana'), ('TARDE', 'Tarde'), ('NOCHE', 'Noche')], max_length=20)),
                 ('inicio', models.DateTimeField(auto_now_add=True)),
                 ('fin', models.DateTimeField(blank=True, null=True)),
                 ('activo', models.BooleanField(default=True)),

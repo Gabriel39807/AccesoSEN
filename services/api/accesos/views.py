@@ -1,25 +1,48 @@
-import hashlib
-import secrets
-from datetime import timedelta
+from __future__ import annotations
 
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
+import base64
+import io
+import re
+from urllib.parse import unquote
+from uuid import uuid4
+
+import qrcode
+from django.db import transaction
 from django.db.models import Q
-from django.template.loader import render_to_string
+from django.core import signing
+from django.core.signing import BadSignature, SignatureExpired
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Acceso, Equipo, Notificacion, PasswordResetOTP, Turno, Usuario
+from .api_responses import error_response, ok_response
+from .error_codes import ErrorCode
+from .import_services import cache_import_payload, get_cached_import_payload, validate_excel
+from .models import Acceso, AprendizImportAudit, Equipo, Notificacion, PasswordResetOTP, Turno, Usuario
+from .otp_services import (
+    OTP_MAX_ATTEMPTS,
+    OTP_MAX_REQUESTS,
+    OTP_REQUEST_LOCK_SEC,
+    OTP_REQUEST_WINDOW_SEC,
+    create_otp_for_user,
+    hash_code,
+    send_otp,
+)
 from .permissions import IsAdmin, IsAprendiz, IsGuarda
+from .rate_limit import bump_with_lock, get_client_ip, is_locked
 from .serializers import (
     AccesoSerializer,
+    ChangeInitialPasswordSerializer,
     EquipoRevisionSerializer,
     EquipoSerializer,
+    ImportAprendicesConfirmSerializer,
+    ImportAprendicesValidateSerializer,
     NotificacionSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
@@ -31,137 +54,241 @@ from .serializers import (
     ValidarDocumentoSerializer,
 )
 
-# =========================
-# Helpers
-# =========================
+
 def obtener_turno_activo(user):
-    """
-    Devuelve el turno activo coherente del guarda.
-
-    Además, auto-corrige inconsistencias comunes que pueden existir en BD:
-    - turno con activo=True pero fin != NULL  -> lo marca activo=False
-    """
     qs = Turno.objects.filter(guarda=user, activo=True).order_by("-inicio")
-
-    # Revisa unos pocos por seguridad (si hay datos sucios)
     for t in qs[:5]:
         if t.fin is None:
             return t
-
-        # Inconsistencia: activo=True pero fin existe -> corregir
         t.activo = False
         t.save(update_fields=["activo"])
-
     return None
 
 
 def _safe_fin(now, inicio):
-    """
-    Garantiza que fin nunca sea menor que inicio.
-    """
     if inicio and now < inicio:
         return inicio
     return now
 
 
-# --- Helpers OTP ---
-OTP_TTL_MINUTES = 10
-OTP_MAX_ATTEMPTS = 5
+def _initial_password_from_documento(documento: str, digits: int = 6) -> str:
+    doc = (documento or "").strip()
+    if len(doc) >= digits:
+        return doc[-digits:]
+    if len(doc) >= 4:
+        return doc[-4:]
+    return "1234"
 
 
-def _hash_code(salt: str, code: str) -> str:
-    raw = f"{salt}:{code}".encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+def _build_aprendiz_qr_value(user: Usuario) -> str:
+    # QR simple solicitado: solo numero de documento.
+    return str(user.documento or "").strip()
 
 
-def _generate_otp_code() -> str:
-    # 6 dígitos
-    return f"{secrets.randbelow(10**6):06d}"
+def _extract_documento_from_scan(raw_value: str) -> str:
+    raw = unquote((raw_value or "").strip())
+    if not raw:
+        return ""
+
+    # Normaliza variantes comunes de lectura de camara
+    normalized = raw.replace("：", ":").strip()
+    match = re.search(r"(?:^|\s)(SADI1\s*:\s*.+)$", normalized, flags=re.IGNORECASE)
+    signed_candidate = match.group(1).strip() if match else normalized
+
+    upper_candidate = signed_candidate.upper()
+
+    # v2 robusto: SADI1B64:<base64url(signed_doc)>
+    if upper_candidate.startswith("SADI1B64:"):
+        token = signed_candidate.split(":", 1)[1]
+        token = re.sub(r"\s+", "", token)
+        try:
+            padding = "=" * (-len(token) % 4)
+            signed_doc = base64.urlsafe_b64decode((token + padding).encode("ascii")).decode("utf-8")
+            doc = signing.TimestampSigner(salt="sadi.aprendiz.qr.doc").unsign(
+                signed_doc,
+                max_age=60 * 60 * 24 * 365,
+            )
+            return str(doc).strip()
+        except Exception:
+            raise ValidationError({"documento": "QR invalido."})
+
+    # v1 legacy: SADI1:<django-signing token>
+    if upper_candidate.startswith("SADI1:"):
+        token = signed_candidate.split(":", 1)[1]
+        token = re.sub(r"\s+", "", token)  # algunos lectores insertan saltos/espacios
+        data = signing.loads(token, salt="sadi.aprendiz.qr", max_age=60 * 60 * 24 * 365)
+        if not isinstance(data, dict) or data.get("typ") != "aprendiz_qr" or not data.get("doc"):
+            raise ValidationError({"documento": "QR invalido."})
+        return str(data["doc"]).strip()
+
+    digits_only = re.sub(r"[^\d]", "", raw)
+    return digits_only or raw
 
 
-def _send_password_reset_email(to_email: str, code: str):
-    """
-    Envía OTP por correo. Si no hay template HTML, cae a texto.
-    """
-    subject = "SADI — Código de recuperación"
-    context = {"otp": code, "ttl_minutes": OTP_TTL_MINUTES, "email": to_email}
-
-    text_body = (
-        f"Tu código de recuperación SADI es: {code}\n\n"
-        f"Este código vence en {OTP_TTL_MINUTES} minutos.\n"
-        "Si no solicitaste este cambio, ignora este mensaje."
-    )
-
-    html_body = None
-    try:
-        html_body = render_to_string("emails/password_reset_otp.html", context)
-    except Exception:
-        html_body = None
-
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@sadi.local"),
-        to=[to_email],
-    )
-    if html_body:
-        msg.attach_alternative(html_body, "text/html")
-    # Si tu SMTP no está configurado, esto puede fallar. En dev usa console backend.
-    msg.send(fail_silently=False)
+def _phone_digits(value: str) -> str:
+    return re.sub(r"[^\d]", "", value or "")
 
 
-# =========================
-# /api/me/
-# =========================
+def _find_user_for_password_reset(channel: str, email: str = "", telefono: str = "") -> Usuario | None:
+    if channel == PasswordResetOTP.Channel.WHATSAPP:
+        if telefono:
+            input_digits = _phone_digits(telefono)
+            if input_digits:
+                candidates = Usuario.objects.exclude(telefono__isnull=True).exclude(telefono="")
+                for u in candidates.only("id", "telefono"):
+                    user_digits = _phone_digits(u.telefono or "")
+                    if not user_digits:
+                        continue
+                    # Match robusto ante formatos distintos (+57, espacios, guiones, etc.)
+                    if user_digits == input_digits or user_digits.endswith(input_digits) or input_digits.endswith(user_digits):
+                        return u
+        if email:
+            return Usuario.objects.filter(email__iexact=email).first()
+        return None
+    if not email:
+        return None
+    return Usuario.objects.filter(email__iexact=email).first()
+
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(
-            {"permitido": True, "motivo": None, "usuario": UsuarioSerializer(request.user).data},
-            status=status.HTTP_200_OK,
+        return ok_response({"usuario": UsuarioSerializer(request.user).data})
+
+
+class ChangeInitialPasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        s = ChangeInitialPasswordSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        user: Usuario = request.user
+        current_password = s.validated_data["current_password"]
+        new_password = s.validated_data["new_password"]
+
+        if not user.check_password(current_password):
+            return error_response(
+                code=ErrorCode.INVALID_CREDENTIALS,
+                message="La contraseña actual no es correcta.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.must_change_password = False
+        user.last_password_change_at = timezone.now()
+        user.save(update_fields=["password", "must_change_password", "last_password_change_at"])
+        return ok_response({"mensaje": "Contrasena actualizada correctamente."})
+
+
+class AprendizMiQRView(APIView):
+    permission_classes = [IsAuthenticated, IsAprendiz]
+
+    def get(self, request):
+        user: Usuario = request.user
+        if not user.documento:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="No tienes documento configurado.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qr_value = _build_aprendiz_qr_value(user)
+        img = qrcode.make(qr_value)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        png_b64 = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return ok_response(
+            {
+                "qr_value": qr_value,
+                "documento": user.documento,
+                "algoritmo": "documento-plain",
+                "qr_png_base64": png_b64,
+            }
         )
 
 
-# =========================
-# AUTH: PASSWORD RESET (OTP)
-# =========================
+class AprendizMiQRDownloadView(APIView):
+    permission_classes = [IsAuthenticated, IsAprendiz]
+
+    def get(self, request):
+        user: Usuario = request.user
+        if not user.documento:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="No tienes documento configurado.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qr_value = _build_aprendiz_qr_value(user)
+        img = qrcode.make(qr_value)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+
+        response = HttpResponse(buffer.getvalue(), content_type="image/png")
+        response["Content-Disposition"] = f'attachment; filename="sadi-mi-qr-{user.documento}.png"'
+        return response
+
+
+class GuardiaEstadoActualView(APIView):
+    permission_classes = [IsAuthenticated, IsGuarda]
+
+    def get(self, request):
+        turno = obtener_turno_activo(request.user)
+        if not turno:
+            return ok_response({"turno_activo": False, "turno": None})
+        return ok_response({"turno_activo": True, "turno": TurnoSerializer(turno).data})
+
+
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         s = PasswordResetRequestSerializer(data=request.data)
-        try:
-            s.is_valid(raise_exception=True)
-        except ValidationError as e:
-            return Response(
-                {"permitido": False, "motivo": "Datos inválidos.", "errores": e.detail},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        s.is_valid(raise_exception=True)
 
-        email = s.validated_data["email"]
-        user = Usuario.objects.filter(email__iexact=email).first()
+        email = s.validated_data.get("email", "")
+        telefono = s.validated_data.get("telefono", "")
+        channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
+        ip = get_client_ip(request)
 
-        # Respuesta neutral para no filtrar si existe el email
+        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
         if user:
-            code = _generate_otp_code()
-            salt = secrets.token_hex(16)
-            code_hash = _hash_code(salt, code)
-            expires_at = timezone.now() + timedelta(minutes=OTP_TTL_MINUTES)
+            k_user = [str(user.id), channel]
+            k_ip = [ip, channel]
+            if is_locked("otp-request-user", k_user) or is_locked("otp-request-ip", k_ip):
+                return error_response(
+                    code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                    message="Demasiadas solicitudes. Intenta más tarde.",
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
 
-            PasswordResetOTP.objects.create(
-                user=user,
-                salt=salt,
-                code_hash=code_hash,
-                expires_at=expires_at,
-            )
+            if channel == PasswordResetOTP.Channel.WHATSAPP and not user.telefono:
+                return ok_response({"mensaje": "Si el usuario existe, enviamos un código OTP."})
 
-            _send_password_reset_email(user.email, code)
+            limit_user = bump_with_lock("otp-request-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            limit_ip = bump_with_lock("otp-request-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            if limit_user["locked"] or limit_ip["locked"]:
+                return error_response(
+                    code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                    message="Demasiadas solicitudes. Intenta más tarde.",
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
 
-        return Response(
-            {"permitido": True, "motivo": None, "mensaje": "Si el correo existe, enviamos un código OTP."},
-            status=status.HTTP_200_OK,
-        )
+            otp_obj, code = create_otp_for_user(user, channel)
+            try:
+                send_otp(channel, user, code)
+            except Exception:
+                otp_obj.delete()
+                return error_response(
+                    code=ErrorCode.NETWORK_ERROR,
+                    message="No se pudo enviar el codigo OTP. Verifica la configuracion de correo.",
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        return ok_response({"mensaje": "Si el usuario existe, enviamos un código OTP."})
 
 
 class PasswordResetVerifyView(APIView):
@@ -169,41 +296,57 @@ class PasswordResetVerifyView(APIView):
 
     def post(self, request):
         s = PasswordResetVerifySerializer(data=request.data)
-        try:
-            s.is_valid(raise_exception=True)
-        except ValidationError as e:
-            return Response(
-                {"permitido": False, "motivo": "Datos inválidos.", "errores": e.detail},
-                status=status.HTTP_400_BAD_REQUEST,
+        s.is_valid(raise_exception=True)
+
+        email = s.validated_data.get("email", "")
+        telefono = s.validated_data.get("telefono", "")
+        otp = s.validated_data["otp"]
+        channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
+
+        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
+        if not user:
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El código OTP no es válido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        email = s.validated_data["email"]
-        otp = s.validated_data["otp"]
-
-        user = Usuario.objects.filter(email__iexact=email).first()
-        if not user:
-            return Response({"permitido": False, "motivo": "OTP inválido."}, status=status.HTTP_400_BAD_REQUEST)
-
         otp_obj = (
-            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True)
+            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=channel)
             .order_by("-created_at")
             .first()
         )
         if not otp_obj:
-            return Response({"permitido": False, "motivo": "No hay OTP activo."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El código OTP no es válido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if timezone.now() > otp_obj.expires_at:
-            return Response({"permitido": False, "motivo": "OTP expirado."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_EXPIRED,
+                message="El código OTP expiró. Solicita uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if otp_obj.attempts >= OTP_MAX_ATTEMPTS:
-            return Response({"permitido": False, "motivo": "Demasiados intentos."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_TOO_MANY_ATTEMPTS,
+                message="Demasiados intentos con OTP. Solicita uno nuevo.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
 
-        if _hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
+        if hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
             otp_obj.attempts += 1
             otp_obj.save(update_fields=["attempts"])
-            return Response({"permitido": False, "motivo": "OTP inválido."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El código OTP no es válido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
-        return Response({"permitido": True, "motivo": None}, status=status.HTTP_200_OK)
+        return ok_response()
 
 
 class PasswordResetConfirmView(APIView):
@@ -211,53 +354,69 @@ class PasswordResetConfirmView(APIView):
 
     def post(self, request):
         s = PasswordResetConfirmSerializer(data=request.data)
-        try:
-            s.is_valid(raise_exception=True)
-        except ValidationError as e:
-            return Response(
-                {"permitido": False, "motivo": "Datos inválidos.", "errores": e.detail},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        s.is_valid(raise_exception=True)
 
-        email = s.validated_data["email"]
+        email = s.validated_data.get("email", "")
+        telefono = s.validated_data.get("telefono", "")
         otp = s.validated_data["otp"]
         new_password = s.validated_data["new_password"]
+        channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
 
-        user = Usuario.objects.filter(email__iexact=email).first()
+        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
         if not user:
-            return Response({"permitido": False, "motivo": "OTP inválido."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El código OTP no es válido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         otp_obj = (
-            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True)
+            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=channel)
             .order_by("-created_at")
             .first()
         )
         if not otp_obj:
-            return Response({"permitido": False, "motivo": "No hay OTP activo."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El código OTP no es válido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if timezone.now() > otp_obj.expires_at:
-            return Response({"permitido": False, "motivo": "OTP expirado."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_EXPIRED,
+                message="El código OTP expiró. Solicita uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if otp_obj.attempts >= OTP_MAX_ATTEMPTS:
-            return Response({"permitido": False, "motivo": "Demasiados intentos."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_TOO_MANY_ATTEMPTS,
+                message="Demasiados intentos con OTP. Solicita uno nuevo.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
 
-        if _hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
+        if hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
             otp_obj.attempts += 1
             otp_obj.save(update_fields=["attempts"])
-            return Response({"permitido": False, "motivo": "OTP inválido."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El código OTP no es válido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
 
         otp_obj.used_at = timezone.now()
         otp_obj.save(update_fields=["used_at"])
+        PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=channel).exclude(id=otp_obj.id).update(
+            used_at=timezone.now()
+        )
 
-        return Response({"permitido": True, "motivo": None}, status=status.HTTP_200_OK)
+        return ok_response()
 
 
-# =========================
-# USUARIOS (ADMIN)
-# =========================
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all().order_by("id")
     serializer_class = UsuarioSerializer
@@ -291,10 +450,106 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
         return qs
 
+    @action(detail=False, methods=["post"], url_path="importar-aprendices/validar", parser_classes=[MultiPartParser])
+    def importar_aprendices_validar(self, request):
+        s = ImportAprendicesValidateSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
 
-# =========================
-# NOTIFICACIONES
-# =========================
+        result = validate_excel(s.validated_data["file"])
+        import_id = uuid4().hex
+        cache_import_payload(import_id, request.user.id, result.rows, result.errors)
+
+        return ok_response(
+            {
+                "import_id": import_id,
+                "resumen": {
+                    "validos": len(result.rows),
+                    "errores": len(result.errors),
+                    "total": len(result.rows) + len(result.errors),
+                },
+                "errores": result.errors,
+            }
+        )
+
+    @action(detail=False, methods=["post"], url_path="importar-aprendices/confirmar")
+    def importar_aprendices_confirmar(self, request):
+        s = ImportAprendicesConfirmSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        payload = get_cached_import_payload(s.validated_data["import_id"])
+        if not payload or payload.get("user_id") != request.user.id:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="La validación previa no existe o expiró. Vuelve a cargar el archivo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rows = payload.get("rows", [])
+        errors = payload.get("errors", [])
+        created_count = 0
+        updated_count = 0
+
+        with transaction.atomic():
+            for row in rows:
+                user = Usuario.objects.filter(documento=row["documento"]).first()
+                if user:
+                    user.first_name = row["first_name"]
+                    user.last_name = row["last_name"]
+                    user.email = row["email"]
+                    user.telefono = row["telefono"]
+                    user.sede_principal = row["sede_principal"]
+                    user.jornada = row["jornada"]
+                    user.programa_formacion = row["programa_formacion"]
+                    user.rol = Usuario.Rol.APRENDIZ
+                    user.save(
+                        update_fields=[
+                            "first_name",
+                            "last_name",
+                            "email",
+                            "telefono",
+                            "sede_principal",
+                            "jornada",
+                            "programa_formacion",
+                            "rol",
+                        ]
+                    )
+                    updated_count += 1
+                else:
+                    created = Usuario.objects.create(
+                        username=row["documento"],
+                        first_name=row["first_name"],
+                        last_name=row["last_name"],
+                        email=row["email"],
+                        telefono=row["telefono"],
+                        documento=row["documento"],
+                        sede_principal=row["sede_principal"],
+                        jornada=row["jornada"],
+                        programa_formacion=row["programa_formacion"],
+                        rol=Usuario.Rol.APRENDIZ,
+                        estado=Usuario.Estado.ACTIVO,
+                        must_change_password=True,
+                    )
+                    created.set_password(_initial_password_from_documento(row["documento"], digits=6))
+                    created.save(update_fields=["password"])
+                    created_count += 1
+
+            AprendizImportAudit.objects.create(
+                imported_by=request.user,
+                total_rows=len(rows) + len(errors),
+                created_count=created_count,
+                updated_count=updated_count,
+                errors_count=len(errors),
+            )
+
+        return ok_response(
+            {
+                "created": created_count,
+                "updated": updated_count,
+                "errors": len(errors),
+            }
+        )
+
+
 class NotificacionViewSet(viewsets.ModelViewSet):
     serializer_class = NotificacionSerializer
     permission_classes = [IsAuthenticated]
@@ -319,26 +574,20 @@ class NotificacionViewSet(viewsets.ModelViewSet):
     def leer(self, request, pk=None):
         obj = self.get_object()
 
-        if getattr(request.user, "rol", None) != "admin":
-            if obj.user_id not in [None, request.user.id]:
-                return Response(
-                    {"permitido": False, "motivo": "No autorizado."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        if getattr(request.user, "rol", None) != "admin" and obj.user_id not in [None, request.user.id]:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No autorizado.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         if obj.read_at is None:
             obj.read_at = timezone.now()
             obj.save(update_fields=["read_at"])
 
-        return Response(
-            {"permitido": True, "motivo": None, "notificacion": NotificacionSerializer(obj).data},
-            status=status.HTTP_200_OK,
-        )
+        return ok_response({"notificacion": NotificacionSerializer(obj).data})
 
 
-# =========================
-# EQUIPOS
-# =========================
 class EquipoViewSet(viewsets.ModelViewSet):
     serializer_class = EquipoSerializer
     permission_classes = [IsAuthenticated]
@@ -396,7 +645,6 @@ class EquipoViewSet(viewsets.ModelViewSet):
             raise ValidationError({"propietario": "Como admin debes enviar el propietario (id del aprendiz)."})
 
         equipo = serializer.save(propietario=propietario)
-
         equipo.estado = Equipo.Estado.APROBADO
         equipo.motivo_rechazo = None
         equipo.revisado_por = user
@@ -418,19 +666,16 @@ class EquipoViewSet(viewsets.ModelViewSet):
         equipo.revisado_en = timezone.now()
         equipo.save()
 
-        return Response(EquipoSerializer(equipo).data, status=status.HTTP_200_OK)
+        return ok_response({"equipo": EquipoSerializer(equipo).data})
 
 
-# =========================
-# TURNOS
-# =========================
 class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Turno.objects.all().order_by("-inicio")
     serializer_class = TurnoSerializer
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ["iniciar", "finalizar", "actual"]:
+        if self.action in ["iniciar", "finalizar", "actual", "reanudar"]:
             return [IsAuthenticated(), IsGuarda()]
         if self.action == "finalizar_admin":
             return [IsAuthenticated(), IsAdmin()]
@@ -470,13 +715,11 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
 
         turno_activo = obtener_turno_activo(request.user)
         if turno_activo:
-            return Response(
-                {
-                    "permitido": False,
-                    "motivo": "Ya tienes un turno activo.",
-                    "turno": TurnoSerializer(turno_activo).data,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                code=ErrorCode.TURNO_ALREADY_ACTIVE,
+                message="Ya tienes un turno activo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                extra={"turno": TurnoSerializer(turno_activo).data},
             )
 
         turno = Turno.objects.create(
@@ -487,18 +730,29 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
             activo=True,
             fin=None,
         )
-        return Response(
-            {"permitido": True, "motivo": None, "turno": TurnoSerializer(turno).data},
-            status=status.HTTP_201_CREATED,
-        )
+        return ok_response({"turno": TurnoSerializer(turno).data}, status_code=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="reanudar")
+    def reanudar(self, request):
+        turno = obtener_turno_activo(request.user)
+        if not turno:
+            return error_response(
+                code=ErrorCode.TURNO_REQUIRED,
+                message="No tienes un turno activo para reanudar.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                extra={"turno": None},
+            )
+        return ok_response({"turno": TurnoSerializer(turno).data})
 
     @action(detail=False, methods=["post"], url_path="finalizar")
     def finalizar(self, request):
         turno = obtener_turno_activo(request.user)
         if not turno:
-            return Response(
-                {"permitido": False, "motivo": "No tienes un turno activo.", "turno": None},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                code=ErrorCode.TURNO_REQUIRED,
+                message="No tienes un turno activo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                extra={"turno": None},
             )
 
         now = timezone.now()
@@ -506,44 +760,35 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         turno.fin = _safe_fin(now, turno.inicio)
         turno.save(update_fields=["activo", "fin"])
 
-        return Response(
-            {"permitido": True, "motivo": None, "turno": TurnoSerializer(turno).data},
-            status=status.HTTP_200_OK,
-        )
+        return ok_response({"turno": TurnoSerializer(turno).data})
 
     @action(detail=False, methods=["get"], url_path="actual")
     def actual(self, request):
         turno = obtener_turno_activo(request.user)
         if not turno:
-            return Response({"activo": False}, status=status.HTTP_200_OK)
-        return Response(TurnoSerializer(turno).data, status=status.HTTP_200_OK)
+            return ok_response({"activo": False})
+        payload = TurnoSerializer(turno).data
+        payload.update({"permitido": True, "motivo": None})
+        return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="finalizar_admin")
     def finalizar_admin(self, request, pk=None):
         turno = self.get_object()
 
-        # Si ya está finalizado, informamos
         if not turno.activo and turno.fin is not None:
-            return Response(
-                {
-                    "permitido": False,
-                    "motivo": "El turno ya estaba finalizado.",
-                    "turno": TurnoSerializer(turno).data,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="El turno ya estaba finalizado.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                extra={"turno": TurnoSerializer(turno).data},
             )
 
         now = timezone.now()
-
-        # ✅ SIEMPRE se sobreescribe fin al cerrar por admin
         turno.activo = False
         turno.fin = _safe_fin(now, turno.inicio)
         turno.save(update_fields=["activo", "fin"])
 
-        return Response(
-            {"permitido": True, "motivo": None, "turno": TurnoSerializer(turno).data},
-            status=status.HTTP_200_OK,
-        )
+        return ok_response({"turno": TurnoSerializer(turno).data})
 
     @action(detail=True, methods=["get"], url_path="resumen")
     def resumen(self, request, pk=None):
@@ -552,26 +797,24 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         rol = getattr(user, "rol", None)
 
         if rol == "guarda" and turno.guarda_id != user.id:
-            return Response({"permitido": False, "motivo": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No autorizado.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         qs = Acceso.objects.filter(turno=turno)
         ingresos = qs.filter(tipo=Acceso.Tipo.INGRESO).count()
         salidas = qs.filter(tipo=Acceso.Tipo.SALIDA).count()
 
-        return Response(
+        return ok_response(
             {
-                "permitido": True,
-                "motivo": None,
                 "turno": TurnoSerializer(turno).data,
                 "resumen": {"ingresos": ingresos, "salidas": salidas, "total": ingresos + salidas},
-            },
-            status=status.HTTP_200_OK,
+            }
         )
 
 
-# =========================
-# ACCESOS
-# =========================
 class AccesoViewSet(viewsets.ModelViewSet):
     serializer_class = AccesoSerializer
     permission_classes = [IsAuthenticated]
@@ -651,14 +894,12 @@ class AccesoViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     def _validar_equipos_ingreso(self, aprendiz: Usuario, equipos: list[Equipo]):
-        # Validación de propiedad y estado
         for eq in equipos:
             if eq.propietario_id != aprendiz.id:
                 raise ValidationError({"equipos": "Uno de los equipos no pertenece al aprendiz."})
             if eq.estado != Equipo.Estado.APROBADO:
                 raise ValidationError({"equipos": "Uno de los equipos no está aprobado."})
 
-        # Regla extra: no permitir ingresar un equipo que ya está "dentro"
         for eq in equipos:
             ultimo_eq = Acceso.objects.filter(equipos=eq).order_by("-fecha").first()
             if ultimo_eq and ultimo_eq.tipo == Acceso.Tipo.INGRESO:
@@ -675,14 +916,18 @@ class AccesoViewSet(viewsets.ModelViewSet):
             raise ValidationError({"equipos": "Salida inválida: el último ingreso no tenía equipos."})
 
         if equipos_enviados and ingreso_ids != enviados_ids:
-            raise ValidationError({"equipos": "Los equipos en la salida deben coincidir exactamente con los de l último ingreso."})
+            raise ValidationError({"equipos": "Los equipos en la salida deben coincidir exactamente con los del último ingreso."})
 
     def create(self, request, *args, **kwargs):
         request_user = request.user
         rol = getattr(request_user, "rol", None)
 
         if rol not in ["admin", "guarda"]:
-            return Response({"permitido": False, "motivo": "No tienes permisos para registrar accesos."}, status=status.HTTP_403_FORBIDDEN)
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No tienes permisos para registrar accesos.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         turno = None
         sede = None
@@ -690,9 +935,10 @@ class AccesoViewSet(viewsets.ModelViewSet):
         if rol == "guarda":
             turno = obtener_turno_activo(request_user)
             if not turno:
-                return Response(
-                    {"permitido": False, "motivo": "Debes iniciar turno antes de registrar accesos."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                return error_response(
+                    code=ErrorCode.TURNO_REQUIRED,
+                    message="Debes iniciar turno antes de registrar accesos.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
             sede = turno.sede
 
@@ -706,74 +952,99 @@ class AccesoViewSet(viewsets.ModelViewSet):
         ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
-            return Response({"permitido": False, "motivo": "Salida sin ingreso previo."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                message="Salida sin ingreso previo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if ultimo is not None and ultimo.tipo == tipo:
-            return Response({"permitido": False, "motivo": f"Doble {tipo}."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                message=f"Doble {tipo}.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Reglas de equipos
         if tipo == Acceso.Tipo.INGRESO and equipos_enviados:
             self._validar_equipos_ingreso(aprendiz, list(equipos_enviados))
 
         if tipo == Acceso.Tipo.SALIDA:
             if not ultimo or ultimo.tipo != Acceso.Tipo.INGRESO:
-                return Response(
-                    {"permitido": False, "motivo": "Salida inválida: el último registro no es un ingreso."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                return error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message="Salida inválida: el último registro no es un ingreso.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
-
-            # Heredar sede/turno del ingreso (admin o guarda)
             sede = ultimo.sede
             turno = ultimo.turno
-
-            # Validación estricta de equipos
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos_enviados))
 
         acceso = serializer.save(registrado_por=request_user, turno=turno, sede=sede)
-
         if equipos_enviados:
             acceso.equipos.set(list(equipos_enviados))
 
-        return Response({"permitido": True, "motivo": None, "acceso": AccesoSerializer(acceso).data}, status=status.HTTP_201_CREATED)
+        return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="validar_documento")
     def validar_documento(self, request):
         s = ValidarDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        documento = s.validated_data["documento"]
+        try:
+            documento = _extract_documento_from_scan(s.validated_data["documento"])
+        except SignatureExpired:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="QR expirado. Genera uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        except (BadSignature, ValidationError):
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="QR o codigo de barras invalido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         turno = obtener_turno_activo(request.user)
         if not turno:
-            return Response(
-                {"permitido": False, "motivo": "Debes iniciar turno para validar y registrar accesos."},
-                status=status.HTTP_400_BAD_REQUEST,
+            return error_response(
+                code=ErrorCode.TURNO_REQUIRED,
+                message="Debes iniciar turno para validar y registrar accesos.",
+                status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         aprendiz = Usuario.objects.filter(documento=documento).first()
         if not aprendiz:
-            return Response({"permitido": False, "motivo": "Documento no registrado."}, status=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Documento no registrado.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
 
         if getattr(aprendiz, "rol", None) != Usuario.Rol.APRENDIZ:
-            return Response({"permitido": False, "motivo": "El documento no pertenece a un aprendiz."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="El documento no pertenece a un aprendiz.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if getattr(aprendiz, "estado", None) == Usuario.Estado.BLOQUEADO:
-            return Response({"permitido": False, "motivo": "El aprendiz está bloqueado."}, status=status.HTTP_403_FORBIDDEN)
+            return error_response(
+                code=ErrorCode.ACCOUNT_DISABLED_SECURITY,
+                message="El aprendiz está bloqueado.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
         estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
-
         equipos_aprobados = Equipo.objects.filter(propietario=aprendiz, estado=Equipo.Estado.APROBADO).order_by("-creado_en")
 
-        return Response(
+        return ok_response(
             {
-                "permitido": True,
-                "motivo": None,
                 "estado": estado,
                 "aprendiz": UsuarioSerializer(aprendiz).data,
                 "equipos": EquipoSerializer(equipos_aprobados, many=True).data,
                 "turno": TurnoSerializer(turno).data,
-            },
-            status=status.HTTP_200_OK,
+            }
         )
 
     @action(detail=False, methods=["post"], url_path="registrar_por_documento")
@@ -781,37 +1052,73 @@ class AccesoViewSet(viewsets.ModelViewSet):
         s = RegistrarAccesoDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        documento = s.validated_data["documento"]
+        try:
+            documento = _extract_documento_from_scan(s.validated_data["documento"])
+        except SignatureExpired:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="QR expirado. Genera uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        except (BadSignature, ValidationError):
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="QR o codigo de barras invalido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         tipo = s.validated_data["tipo"]
-        equipos = s.validated_data.get("equipos", [])
+        equipos_ids = s.validated_data.get("equipos", [])
+        equipos = list(Equipo.objects.filter(id__in=equipos_ids)) if equipos_ids else []
 
         turno = obtener_turno_activo(request.user)
         if not turno:
-            return Response({"permitido": False, "motivo": "Debes iniciar turno antes de registrar accesos."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.TURNO_REQUIRED,
+                message="Debes iniciar turno antes de registrar accesos.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         aprendiz = Usuario.objects.filter(documento=documento).first()
         if not aprendiz:
-            return Response({"permitido": False, "motivo": "Documento no registrado."}, status=status.HTTP_404_NOT_FOUND)
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Documento no registrado.",
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
 
         if getattr(aprendiz, "rol", None) != Usuario.Rol.APRENDIZ:
-            return Response({"permitido": False, "motivo": "El documento no pertenece a un aprendiz."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="El documento no pertenece a un aprendiz.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
-            return Response({"permitido": False, "motivo": "Salida sin ingreso previo."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                message="Salida sin ingreso previo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
         if ultimo is not None and ultimo.tipo == tipo:
-            return Response({"permitido": False, "motivo": f"Doble {tipo}."}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                message=f"Doble {tipo}.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Equipos
         if tipo == Acceso.Tipo.INGRESO and equipos:
             self._validar_equipos_ingreso(aprendiz, list(equipos))
 
         if tipo == Acceso.Tipo.SALIDA:
             if not ultimo or ultimo.tipo != Acceso.Tipo.INGRESO:
-                return Response({"permitido": False, "motivo": "Salida inválida: el último registro no es un ingreso."}, status=status.HTTP_400_BAD_REQUEST)
-            # Validación estricta de equipos
+                return error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message="Salida inválida: el último registro no es un ingreso.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos))
 
         acceso = Acceso.objects.create(
@@ -825,29 +1132,30 @@ class AccesoViewSet(viewsets.ModelViewSet):
         if equipos:
             acceso.equipos.set(list(equipos))
 
-        return Response({"permitido": True, "motivo": None, "acceso": AccesoSerializer(acceso).data}, status=status.HTTP_201_CREATED)
+        return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
         turno = obtener_turno_activo(request.user)
         if not turno:
-            return Response({"permitido": False, "motivo": "No tienes turno activo.", "stats": None}, status=status.HTTP_400_BAD_REQUEST)
+            return error_response(
+                code=ErrorCode.TURNO_REQUIRED,
+                message="No tienes turno activo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                extra={"stats": None},
+            )
 
         qs = Acceso.objects.filter(turno=turno)
         ingresos = qs.filter(tipo=Acceso.Tipo.INGRESO).count()
         salidas = qs.filter(tipo=Acceso.Tipo.SALIDA).count()
 
-        return Response(
+        return ok_response(
             {
-                "permitido": True,
-                "motivo": None,
                 "turno": {"id": turno.id, "sede": turno.sede, "jornada": turno.jornada},
                 "stats": {"ingresos": ingresos, "salidas": salidas, "total": ingresos + salidas},
-            },
-            status=status.HTTP_200_OK,
+            }
         )
 
-    # ===== Aprendiz endpoints (para después, pero no estorban) =====
     @action(detail=False, methods=["get"], url_path="mis_accesos")
     def mis_accesos(self, request):
         qs = Acceso.objects.filter(usuario=request.user).order_by("-fecha")[:100]
@@ -857,4 +1165,4 @@ class AccesoViewSet(viewsets.ModelViewSet):
     def estado(self, request):
         ultimo = Acceso.objects.filter(usuario=request.user).order_by("-fecha").first()
         estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
-        return Response({"estado": estado}, status=status.HTTP_200_OK)
+        return ok_response({"estado": estado})

@@ -15,14 +15,14 @@ type Turno = {
   id: number;
   guarda: number; // en tu serializer viene como id del guarda
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MANANA" | "TARDE" | "NOCHE";
+  jornada: "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
 };
 
 const SEDES: Turno["sede"][] = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
-const JORNADAS: Turno["jornada"][] = ["MANANA", "TARDE", "NOCHE"];
+const JORNADAS: Turno["jornada"][] = ["MAÑANA", "TARDE", "NOCHE"];
 
 function badgeBase() {
   return "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
@@ -34,7 +34,7 @@ function badgeEstado(turno: Turno) {
     : `${badgeBase()} bg-gray-100 text-gray-800 border-gray-200`;
 }
 function badgeJornada(j: Turno["jornada"]) {
-  if (j === "MANANA") return `${badgeBase()} bg-sky-100 text-sky-800 border-sky-200`;
+  if (j === "MAÑANA") return `${badgeBase()} bg-sky-100 text-sky-800 border-sky-200`;
   if (j === "TARDE") return `${badgeBase()} bg-amber-100 text-amber-800 border-amber-200`;
   return `${badgeBase()} bg-indigo-100 text-indigo-800 border-indigo-200`;
 }
@@ -56,6 +56,19 @@ function formatFecha(iso?: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(d);
+}
+
+function safeErrorMessage(e: any) {
+  return (
+    (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
+    (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : null) ??
+    (typeof e?.response?.data?.motivo === "string" ? e.response.data.motivo : null) ??
+    e?.response?.data?.detail ??
+    e?.response?.data?.motivo ??
+    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
+    e?.message ??
+    "Ocurrio un error."
+  );
 }
 
 function Modal({
@@ -149,7 +162,7 @@ export default function AdminTurnosPage() {
     try {
       await Promise.all([cargarUsuarios(), cargarTurnos()]);
     } catch (e: any) {
-      setError(e?.response?.data?.detail ?? e?.message ?? "Error cargando datos.");
+      setError(safeErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -161,7 +174,7 @@ export default function AdminTurnosPage() {
     try {
       await cargarTurnos();
     } catch (e: any) {
-      setError(e?.response?.data?.detail ?? e?.message ?? "No se pudo refrescar.");
+      setError(safeErrorMessage(e));
     } finally {
       setReloading(false);
     }
@@ -194,12 +207,7 @@ export default function AdminTurnosPage() {
       setTurnoFinalizar(null);
       await cargarTurnos();
     } catch (e: any) {
-      const msg =
-        e?.response?.data?.motivo ??
-        e?.response?.data?.detail ??
-        (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
-        e?.message ??
-        "No se pudo finalizar el turno.";
+      const msg = safeErrorMessage(e) || "No se pudo finalizar el turno.";
       alert(msg);
       await cargarTurnos();
     } finally {
@@ -279,7 +287,7 @@ export default function AdminTurnosPage() {
               <option value="">Jornada</option>
               {JORNADAS.map((j) => (
                 <option key={j} value={j}>
-                  {j === "MANANA" ? "Mañana" : j === "TARDE" ? "Tarde" : "Noche"}
+                  {j === "MAÑANA" ? "Mañana" : j === "TARDE" ? "Tarde" : "Noche"}
                 </option>
               ))}
             </select>
@@ -374,7 +382,7 @@ export default function AdminTurnosPage() {
                       <td className="px-4 py-3 text-gray-800">{t.sede.replace("_", " ")}</td>
                       <td className="px-4 py-3">
                         <span className={badgeJornada(t.jornada)}>
-                          {t.jornada === "MANANA" ? "Mañana" : t.jornada === "TARDE" ? "Tarde" : "Noche"}
+                          {t.jornada === "MAÑANA" ? "Mañana" : t.jornada === "TARDE" ? "Tarde" : "Noche"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-800">{formatFecha(t.inicio)}</td>
@@ -428,7 +436,7 @@ export default function AdminTurnosPage() {
                 <div>
                   <span className="text-gray-500">Jornada:</span>{" "}
                   <span className="font-semibold">
-                    {turnoFinalizar.jornada === "MANANA"
+                    {turnoFinalizar.jornada === "MAÑANA"
                       ? "Mañana"
                       : turnoFinalizar.jornada === "TARDE"
                       ? "Tarde"

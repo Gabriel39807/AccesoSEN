@@ -1,7 +1,7 @@
 import { api } from "./client";
 
 export type Sede = "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-export type Jornada = "MANANA" | "TARDE" | "NOCHE";
+export type Jornada = "MAÑANA" | "TARDE" | "NOCHE";
 
 export type Turno = {
   id: number;
@@ -25,8 +25,17 @@ export async function finalizarTurno() {
 
 export async function turnoActual() {
   const r = await api.get("/api/turnos/actual/");
-  // Puede devolver {activo:false} o el TurnoSerializer
-  return r.data as ({ activo: false } | Turno);
+  return r.data as { permitido: boolean; motivo: string | null; activo?: false; turno?: Turno };
+}
+
+export async function reanudarTurno() {
+  const r = await api.post("/api/turnos/reanudar/");
+  return r.data as { permitido: boolean; motivo: string | null; turno: Turno };
+}
+
+export async function estadoActualGuardia() {
+  const r = await api.get("/api/guardia/estado-actual/");
+  return r.data as { permitido: boolean; motivo: string | null; turno_activo: boolean; turno: Turno | null };
 }
 
 export async function resumenTurno(id: number) {

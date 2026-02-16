@@ -9,6 +9,23 @@ function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
 }
 
+type PasswordRule = {
+  id: string;
+  label: string;
+  valid: boolean;
+};
+
+function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
+  return [
+    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
+    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
+    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
+    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
+    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
+    { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
+  ];
+}
+
 function safeErrorMessage(e: any) {
   return (
     e?.response?.data?.detail ??
@@ -37,6 +54,8 @@ export default function AprendizPerfilPage() {
   const [pwOpen, setPwOpen] = useState(false);
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
+  const passwordRules = buildPasswordRules(pw, pw2);
+  const passwordRulesValid = passwordRules.every((rule) => rule.valid);
 
   useEffect(() => {
     if (!me) return;
@@ -84,13 +103,8 @@ export default function AprendizPerfilPage() {
     setMsg(null);
     setMsgTipo(null);
 
-    if (!pw || pw.length < 8) {
-      setMsg("La nueva contraseña debe tener mínimo 8 caracteres.");
-      setMsgTipo("err");
-      return;
-    }
-    if (pw !== pw2) {
-      setMsg("Las contraseñas no coinciden.");
+    if (!passwordRulesValid) {
+      setMsg("La nueva contrasena no cumple todos los requisitos.");
       setMsgTipo("err");
       return;
     }
@@ -176,11 +190,6 @@ export default function AprendizPerfilPage() {
                 {me?.programa_formacion ?? "—"}
               </div>
             </div>
-          </div>
-
-          <div className="mt-5 rounded-2xl border bg-zinc-50 p-4 text-xs text-zinc-600">
-            <span className="font-semibold text-zinc-900">Nota:</span> si al guardar recibes un error de permisos,
-            significa que el backend aún no permite actualización directa del perfil para aprendices.
           </div>
 
           {msg && (
@@ -338,14 +347,21 @@ export default function AprendizPerfilPage() {
                 />
               </div>
               <div className="rounded-2xl border bg-zinc-50 p-4 text-xs text-zinc-600">
-                Requisitos sugeridos: mínimo 8 caracteres, 1 mayúscula y 1 número.
+                <div className="mb-2 font-semibold text-zinc-900">Checklist de seguridad</div>
+                <ul className="space-y-1">
+                  {passwordRules.map((rule) => (
+                    <li key={rule.id} className={rule.valid ? "text-emerald-700" : "text-zinc-600"}>
+                      {rule.valid ? "[OK]" : "[ ]"} {rule.label}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
 
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <button
                 onClick={cambiarContrasena}
-                disabled={saving}
+                disabled={saving || !passwordRulesValid}
                 className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
               >
                 {saving ? "Guardando..." : "Actualizar contraseña"}

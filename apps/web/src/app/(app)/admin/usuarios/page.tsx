@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import Modal from "@/components/ui/Modal";
+import Pagination from "@/components/ui/Pagination";
 
 type Usuario = {
   id: number;
@@ -23,6 +25,14 @@ type Paginated<T> = {
   results: T[];
 };
 
+type ImportValidationError = {
+  row: number;
+  code: string;
+  message: string;
+  field?: string | null;
+  fields?: string[];
+};
+
 const ROLES = ["admin", "guarda", "aprendiz"] as const;
 const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
@@ -37,6 +47,9 @@ function useDebounced<T>(value: T, delay = 450) {
 
 function safeErrorMessage(e: any) {
   return (
+    (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
+    (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : null) ??
+    (typeof e?.response?.data?.motivo === "string" ? e.response.data.motivo : null) ??
     e?.response?.data?.detail ??
     e?.response?.data?.motivo ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
@@ -70,15 +83,98 @@ function StatSkeleton() {
 
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
-      <div className="p-4 space-y-3">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
-        ))}
+    <>
+      {/* Tabla skeleton (misma “caja” que tu tabla real) */}
+      <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
+        <table className="min-w-full text-sm">
+          {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
+          <thead className="bg-emerald-50 text-emerald-900">
+            <tr className="text-left">
+              <th className="p-3">ID</th>
+              <th className="p-3">Usuario</th>
+              <th className="p-3">Nombre</th>
+              <th className="p-3">Rol</th>
+              <th className="p-3">Estado</th>
+              <th className="p-3">Documento</th>
+              <th className="p-3">Sede</th>
+              <th className="p-3">Programa</th>
+              <th className="p-3">Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y">
+            {Array.from({ length: rows }).map((_, i) => (
+              <tr key={i} className="hover:bg-emerald-50/40 transition">
+                {/* ID */}
+                <td className="p-3">
+                  <div className="h-4 w-10 rounded sadi-skeleton" />
+                </td>
+
+                {/* Usuario (2 líneas: username + email) */}
+                <td className="p-3">
+                  <div className="h-4 w-28 rounded sadi-skeleton" />
+                  <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
+                </td>
+
+                {/* Nombre */}
+                <td className="p-3">
+                  <div className="h-4 w-36 rounded sadi-skeleton" />
+                </td>
+
+                {/* Rol (pill + select como en tu UI real) */}
+                <td className="p-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-6 w-24 rounded-full sadi-skeleton" />
+                    <div className="h-10 w-28 rounded-xl sadi-skeleton" />
+                  </div>
+                </td>
+
+                {/* Estado (pill + select) */}
+                <td className="p-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="h-6 w-24 rounded-full sadi-skeleton" />
+                    <div className="h-10 w-28 rounded-xl sadi-skeleton" />
+                  </div>
+                </td>
+
+                {/* Documento */}
+                <td className="p-3">
+                  <div className="h-4 w-24 rounded sadi-skeleton" />
+                </td>
+
+                {/* Sede */}
+                <td className="p-3">
+                  <div className="h-4 w-20 rounded sadi-skeleton" />
+                </td>
+
+                {/* Programa */}
+                <td className="p-3">
+                  <div className="h-4 w-32 rounded sadi-skeleton" />
+                </td>
+
+                {/* Acciones (botón) */}
+                <td className="p-3">
+                  <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      {/* Paginación skeleton (misma caja que tu paginación real) */}
+      <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border p-3 mt-4">
+        <div className="h-4 w-40 rounded sadi-skeleton" />
+
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+          <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+        </div>
+      </div>
+    </>
   );
 }
+
 
 export default function AdminUsuariosPage() {
   // data
@@ -135,6 +231,15 @@ export default function AdminUsuariosPage() {
   const [c_sede, setCSede] = useState<string>("");
   const [c_programa, setCPrograma] = useState("");
 
+  // modal importar aprendices (excel 2 fases)
+  const [openImportar, setOpenImportar] = useState(false);
+  const [validandoImport, setValidandoImport] = useState(false);
+  const [confirmandoImport, setConfirmandoImport] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importId, setImportId] = useState<string>("");
+  const [importResumen, setImportResumen] = useState<{ validos: number; errores: number; total: number } | null>(null);
+  const [importErrores, setImportErrores] = useState<ImportValidationError[]>([]);
+
   const requestIdRef = useRef(0);
 
   async function cargar(p = page) {
@@ -170,7 +275,7 @@ export default function AdminUsuariosPage() {
       }
     } catch (e: any) {
       if (rid !== requestIdRef.current) return;
-      setError(e?.response?.data?.detail ?? "No se pudieron cargar los usuarios.");
+      setError(safeErrorMessage(e));
     } finally {
       if (rid === requestIdRef.current) {
         setLoading(false);
@@ -301,7 +406,7 @@ export default function AdminUsuariosPage() {
     try {
       await api.patch(`/api/usuarios/${id}/`, patch);
     } catch (e: any) {
-      alert(e?.response?.data?.detail ?? "No se pudo actualizar.");
+      alert(safeErrorMessage(e));
       await cargar(page);
     }
   }
@@ -354,27 +459,96 @@ export default function AdminUsuariosPage() {
     }
   }
 
+  function abrirImportar() {
+    setOpenImportar(true);
+    setImportFile(null);
+    setImportId("");
+    setImportResumen(null);
+    setImportErrores([]);
+    setValidandoImport(false);
+    setConfirmandoImport(false);
+  }
+
+  async function validarImportacion() {
+    if (!importFile) {
+      alert("Selecciona un archivo Excel antes de validar.");
+      return;
+    }
+
+    setValidandoImport(true);
+    try {
+      const form = new FormData();
+      form.append("file", importFile);
+
+      const res = await api.post("/api/usuarios/importar-aprendices/validar/", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const data = res?.data?.data ?? res?.data ?? {};
+      setImportId(data.import_id ?? "");
+      setImportResumen(data.resumen ?? null);
+      setImportErrores(data.errores ?? []);
+    } catch (e: any) {
+      alert(safeErrorMessage(e));
+    } finally {
+      setValidandoImport(false);
+    }
+  }
+
+  async function confirmarImportacion() {
+    if (!importId) {
+      alert("Primero valida el archivo.");
+      return;
+    }
+
+    setConfirmandoImport(true);
+    try {
+      const res = await api.post("/api/usuarios/importar-aprendices/confirmar/", {
+        import_id: importId,
+      });
+      const data = res?.data?.data ?? res?.data ?? {};
+      const created = data.created ?? data.created_count ?? 0;
+      const updated = data.updated ?? data.updated_count ?? 0;
+
+      alert(`Importación aplicada. Creados: ${created}. Actualizados: ${updated}.`);
+      setOpenImportar(false);
+      setPage(1);
+      await cargar(1);
+    } catch (e: any) {
+      alert(safeErrorMessage(e));
+    } finally {
+      setConfirmandoImport(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-emerald-50/40">
+    <div className="min-h-screen bg-transparent">
       <div className="max-w-6xl mx-auto p-6 space-y-4">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-emerald-900">Admin / Usuarios</h1>
-            <p className="text-sm text-gray-500">Gestión de usuarios del sistema</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Admin / Usuarios</h1>
+            <p className="text-sm text-slate-500">Gestión de cuentas, roles y estado del sistema.</p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={abrirCrear}
-              className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition"
+              className="rounded-xl px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition"
             >
               ➕ Crear usuario
             </button>
 
             <button
+              onClick={abrirImportar}
+              className="rounded-xl px-4 py-2 bg-teal-700 text-white hover:bg-teal-800 shadow-sm transition"
+            >
+              Cargar aprendices (Excel)
+            </button>
+
+            <button
               onClick={() => cargar(page)}
-              className="rounded-xl px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50 shadow-sm transition"
             >
               Recargar
             </button>
@@ -509,7 +683,7 @@ export default function AdminUsuariosPage() {
 
         {/* Table */}
         {loadingTable ? (
-          <TableSkeleton />
+          <TableSkeleton rows={Math.min(8, pageSize)} />
         ) : (
           <>
             <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
@@ -599,49 +773,25 @@ export default function AdminUsuariosPage() {
               </table>
             </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border p-3">
-              <div className="text-sm text-gray-600">
-                Página <span className="font-semibold">{page}</span> de{" "}
-                <span className="font-semibold">{totalPages}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  className="border rounded-xl px-3 py-2 disabled:opacity-50 hover:bg-gray-50 transition"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  Anterior
-                </button>
-                <button
-                  className="border rounded-xl px-3 py-2 disabled:opacity-50 hover:bg-gray-50 transition"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Siguiente
-                </button>
-              </div>
-            </div>
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPrev={() => setPage((p) => Math.max(1, p - 1))}
+              onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+            />
           </>
         )}
 
         {/* MODAL EDITAR */}
-        {open && selected && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
-            <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl p-5 space-y-4 border">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-emerald-900">
-                  Editar usuario #{selected.id} — {selected.username}
-                </h2>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="text-sm border rounded-xl px-3 py-2 hover:bg-gray-50 transition"
-                >
-                  Cerrar
-                </button>
-              </div>
-
+        {selected && (
+          <Modal
+            open={open}
+            title={`Editar usuario #${selected.id} - ${selected.username}`}
+            onClose={() => setOpen(false)}
+            maxWidthClassName="max-w-lg"
+          >
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Rol</div>
@@ -734,24 +884,18 @@ export default function AdminUsuariosPage() {
                   {saving ? "Guardando..." : "Guardar cambios"}
                 </button>
               </div>
-            </div>
-          </div>
+          </Modal>
         )}
 
         {/* MODAL CREAR */}
         {openCrear && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl p-5 space-y-4 border">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-emerald-900">Crear usuario</h2>
-                <button
-                  onClick={() => (!creating ? setOpenCrear(false) : null)}
-                  className="text-sm border rounded-xl px-3 py-2 hover:bg-gray-50 transition"
-                >
-                  Cerrar
-                </button>
-              </div>
-
+          <Modal
+            open={openCrear}
+            title="Crear usuario"
+            onClose={() => (!creating ? setOpenCrear(false) : null)}
+            maxWidthClassName="max-w-xl"
+            closeDisabled={creating}
+          >
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Username *</div>
@@ -881,9 +1025,94 @@ export default function AdminUsuariosPage() {
                   {creating ? "Creando..." : "Crear usuario"}
                 </button>
               </div>
-            </div>
-          </div>
+          </Modal>
         )}
+
+        <Modal
+          open={openImportar}
+          title="Importar aprendices desde Excel"
+          onClose={() => (!validandoImport && !confirmandoImport ? setOpenImportar(false) : null)}
+          maxWidthClassName="max-w-4xl"
+          closeDisabled={validandoImport || confirmandoImport}
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importación.
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+              <input
+                type="file"
+                accept=".xlsx,.xlsm,.xltx,.xltm"
+                onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+              />
+              <button
+                onClick={validarImportacion}
+                disabled={!importFile || validandoImport || confirmandoImport}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {validandoImport ? "Validando..." : "Validar archivo"}
+              </button>
+              <button
+                onClick={confirmarImportacion}
+                disabled={!importId || confirmandoImport || validandoImport}
+                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {confirmandoImport ? "Confirmando..." : "Confirmar importación"}
+              </button>
+            </div>
+
+            {importResumen && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="text-xs text-slate-500">Total</div>
+                  <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
+                </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="text-xs text-emerald-700">Válidos</div>
+                  <div className="text-xl font-semibold text-emerald-800">{importResumen.validos}</div>
+                </div>
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                  <div className="text-xs text-rose-700">Errores</div>
+                  <div className="text-xl font-semibold text-rose-800">{importResumen.errores}</div>
+                </div>
+              </div>
+            )}
+
+            {importErrores.length > 0 && (
+              <div className="overflow-hidden rounded-2xl border border-rose-200">
+                <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800">
+                  Errores de validación
+                </div>
+                <div className="max-h-64 overflow-auto bg-white">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2">Fila</th>
+                        <th className="px-3 py-2">Código</th>
+                        <th className="px-3 py-2">Mensaje</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {importErrores.map((err, idx) => (
+                        <tr key={`${err.row}-${err.code}-${idx}`}>
+                          <td className="px-3 py-2">{err.row}</td>
+                          <td className="px-3 py-2 font-medium text-rose-700">{err.code}</td>
+                          <td className="px-3 py-2 text-slate-700">
+                            {err.message}
+                            {err.field ? ` (campo: ${err.field})` : ""}
+                            {err.fields?.length ? ` (campos: ${err.fields.join(", ")})` : ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
       </div>
     </div>
   );

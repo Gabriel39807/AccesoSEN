@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import Modal from "@/components/ui/Modal";
+import Pagination from "@/components/ui/Pagination";
 
 type Usuario = {
   id: number;
@@ -18,7 +20,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MANANA" | "TARDE" | "NOCHE";
+  jornada: "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -117,33 +119,6 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
         ))}
-      </div>
-    </div>
-  );
-}
-
-function Modal({
-  open,
-  title,
-  children,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl border overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="px-3 py-1 rounded-lg border hover:bg-gray-50">
-            ✖
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
       </div>
     </div>
   );
@@ -347,8 +322,6 @@ export default function AdminAccesosPage() {
   }, [page]);
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
-  const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = Math.min(count, page * pageSize);
 
   return (
     <div className="min-h-screen bg-emerald-50/40">
@@ -532,32 +505,9 @@ export default function AdminAccesosPage() {
           <TableSkeleton />
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="px-4 py-3 border-b">
               <div className="text-sm text-gray-600">
-                Mostrando <span className="font-semibold">{from}</span>–<span className="font-semibold">{to}</span> de{" "}
-                <span className="font-semibold">{count}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ← Anterior
-                </button>
-
-                <div className="text-xs text-gray-600">
-                  Página <span className="font-semibold">{page}</span> / <span className="font-semibold">{totalPages}</span>
-                </div>
-
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Siguiente →
-                </button>
+                Resultados: <span className="font-semibold">{count}</span>
               </div>
             </div>
 
@@ -619,6 +569,16 @@ export default function AdminAccesosPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+            <div className="p-3">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={count}
+                pageSize={pageSize}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+              />
             </div>
           </div>
         )}
@@ -732,3 +692,4 @@ export default function AdminAccesosPage() {
     </div>
   );
 }
+

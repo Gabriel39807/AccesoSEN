@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, FlatList, ActivityIndicator } from "react-native";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import { api } from "../../src/api/client";
+import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type Row = { id: number; tipo: "ingreso" | "salida"; fecha: string };
 
@@ -37,42 +38,56 @@ export default function GuardHistorial() {
   }, [rows]);
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
-      <View style={{ backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#eee", padding: 12, gap: 10 }}>
-        <Text style={{ fontWeight: "900" }}>Buscar</Text>
-        <TextInput
-          value={q}
-          onChangeText={setQ}
-          placeholder="Documento, nombre, serial…"
-          style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
-        />
-        <Pressable onPress={buscar} style={{ backgroundColor: "#16a34a", padding: 12, borderRadius: 999, alignItems: "center" }}>
-          <Text style={{ color: "#fff", fontWeight: "900" }}>Filtrar</Text>
-        </Pressable>
-      </View>
+    <ModernScreen scroll>
+      <FadeInCard delay={0}>
+        <Pill text="HISTORIAL" />
+        <View style={{ marginTop: 8 }}>
+          <TitleBlock title="Registros de acceso" subtitle="Filtra por documento, nombre o serial." />
+        </View>
+      </FadeInCard>
 
-      {loading ? (
-        <View style={{ padding: 16 }}><ActivityIndicator /></View>
-      ) : (
-        <FlatList
-          data={grouped}
-          keyExtractor={(i) => i.dia}
-          renderItem={({ item }) => (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={{ fontWeight: "900", marginBottom: 8 }}>{item.dia}</Text>
-              {item.items.map((r) => (
-                <View key={r.id} style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, marginBottom: 10 }}>
-                  <Text style={{ fontWeight: "900" }}>
-                    #{r.id} — {r.tipo.toUpperCase()}
-                  </Text>
-                  <Text style={{ opacity: 0.7 }}>{new Date(r.fecha).toLocaleString()}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-          ListEmptyComponent={<Text style={{ opacity: 0.7 }}>No hay resultados.</Text>}
-        />
-      )}
-    </View>
+      <FadeInCard delay={70}>
+        <InputField value={q} onChangeText={setQ} label="Buscar" placeholder="Documento, nombre o serial" />
+        <View style={{ marginTop: 10 }}>
+          <ModernButton label={loading ? "Buscando..." : "Filtrar"} onPress={buscar} disabled={loading} />
+        </View>
+      </FadeInCard>
+
+      <FadeInCard delay={120}>
+        {loading ? (
+          <ActivityIndicator />
+        ) : (
+          <FlatList
+            data={grouped}
+            scrollEnabled={false}
+            keyExtractor={(i) => i.dia}
+            renderItem={({ item }) => (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontWeight: "900", color: "#0f172a", marginBottom: 6 }}>{item.dia}</Text>
+                {item.items.map((r) => (
+                  <View
+                    key={r.id}
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderWidth: 1,
+                      borderColor: "#e2e8f0",
+                      borderRadius: 12,
+                      padding: 10,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "900", color: "#0f172a" }}>
+                      #{r.id} - {r.tipo.toUpperCase()}
+                    </Text>
+                    <Text style={{ color: "#64748b" }}>{new Date(r.fecha).toLocaleString()}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            ListEmptyComponent={<Text style={{ color: "#64748b" }}>No hay resultados.</Text>}
+          />
+        )}
+      </FadeInCard>
+    </ModernScreen>
   );
 }

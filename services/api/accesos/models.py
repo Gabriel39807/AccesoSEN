@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q, F
+from uuid import uuid4
 
 
 class Usuario(AbstractUser):
@@ -28,6 +29,13 @@ class Usuario(AbstractUser):
     )
 
     programa_formacion = models.CharField(max_length=100, null=True, blank=True)
+    telefono = models.CharField(max_length=20, null=True, blank=True)
+    class Jornada(models.TextChoices):
+        MAÑANA = "MAÑANA", "MAÑANA"
+        TARDE = "TARDE", "Tarde"
+        NOCHE = "NOCHE", "Noche"
+
+    jornada = models.CharField(max_length=20, choices=Jornada.choices, null=True, blank=True)
 
     # QR / código de barras = número de documento
     documento = models.CharField(max_length=30, unique=True, null=True, blank=True)
@@ -37,6 +45,10 @@ class Usuario(AbstractUser):
         BLOQUEADO = "bloqueado", "Bloqueado"
 
     estado = models.CharField(max_length=20, choices=Estado.choices, default=Estado.ACTIVO)
+    active_session_id = models.UUIDField(null=True, blank=True, default=None)
+    last_guard_login_at = models.DateTimeField(null=True, blank=True)
+    must_change_password = models.BooleanField(default=False)
+    last_password_change_at = models.DateTimeField(null=True, blank=True)
 
 
 class Equipo(models.Model):
@@ -71,7 +83,7 @@ class Turno(models.Model):
         GASTRONOMIA = "GASTRONOMIA", "GASTRONOMIA"
 
     class Jornada(models.TextChoices):
-        MANANA = "MANANA", "Mañana"
+        MAÑANA = "MAÑANA", "Mañana"
         TARDE = "TARDE", "Tarde"
         NOCHE = "NOCHE", "Noche"
 
@@ -176,6 +188,11 @@ class PasswordResetOTP(models.Model):
 
     salt = models.CharField(max_length=64)
     code_hash = models.CharField(max_length=128)
+    class Channel(models.TextChoices):
+        EMAIL = "email", "Email"
+        WHATSAPP = "whatsapp", "WhatsApp"
+
+    channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.EMAIL)
 
     expires_at = models.DateTimeField()
     attempts = models.PositiveIntegerField(default=0)
@@ -195,3 +212,24 @@ class PasswordResetOTP(models.Model):
 
     def __str__(self):
         return f"OTP(user={self.user_id}, exp={self.expires_at}, used={bool(self.used_at)})"
+
+
+class AprendizImportAudit(models.Model):
+    imported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="aprendiz_import_audits",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    total_rows = models.PositiveIntegerField(default=0)
+    errors_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"ImportAudit(by={self.imported_by_id}, created={self.created_count}, updated={self.updated_count})"

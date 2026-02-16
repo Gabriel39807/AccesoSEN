@@ -31,3 +31,6 @@ Thumbs.db
 # Django secrets
 services/api/.env
 .env
+
+# IA y Agentes
+Agents.md

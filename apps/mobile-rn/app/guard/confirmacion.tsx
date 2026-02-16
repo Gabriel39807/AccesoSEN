@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, Pressable, FlatList, Alert, ActivityIndicator } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { router } from "expo-router";
+import { ActivityIndicator, Alert, FlatList, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 
 import * as Accesos from "../../src/api/accesos";
+import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 export default function ConfirmacionScreen() {
   const params = useLocalSearchParams<{
@@ -14,7 +14,6 @@ export default function ConfirmacionScreen() {
 
   const documento = params.documento ?? "";
   const status = params.status;
-
   const data = status === "ok" ? Accesos.__cache.get(documento) : null;
 
   const [selected, setSelected] = useState<number[]>([]);
@@ -29,13 +28,8 @@ export default function ConfirmacionScreen() {
   async function registrar(tipo: "ingreso" | "salida") {
     try {
       setLoading(true);
-      await Accesos.registrarPorDocumento({
-        documento,
-        tipo,
-        equipos: selected,
-      });
-
-      Alert.alert("Listo", `Se registró ${tipo} correctamente.`);
+      await Accesos.registrarPorDocumento({ documento, tipo, equipos: selected });
+      Alert.alert("Listo", `Se registro ${tipo} correctamente.`);
       router.replace("/guard/home");
     } catch (e: any) {
       const motivo = e?.response?.data?.motivo || e?.response?.data?.detail || "No se pudo registrar.";
@@ -49,95 +43,80 @@ export default function ConfirmacionScreen() {
 
   if (status === "notfound") {
     return (
-      <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 14 }}>
-        <Text style={{ fontSize: 26, fontWeight: "900", textAlign: "center" }}>Acceso Denegado</Text>
-        <Text style={{ fontSize: 18, fontWeight: "900", textAlign: "center" }}>Usuario No Encontrado</Text>
-        <Text style={{ textAlign: "center", opacity: 0.7 }}>
-          La información escaneada no corresponde a un usuario registrado.
-        </Text>
-        <Pressable onPress={() => router.back()} style={{ backgroundColor: "#dc2626", padding: 14, borderRadius: 999, alignItems: "center" }}>
-          <Text style={{ color: "#fff", fontWeight: "900" }}>Volver a Escanear</Text>
-        </Pressable>
-      </View>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
+        <FadeInCard>
+          <TitleBlock title="Acceso denegado" subtitle="Usuario no encontrado" />
+          <Text style={{ color: "#64748b", marginTop: 6 }}>
+            La informacion escaneada no corresponde a un usuario registrado.
+          </Text>
+          <View style={{ marginTop: 12 }}>
+            <ModernButton label="Volver a escanear" tone="danger" onPress={() => router.back()} />
+          </View>
+        </FadeInCard>
+      </ModernScreen>
     );
   }
 
   if (status === "denied") {
     return (
-      <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 14 }}>
-        <Text style={{ fontSize: 26, fontWeight: "900", textAlign: "center" }}>Acceso Denegado</Text>
-        <Text style={{ fontSize: 18, fontWeight: "900", textAlign: "center" }}>Motivo del Rechazo</Text>
-        <Text style={{ textAlign: "center", opacity: 0.8 }}>{params.motivo ?? "Acceso denegado."}</Text>
-        <Pressable onPress={() => router.back()} style={{ backgroundColor: "#dc2626", padding: 14, borderRadius: 999, alignItems: "center" }}>
-          <Text style={{ color: "#fff", fontWeight: "900" }}>Volver a Escanear</Text>
-        </Pressable>
-      </View>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
+        <FadeInCard>
+          <TitleBlock title="Acceso denegado" subtitle="Motivo del rechazo" />
+          <Text style={{ color: "#64748b", marginTop: 6 }}>{params.motivo ?? "Acceso denegado."}</Text>
+          <View style={{ marginTop: 12 }}>
+            <ModernButton label="Volver a escanear" tone="danger" onPress={() => router.back()} />
+          </View>
+        </FadeInCard>
+      </ModernScreen>
     );
   }
 
   if (!data) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <ActivityIndicator />
-      </View>
+      </ModernScreen>
     );
   }
 
   const a = data.aprendiz;
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 14 }}>
-      <Text style={{ fontSize: 26, fontWeight: "900", textAlign: "center" }}>Acceso Autorizado</Text>
+    <ModernScreen scroll>
+      <FadeInCard delay={0}>
+        <Pill text="ACCESO AUTORIZADO" />
+        <View style={{ marginTop: 8 }}>
+          <TitleBlock title={`${a.first_name} ${a.last_name}`} subtitle={`Documento ${a.documento}`} />
+        </View>
+      </FadeInCard>
 
-      <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "#eee", gap: 6 }}>
-        <Text style={{ fontSize: 18, fontWeight: "900", textAlign: "center" }}>
-          {a.first_name} {a.last_name}
-        </Text>
-        <Text style={{ textAlign: "center", opacity: 0.7 }}>{a.documento}</Text>
-      </View>
-
-      <Text style={{ fontSize: 16, fontWeight: "900" }}>Checklist de Equipos</Text>
-
-      <View style={{ flex: 1, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: "#eee" }}>
+      <FadeInCard delay={70}>
+        <Text style={{ fontWeight: "900", color: "#0f172a", marginBottom: 8 }}>Checklist de equipos</Text>
         <FlatList
           data={equipos}
+          scrollEnabled={false}
           keyExtractor={(i) => String(i.id)}
           renderItem={({ item }) => {
             const checked = selected.includes(item.id);
             return (
-              <Pressable
+              <ModernButton
+                label={`${checked ? "[OK]" : "[ ]"} ${item.marca} ${item.modelo} - ${item.serial}`}
+                tone="light"
                 onPress={() => toggleEquipo(item.id)}
-                style={{
-                  padding: 12,
-                  borderBottomWidth: 1,
-                  borderBottomColor: "#f3f4f6",
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={{ fontWeight: "900" }}>
-                    {item.marca} {item.modelo}
-                  </Text>
-                  <Text style={{ opacity: 0.7 }}>Serial: {item.serial}</Text>
-                </View>
-                <Text style={{ fontSize: 18 }}>{checked ? "✅" : "⬜"}</Text>
-              </Pressable>
+              />
             );
           }}
-          ListEmptyComponent={<Text style={{ padding: 12, opacity: 0.7 }}>No hay equipos aprobados.</Text>}
+          ListEmptyComponent={<Text style={{ color: "#64748b" }}>No hay equipos aprobados.</Text>}
         />
-      </View>
+      </FadeInCard>
 
-      <Pressable disabled={loading} onPress={() => registrar("ingreso")} style={{ backgroundColor: "#16a34a", padding: 14, borderRadius: 999, alignItems: "center" }}>
-        <Text style={{ color: "#fff", fontWeight: "900" }}>Registrar Ingreso</Text>
-      </Pressable>
-
-      <Pressable disabled={loading} onPress={() => registrar("salida")} style={{ backgroundColor: "#dc2626", padding: 14, borderRadius: 999, alignItems: "center" }}>
-        <Text style={{ color: "#fff", fontWeight: "900" }}>Registrar Salida</Text>
-      </Pressable>
-    </View>
+      <FadeInCard delay={120}>
+        <View style={{ gap: 8 }}>
+          <ModernButton label="Registrar ingreso" onPress={() => registrar("ingreso")} disabled={loading} />
+          <ModernButton label="Registrar salida" tone="danger" onPress={() => registrar("salida")} disabled={loading} />
+          {loading ? <ActivityIndicator style={{ marginTop: 8 }} /> : null}
+        </View>
+      </FadeInCard>
+    </ModernScreen>
   );
 }
-    

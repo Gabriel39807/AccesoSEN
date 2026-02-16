@@ -12,6 +12,7 @@ type MeResponse = {
     id: number;
     username: string;
     rol: "admin" | "aprendiz" | "guarda";
+    must_change_password?: boolean;
   };
 };
 
@@ -29,6 +30,16 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
         const isAdminRoute = pathname.startsWith("/admin");
         const isAprendizRoute = pathname.startsWith("/aprendiz");
+        const isPrimerAcceso = pathname.startsWith("/aprendiz/primer-acceso");
+
+        if (rol === "aprendiz" && me.data.usuario.must_change_password && !isPrimerAcceso) {
+          router.replace("/aprendiz/primer-acceso");
+          return;
+        }
+        if (rol === "aprendiz" && !me.data.usuario.must_change_password && isPrimerAcceso) {
+          router.replace("/aprendiz/inicio");
+          return;
+        }
 
         // Protecciones:
         if (isAdminRoute && rol !== "admin") {

@@ -1,6 +1,22 @@
 from rest_framework import serializers
 from .models import Usuario, Acceso, Equipo, Turno
-from .models import Notificacion
+from .models import Notificacion, PasswordResetOTP
+from .otp_services import normalize_phone_e164
+
+
+def password_policy_errors(password: str) -> list[str]:
+    errors: list[str] = []
+    if len(password) < 8:
+        errors.append("La contrasena debe tener minimo 8 caracteres.")
+    if not any(c.isupper() for c in password):
+        errors.append("La contrasena debe incluir al menos 1 mayuscula.")
+    if not any(c.islower() for c in password):
+        errors.append("La contrasena debe incluir al menos 1 minuscula.")
+    if not any(c.isdigit() for c in password):
+        errors.append("La contrasena debe incluir al menos 1 numero.")
+    if all(c.isalnum() for c in password):
+        errors.append("La contrasena debe incluir al menos 1 caracter especial.")
+    return errors
 
 # =========================
 # USUARIOS
@@ -22,22 +38,31 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "documento",
             "estado",
             "sede_principal",
+            "jornada",
             "programa_formacion",
+            "telefono",
+            "must_change_password",
         ]
+        read_only_fields = ["must_change_password"]
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
+        auto_password = False
 
         # Si NO mandan password, por default lo ponemos como los últimos 4 del documento (si existe)
         if password is None:
             doc = (validated_data.get("documento") or "").strip()
-            if len(doc) >= 4:
+            if len(doc) >= 6:
+                password = doc[-6:]
+            elif len(doc) >= 4:
                 password = doc[-4:]
             else:
                 password = "1234"  # fallback simple (puedes cambiarlo)
+            auto_password = True
 
         user = Usuario(**validated_data)
         user.set_password(password)
+        user.must_change_password = auto_password
         user.save()
         return user
 
@@ -184,30 +209,132 @@ class NotificacionSerializer(serializers.ModelSerializer):
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    email = serializers.EmailField(required=False, allow_blank=True)
+    telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    channel = serializers.ChoiceField(
+        choices=PasswordResetOTP.Channel.choices,
+        default=PasswordResetOTP.Channel.EMAIL,
+        required=False,
+    )
 
     def validate_email(self, value):
         return value.strip().lower()
+
+    def validate_telefono(self, value):
+        if not value:
+            return ""
+        return normalize_phone_e164(value)
+
+    def validate(self, attrs):
+        channel = attrs.get("channel", PasswordResetOTP.Channel.EMAIL)
+        email = (attrs.get("email") or "").strip().lower()
+        telefono = (attrs.get("telefono") or "").strip()
+        if channel == PasswordResetOTP.Channel.WHATSAPP:
+            if not telefono and not email:
+                raise serializers.ValidationError({"telefono": "Telefono o correo son obligatorios para WhatsApp."})
+        else:
+            if not email:
+                raise serializers.ValidationError({"email": "El correo es obligatorio para este canal."})
+        attrs["email"] = email
+        attrs["telefono"] = telefono
+        return attrs
 
 
 class PasswordResetVerifySerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(min_length=6, max_length=6)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    otp = serializers.CharField(min_length=5, max_length=5)
+    channel = serializers.ChoiceField(
+        choices=PasswordResetOTP.Channel.choices,
+        default=PasswordResetOTP.Channel.EMAIL,
+        required=False,
+    )
 
     def validate_email(self, value):
         return value.strip().lower()
 
+    def validate_telefono(self, value):
+        if not value:
+            return ""
+        return normalize_phone_e164(value)
+
     def validate_otp(self, value):
         return value.strip()
+
+    def validate(self, attrs):
+        channel = attrs.get("channel", PasswordResetOTP.Channel.EMAIL)
+        email = (attrs.get("email") or "").strip().lower()
+        telefono = (attrs.get("telefono") or "").strip()
+        if channel == PasswordResetOTP.Channel.WHATSAPP:
+            if not telefono and not email:
+                raise serializers.ValidationError({"telefono": "Telefono o correo son obligatorios para WhatsApp."})
+        else:
+            if not email:
+                raise serializers.ValidationError({"email": "El correo es obligatorio para este canal."})
+        attrs["email"] = email
+        attrs["telefono"] = telefono
+        return attrs
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(min_length=6, max_length=6)
-    new_password = serializers.CharField(min_length=4, max_length=128)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    otp = serializers.CharField(min_length=5, max_length=5)
+    new_password = serializers.CharField(min_length=8, max_length=128)
+    channel = serializers.ChoiceField(
+        choices=PasswordResetOTP.Channel.choices,
+        default=PasswordResetOTP.Channel.EMAIL,
+        required=False,
+    )
 
     def validate_email(self, value):
         return value.strip().lower()
 
+    def validate_telefono(self, value):
+        if not value:
+            return ""
+        return normalize_phone_e164(value)
+
     def validate_otp(self, value):
         return value.strip()
+
+    def validate_new_password(self, value):
+        value = value.strip()
+        errors = password_policy_errors(value)
+        if errors:
+            raise serializers.ValidationError(errors[0])
+        return value
+
+    def validate(self, attrs):
+        channel = attrs.get("channel", PasswordResetOTP.Channel.EMAIL)
+        email = (attrs.get("email") or "").strip().lower()
+        telefono = (attrs.get("telefono") or "").strip()
+        if channel == PasswordResetOTP.Channel.WHATSAPP:
+            if not telefono and not email:
+                raise serializers.ValidationError({"telefono": "Telefono o correo son obligatorios para WhatsApp."})
+        else:
+            if not email:
+                raise serializers.ValidationError({"email": "El correo es obligatorio para este canal."})
+        attrs["email"] = email
+        attrs["telefono"] = telefono
+        return attrs
+
+
+class ImportAprendicesValidateSerializer(serializers.Serializer):
+    file = serializers.FileField()
+
+
+class ImportAprendicesConfirmSerializer(serializers.Serializer):
+    import_id = serializers.CharField(max_length=128)
+
+
+class ChangeInitialPasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(min_length=4, max_length=128)
+    new_password = serializers.CharField(min_length=8, max_length=128)
+
+    def validate_new_password(self, value):
+        value = value.strip()
+        errors = password_policy_errors(value)
+        if errors:
+            raise serializers.ValidationError(errors[0])
+        return value

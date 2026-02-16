@@ -43,9 +43,6 @@ export default function AprendizAyudaPage() {
                   <li>Haz clic en <span className="font-semibold">Registrar nuevo</span>.</li>
                   <li>Completa los datos (Serial, Marca y Modelo) y guarda.</li>
                 </ol>
-                <p className="mt-3 text-xs text-zinc-500">
-                  Nota: registra tu equipo antes de llegar a portería para evitar filas.
-                </p>
               </div>
             </details>
 

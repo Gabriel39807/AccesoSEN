@@ -1,64 +1,73 @@
 from __future__ import annotations
 
-from rest_framework.views import exception_handler
-from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, PermissionDenied, ValidationError
-from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, PermissionDenied, ValidationError
+from rest_framework.views import exception_handler
+
+from .error_codes import ErrorCode
+
+
+def _error_payload(code: str, message: str, detail=None, field=None):
+    return {
+        "code": code,
+        "message": message,
+        "detail": detail,
+        "field": field,
+        "permitido": False,
+        "motivo": message,
+    }
 
 
 def ui_exception_handler(exc, context):
-    # First, get DRF's default error response.
     response = exception_handler(exc, context)
-
-    # If DRF couldn't handle it, return None (will become 500).
     if response is None:
         return response
 
-    # Default shape
-    payload = {
-        "permitido": False,
-        "motivo": "Ocurrió un error.",
-    }
-
-    # Friendly mapping
-    if isinstance(exc, (NotAuthenticated,)):
-        payload["motivo"] = "Debes iniciar sesión para continuar."
+    if isinstance(exc, NotAuthenticated):
+        response.data = _error_payload(
+            code=ErrorCode.NOT_AUTHENTICATED,
+            message="Debes iniciar sesión para continuar.",
+            detail=response.data,
+        )
         response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
 
-    elif isinstance(exc, (AuthenticationFailed,)):
-        # Includes invalid/expired token cases
-        payload["motivo"] = "Tu sesión no es válida o expiró. Inicia sesión nuevamente."
-        response.status_code = status.HTTP_401_UNAUTHORIZED
+    if isinstance(exc, AuthenticationFailed):
+        detail = exc.detail if isinstance(exc.detail, dict) else response.data
+        code = detail.get("code", ErrorCode.INVALID_CREDENTIALS) if isinstance(detail, dict) else ErrorCode.INVALID_CREDENTIALS
+        message = detail.get("message", "Tu sesión no es válida o expiró.") if isinstance(detail, dict) else "Tu sesión no es válida o expiró."
+        response.data = _error_payload(code=code, message=message, detail=detail)
+        if code == ErrorCode.ACCOUNT_LOCKED_15MIN:
+            response.status_code = status.HTTP_423_LOCKED
+        else:
+            response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response
 
-    elif isinstance(exc, (PermissionDenied,)):
-        payload["motivo"] = "No tienes permisos para realizar esta acción."
+    if isinstance(exc, PermissionDenied):
+        response.data = _error_payload(
+            code=ErrorCode.PERMISSION_DENIED,
+            message="No tienes permisos para realizar esta acción.",
+            detail=response.data,
+        )
         response.status_code = status.HTTP_403_FORBIDDEN
+        return response
 
-    elif isinstance(exc, (ValidationError,)):
-        payload["motivo"] = "Datos inválidos."
-        payload["errores"] = response.data
+    if isinstance(exc, ValidationError):
+        response.data = _error_payload(
+            code=ErrorCode.VALIDATION_ERROR,
+            message="Datos inválidos.",
+            detail=response.data,
+        )
         response.status_code = status.HTTP_400_BAD_REQUEST
+        return response
 
-    else:
-        # Try to extract a single message from response.data
-        data = response.data
-        if isinstance(data, dict):
-            # If backend already uses {motivo: ...}
-            if isinstance(data.get("motivo"), str):
-                payload["motivo"] = data["motivo"]
-                # keep extra fields if present
-                extra = {k: v for k, v in data.items() if k not in ["motivo", "permitido"]}
-                payload.update(extra)
-            else:
-                # Use common DRF 'detail'
-                detail = data.get("detail")
-                if isinstance(detail, str):
-                    payload["motivo"] = detail
-
-                # include field errors when present
-                payload["errores"] = data
-        elif isinstance(data, list) and data:
-            payload["motivo"] = str(data[0])
-
-    response.data = payload
+    detail = response.data
+    message = "Ocurrió un error."
+    if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
+        message = detail["detail"]
+    response.data = _error_payload(
+        code=ErrorCode.SERVER_ERROR if response.status_code >= 500 else ErrorCode.VALIDATION_ERROR,
+        message=message,
+        detail=detail,
+    )
     return response

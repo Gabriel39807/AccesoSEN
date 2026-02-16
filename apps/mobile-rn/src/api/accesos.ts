@@ -22,7 +22,14 @@ export type ValidarDocumentoOK = {
 
 export async function validarDocumento(documento: string) {
   const r = await api.post("/api/accesos/validar_documento/", { documento });
-  return r.data as ValidarDocumentoOK;
+  const d = r.data as any;
+  const equipos = d?.equipos_aprobados ?? d?.equipos ?? [];
+  return {
+    permitido: true,
+    aprendiz: d?.aprendiz,
+    equipos_aprobados: equipos,
+    turno: d?.turno,
+  } as ValidarDocumentoOK;
 }
 
 export async function registrarPorDocumento(params: {

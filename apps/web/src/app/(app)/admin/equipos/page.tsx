@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import Modal from "@/components/ui/Modal";
+import Pagination from "@/components/ui/Pagination";
 
 type Usuario = {
   id: number;
@@ -79,49 +81,78 @@ function Badge({
 function StatSkeleton() {
   return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
 }
-function TableSkeleton({ rows = 8 }: { rows?: number }) {
+function TableSkeleton({ rows = 7 }: { rows?: number }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-      <div className="px-4 py-3 border-b">
-        <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
-      </div>
-      <div className="p-4 space-y-3">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
-        ))}
-      </div>
-    </div>
-  );
-}
+      {/* Barra superior: Mostrando... + paginación (skeleton) */}
+      <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="h-4 w-64 rounded sadi-skeleton" />
 
-function Modal({
-  open,
-  title,
-  children,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl border overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="px-3 py-1 rounded-lg border hover:bg-gray-50">
-            ✖
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-24 rounded-xl sadi-skeleton" />
+          <div className="h-4 w-24 rounded sadi-skeleton" />
+          <div className="h-8 w-24 rounded-xl sadi-skeleton" />
         </div>
-        <div className="p-5">{children}</div>
+      </div>
+
+      {/* Tabla */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          {/* Mantener el header real da contexto y se ve más “producto” */}
+          <thead className="bg-gray-50 border-b">
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Marca / Modelo</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Propietario</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Motivo</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {Array.from({ length: rows }).map((_, i) => (
+              <tr key={i} className="border-b">
+                {/* Serial */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-24 rounded sadi-skeleton" />
+                </td>
+
+                {/* Marca / Modelo (dos líneas) */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-32 rounded sadi-skeleton" />
+                  <div className="mt-2 h-3 w-24 rounded sadi-skeleton" />
+                </td>
+
+                {/* Propietario (dos líneas) */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-40 rounded sadi-skeleton" />
+                  <div className="mt-2 h-3 w-20 rounded sadi-skeleton" />
+                </td>
+
+                {/* Estado (pill) */}
+                <td className="px-4 py-3">
+                  <div className="h-6 w-24 rounded-full sadi-skeleton" />
+                </td>
+
+                {/* Motivo */}
+                <td className="px-4 py-3">
+                  <div className="h-4 w-28 rounded sadi-skeleton" />
+                </td>
+
+                {/* Acciones (botón a la derecha) */}
+                <td className="px-4 py-3 text-right">
+                  <div className="ml-auto h-8 w-24 rounded-xl sadi-skeleton" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
-
-export default function AdminEquiposPage() {
+`r`nexport default function AdminEquiposPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   const [equipos, setEquipos] = useState<Equipo[]>([]);
@@ -269,8 +300,6 @@ export default function AdminEquiposPage() {
   }, [page]);
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
-  const from = count === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = Math.min(count, page * pageSize);
 
   return (
     <div className="min-h-screen bg-emerald-50/40">
@@ -378,33 +407,9 @@ export default function AdminEquiposPage() {
           <TableSkeleton />
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="px-4 py-3 border-b">
               <div className="text-sm text-gray-600">
-                Mostrando <span className="font-semibold">{from}</span>–<span className="font-semibold">{to}</span> de{" "}
-                <span className="font-semibold">{count}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  ← Anterior
-                </button>
-
-                <div className="text-xs text-gray-600">
-                  Página <span className="font-semibold">{page}</span> /{" "}
-                  <span className="font-semibold">{totalPages}</span>
-                </div>
-
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Siguiente →
-                </button>
+                Resultados: <span className="font-semibold">{count}</span>
               </div>
             </div>
 
@@ -470,6 +475,16 @@ export default function AdminEquiposPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+            <div className="p-3">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={count}
+                pageSize={pageSize}
+                onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+              />
             </div>
           </div>
         )}
@@ -544,3 +559,6 @@ export default function AdminEquiposPage() {
     </div>
   );
 }
+
+
+

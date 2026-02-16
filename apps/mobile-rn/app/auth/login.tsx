@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { useSessionStore } from "../../src/store/session";
 import type { Jornada, Sede } from "../../src/api/turnos";
+import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 const MAX_INTENTOS = 3;
 const BLOQUEO_SEG = 30;
@@ -20,7 +21,7 @@ export default function LoginScreen() {
   const [show, setShow] = useState(false);
 
   const [sede, setSede] = useState<Sede>("CEGAFE");
-  const [jornada, setJornada] = useState<Jornada>("MANANA");
+  const [jornada, setJornada] = useState<Jornada>("MAÑANA");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,6 @@ export default function LoginScreen() {
 
   async function onSubmit() {
     setError(null);
-
     if (bloqueado) return;
 
     setLoading(true);
@@ -49,14 +49,16 @@ export default function LoginScreen() {
         sede: rol === "guarda" ? sede : undefined,
         jornada: rol === "guarda" ? jornada : undefined,
       });
-
-      router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
+      const mustChange = useSessionStore.getState().user?.must_change_password;
+      if (rol === "aprendiz" && mustChange) {
+        router.replace("/auth/first-password" as any);
+      } else {
+        router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
+      }
     } catch (e: any) {
-      setError(e?.message || "No se pudo iniciar sesión.");
-
+      setError(e?.message || "No se pudo iniciar sesion.");
       const next = intentos + 1;
       setIntentos(next);
-
       if (next >= MAX_INTENTOS) {
         setBloqueadoHasta(Date.now() + BLOQUEO_SEG * 1000);
         setIntentos(0);
@@ -67,90 +69,86 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 14 }}>
-      <Text style={{ fontSize: 24, fontWeight: "900", textAlign: "center" }}>
-        Iniciar sesión — {rol === "guarda" ? "Guarda" : "Aprendiz"}
-      </Text>
+    <ModernScreen scroll>
+      <FadeInCard delay={0}>
+        <Pill text={rol === "guarda" ? "SEGURIDAD" : "APRENDIZ"} />
+        <View style={{ marginTop: 8 }}>
+          <TitleBlock title="Iniciar sesion" subtitle={rol === "guarda" ? "Controla accesos y turnos activos." : "Consulta tu estado, equipos y mi QR."} />
+        </View>
+      </FadeInCard>
 
-      <View style={{ backgroundColor: "#fff", borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "#eee", gap: 10 }}>
-        <Text style={{ fontWeight: "800" }}>Usuario</Text>
-        <TextInput
-          value={username}
-          onChangeText={setUsername}
-          placeholder="usuario"
-          autoCapitalize="none"
-          style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
-        />
+      <FadeInCard delay={70}>
+        <View style={{ gap: 10 }}>
+          <InputField
+            label={rol === "guarda" ? "Usuario" : "Documento o usuario"}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            placeholder={rol === "guarda" ? "guarda.carlos" : "1053444048"}
+          />
 
-        <Text style={{ fontWeight: "800" }}>Contraseña</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="********"
-          secureTextEntry={!show}
-          style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
-        />
+          <InputField
+            label="Contrasena"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="********"
+            secureTextEntry={!show}
+          />
 
-        <Pressable onPress={() => setShow((v) => !v)} style={{ paddingVertical: 6 }}>
-          <Text style={{ fontWeight: "800" }}>{show ? "Ocultar" : "Mostrar"} contraseña</Text>
-        </Pressable>
+          <ModernButton
+            label={show ? "Ocultar contrasena" : "Mostrar contrasena"}
+            tone="light"
+            onPress={() => setShow((v) => !v)}
+          />
 
-        {rol === "guarda" ? (
-          <>
-            <Text style={{ fontWeight: "800" }}>Sede</Text>
-            <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12, overflow: "hidden" }}>
-              <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
-                <Picker.Item label="CEGAFE" value="CEGAFE" />
-                <Picker.Item label="SANTA CLARA" value="SANTA_CLARA" />
-                <Picker.Item label="ITEDRIS" value="ITEDRIS" />
-                <Picker.Item label="GASTRONOMIA" value="GASTRONOMIA" />
-              </Picker>
+          {rol === "guarda" ? (
+            <View style={{ gap: 10 }}>
+              <Text style={{ fontWeight: "700", color: "#0f172a" }}>Sede</Text>
+              <View style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 12, overflow: "hidden", backgroundColor: "#f8fafc" }}>
+                <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
+                  <Picker.Item label="CEGAFE" value="CEGAFE" />
+                  <Picker.Item label="SANTA CLARA" value="SANTA_CLARA" />
+                  <Picker.Item label="ITEDRIS" value="ITEDRIS" />
+                  <Picker.Item label="GASTRONOMIA" value="GASTRONOMIA" />
+                </Picker>
+              </View>
+
+              <Text style={{ fontWeight: "700", color: "#0f172a" }}>Turno</Text>
+              <View style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 12, overflow: "hidden", backgroundColor: "#f8fafc" }}>
+                <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
+                  <Picker.Item label="MAÑANA" value="MAÑANA" />
+                  <Picker.Item label="Tarde" value="TARDE" />
+                  <Picker.Item label="Noche" value="NOCHE" />
+                </Picker>
+              </View>
             </View>
+          ) : null}
 
-            <Text style={{ fontWeight: "800" }}>Turno</Text>
-            <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12, overflow: "hidden" }}>
-              <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-                <Picker.Item label="Mañana" value="MANANA" />
-                <Picker.Item label="Tarde" value="TARDE" />
-                <Picker.Item label="Noche" value="NOCHE" />
-              </Picker>
-            </View>
-          </>
-        ) : null}
+          {bloqueado ? (
+            <Text style={{ color: "#b91c1c", fontWeight: "800" }}>
+              Bloqueado temporalmente. Intenta en {restante}s.
+            </Text>
+          ) : null}
 
-        {bloqueado ? (
-          <Text style={{ color: "#dc2626", fontWeight: "800" }}>
-            Bloqueado por intentos. Intenta en {restante}s.
-          </Text>
-        ) : null}
+          {error ? <Text style={{ color: "#b91c1c" }}>{error}</Text> : null}
 
-        {error ? <Text style={{ color: "#dc2626" }}>{error}</Text> : null}
+          <ModernButton
+            label={loading ? "Ingresando..." : "Continuar"}
+            disabled={loading || bloqueado}
+            onPress={onSubmit}
+          />
 
-        <Pressable
-          disabled={loading || bloqueado}
-          onPress={onSubmit}
-          style={{
-            marginTop: 6,
-            backgroundColor: loading || bloqueado ? "#6b7280" : "#16a34a",
-            padding: 14,
-            borderRadius: 999,
-            alignItems: "center",
-          }}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "900" }}>Continuar</Text>}
-        </Pressable>
+          {loading ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
 
-        <Pressable
-          onPress={() => router.push({ pathname: "/auth/password-recovery" } as any)}
-          style={{ paddingVertical: 10, alignItems: "center" }}
-        >
-          <Text style={{ opacity: 0.75, fontWeight: "800" }}>¿Olvidaste tu contraseña?</Text>
-        </Pressable>
+          <ModernButton
+            label="Olvide mi contrasena"
+            tone="light"
+            onPress={() => router.push({ pathname: "/auth/password-recovery" } as any)}
+          />
 
-        <Pressable onPress={() => router.back()} style={{ paddingVertical: 6, alignItems: "center" }}>
-          <Text style={{ opacity: 0.7 }}>Volver</Text>
-        </Pressable>
-      </View>
-    </View>
+          <ModernButton label="Volver" tone="dark" onPress={() => router.back()} />
+        </View>
+      </FadeInCard>
+    </ModernScreen>
   );
 }

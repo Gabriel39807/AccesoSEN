@@ -17,6 +17,12 @@ type SessionState = {
     sede?: Turnos.Sede;
     jornada?: Turnos.Jornada;
   }) => Promise<void>;
+  signInGuarda: (p: {
+    username: string;
+    password: string;
+    sede: Turnos.Sede;
+    jornada: Turnos.Jornada;
+  }) => Promise<void>;
 
   finalizarTurno: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -47,9 +53,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // guarda puede traer turno actual
       let turno: Turnos.Turno | null = null;
       if (me.usuario.rol === "guarda") {
-        const actual = await Turnos.turnoActual();
-        if ((actual as any)?.activo === false) turno = null;
-        else turno = actual as Turnos.Turno;
+        const actual = await Turnos.estadoActualGuardia();
+        turno = actual.turno_activo ? actual.turno : null;
       }
 
       set({ isReady: true, user: me.usuario, turno });
@@ -77,6 +82,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     // 3) turno solo para guarda
     if (rol === "guarda") {
+      const estado = await Turnos.estadoActualGuardia();
+      if (estado.turno_activo && estado.turno) {
+        set({ user: me.usuario, turno: estado.turno });
+        return;
+      }
+
       if (!sede || !jornada) throw new Error("Selecciona sede y jornada.");
       try {
         const r = await Turnos.iniciarTurno(sede, jornada);
@@ -88,12 +99,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           set({ user: me.usuario, turno: data.turno });
           return;
         }
-        throw new Error(data?.motivo || "No se pudo iniciar el turno.");
+        throw new Error(data?.message || data?.motivo || "No se pudo iniciar el turno.");
       }
     }
 
     // aprendiz
     set({ user: me.usuario, turno: null });
+  },
+
+  signInGuarda: async ({ username, password, sede, jornada }) => {
+    await get().signIn({ username, password, rol: "guarda", sede, jornada });
   },
 
   finalizarTurno: async () => {
