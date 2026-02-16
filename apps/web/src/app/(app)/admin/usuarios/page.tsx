@@ -47,6 +47,9 @@ function useDebounced<T>(value: T, delay = 450) {
 
 function safeErrorMessage(e: any) {
   return (
+    (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
+    (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : null) ??
+    (typeof e?.response?.data?.motivo === "string" ? e.response.data.motivo : null) ??
     e?.response?.data?.detail ??
     e?.response?.data?.motivo ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
@@ -189,7 +192,7 @@ export default function AdminUsuariosPage() {
       }
     } catch (e: any) {
       if (rid !== requestIdRef.current) return;
-      setError(e?.response?.data?.detail ?? "No se pudieron cargar los usuarios.");
+      setError(safeErrorMessage(e));
     } finally {
       if (rid === requestIdRef.current) {
         setLoading(false);
@@ -320,7 +323,7 @@ export default function AdminUsuariosPage() {
     try {
       await api.patch(`/api/usuarios/${id}/`, patch);
     } catch (e: any) {
-      alert(e?.response?.data?.detail ?? "No se pudo actualizar.");
+      alert(safeErrorMessage(e));
       await cargar(page);
     }
   }

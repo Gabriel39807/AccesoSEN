@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearTokens, saveTokens } from "@/lib/auth";
+import { toErrorMessage } from "@/lib/errors";
 
 type MeResponse = {
   permitido: boolean;
@@ -39,7 +40,7 @@ export default function LoginPage() {
         setError("El rol guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? err?.response?.data?.motivo ?? "Credenciales invalidas.");
+      setError(toErrorMessage(err, "Credenciales invalidas."));
     } finally {
       setLoading(false);
     }

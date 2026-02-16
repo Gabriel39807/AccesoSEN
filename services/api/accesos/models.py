@@ -31,7 +31,7 @@ class Usuario(AbstractUser):
     programa_formacion = models.CharField(max_length=100, null=True, blank=True)
     telefono = models.CharField(max_length=20, null=True, blank=True)
     class Jornada(models.TextChoices):
-        MANANA = "MANANA", "Manana"
+        MAÑANA = "MAÑANA", "MAÑANA"
         TARDE = "TARDE", "Tarde"
         NOCHE = "NOCHE", "Noche"
 
@@ -83,7 +83,7 @@ class Turno(models.Model):
         GASTRONOMIA = "GASTRONOMIA", "GASTRONOMIA"
 
     class Jornada(models.TextChoices):
-        MANANA = "MANANA", "Mañana"
+        MAÑANA = "MAÑANA", "Mañana"
         TARDE = "TARDE", "Tarde"
         NOCHE = "NOCHE", "Noche"
 

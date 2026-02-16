@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 type Step = "email" | "otp" | "newpass" | "done";
 type Channel = "email" | "whatsapp";
@@ -58,7 +59,7 @@ export default function PasswordRecoveryWebPage() {
       setStep("otp");
       setMsg(`Si el usuario existe, enviamos un codigo OTP por ${channel === "whatsapp" ? "WhatsApp" : "correo"}.`);
     } catch (err: any) {
-      setMsg(err?.response?.data?.message || err?.response?.data?.motivo || "No se pudo enviar el codigo.");
+      setMsg(toErrorMessage(err, "No se pudo enviar el codigo."));
     } finally {
       setLoading(false);
     }
@@ -73,7 +74,7 @@ export default function PasswordRecoveryWebPage() {
       if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "OTP invalido.");
       setStep("newpass");
     } catch (err: any) {
-      setMsg(err?.message || err?.response?.data?.message || err?.response?.data?.motivo || "OTP invalido.");
+      setMsg(toErrorMessage(err, "OTP invalido."));
     } finally {
       setLoading(false);
     }
@@ -97,7 +98,7 @@ export default function PasswordRecoveryWebPage() {
       if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contrasena.");
       setStep("done");
     } catch (err: any) {
-      setMsg(err?.message || err?.response?.data?.message || err?.response?.data?.motivo || "No se pudo cambiar la contrasena.");
+      setMsg(toErrorMessage(err, "No se pudo cambiar la contrasena."));
     } finally {
       setLoading(false);
     }

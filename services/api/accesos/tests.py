@@ -29,7 +29,7 @@ class GuardTurnoResumeTests(APITestCase):
 
     def test_turno_reanudar_idempotente(self):
         self._auth()
-        Turno.objects.create(guarda=self.guarda, sede="CEGAFE", jornada="MANANA", activo=True)
+        Turno.objects.create(guarda=self.guarda, sede="CEGAFE", jornada="MAÑANA", activo=True)
         r1 = self.client.post("/api/turnos/reanudar/")
         r2 = self.client.post("/api/turnos/reanudar/")
         self.assertEqual(r1.status_code, status.HTTP_200_OK)

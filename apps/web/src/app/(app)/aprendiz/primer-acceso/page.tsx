@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 type PasswordRule = {
   id: string;
@@ -47,7 +48,7 @@ export default function PrimerAccesoPage() {
       });
       router.replace("/aprendiz/inicio");
     } catch (e: any) {
-      setMsg(e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo actualizar.");
+      setMsg(toErrorMessage(e, "No se pudo actualizar."));
     } finally {
       setLoading(false);
     }

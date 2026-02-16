@@ -20,7 +20,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MANANA" | "TARDE" | "NOCHE";
+  jornada: "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;

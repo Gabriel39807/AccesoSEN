@@ -17,7 +17,7 @@ EXPECTED_COLUMNS = [
     "Sede",
 ]
 
-VALID_JORNADAS = {"MANANA", "TARDE", "NOCHE"}
+VALID_JORNADAS = {"MAÑANA", "TARDE", "NOCHE"}
 VALID_SEDES = {"CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"}
 
 
@@ -96,7 +96,7 @@ def validate_excel(content) -> ImportValidationResult:
                 {
                     "row": idx,
                     "code": "INVALID_JORNADA",
-                    "message": "Jornada invalida. Valores permitidos: MANANA, TARDE, NOCHE.",
+                    "message": "Jornada invalida. Valores permitidos: MAÑANA, TARDE, NOCHE.",
                     "field": "Jornada",
                 }
             )

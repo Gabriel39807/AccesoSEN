@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
             name="jornada",
             field=models.CharField(
                 blank=True,
-                choices=[("MANANA", "Manana"), ("TARDE", "Tarde"), ("NOCHE", "Noche")],
+                choices=[("MAÑANA", "MAÑANA"), ("TARDE", "Tarde"), ("NOCHE", "Noche")],
                 max_length=20,
                 null=True,
             ),

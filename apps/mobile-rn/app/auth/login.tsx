@@ -21,7 +21,7 @@ export default function LoginScreen() {
   const [show, setShow] = useState(false);
 
   const [sede, setSede] = useState<Sede>("CEGAFE");
-  const [jornada, setJornada] = useState<Jornada>("MANANA");
+  const [jornada, setJornada] = useState<Jornada>("MAÑANA");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +116,7 @@ export default function LoginScreen() {
               <Text style={{ fontWeight: "700", color: "#0f172a" }}>Turno</Text>
               <View style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 12, overflow: "hidden", backgroundColor: "#f8fafc" }}>
                 <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-                  <Picker.Item label="Manana" value="MANANA" />
+                  <Picker.Item label="MAÑANA" value="MAÑANA" />
                   <Picker.Item label="Tarde" value="TARDE" />
                   <Picker.Item label="Noche" value="NOCHE" />
                 </Picker>

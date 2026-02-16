@@ -12,7 +12,7 @@ export function GuardLoginScreen() {
   const [password, setPassword] = useState("");
 
   const [sede, setSede] = useState<Sede>("CEGAFE");
-  const [jornada, setJornada] = useState<Jornada>("MANANA");
+  const [jornada, setJornada] = useState<Jornada>("MAÑANA");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export function GuardLoginScreen() {
         <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Turno</Text>
         <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12 }}>
           <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-            <Picker.Item label="Mañana" value="MANANA" />
+            <Picker.Item label="Mañana" value="MAÑANA" />
             <Picker.Item label="Tarde" value="TARDE" />
             <Picker.Item label="Noche" value="NOCHE" />
           </Picker>
