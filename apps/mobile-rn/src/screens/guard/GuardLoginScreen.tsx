@@ -32,7 +32,7 @@ export function GuardLoginScreen() {
       return;
     }
     if (!password || password.length > 20) {
-      setError("La contrasena debe tener maximo 20 caracteres.");
+      setError("La contraseña debe tener maximo 20 caracteres.");
       return;
     }
 
@@ -49,7 +49,7 @@ export function GuardLoginScreen() {
   return (
     <View style={{ flex: 1, padding: 16, gap: 12, justifyContent: "center" }}>
       <Text style={{ fontSize: 24, fontWeight: "800", textAlign: "center" }}>Personal de Seguridad</Text>
-      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu documento y contrasena</Text>
+      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu documento y contraseña</Text>
 
       <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#eee" }}>
         <Text style={{ fontWeight: "700", marginBottom: 6 }}>Documento</Text>
@@ -62,11 +62,11 @@ export function GuardLoginScreen() {
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 
-        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Contrasena</Text>
+        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>contraseña</Text>
         <TextInput
           value={password}
           onChangeText={onPasswordChange}
-          placeholder="Ingresa tu contrasena"
+          placeholder="Ingresa tu contraseña"
           secureTextEntry
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />

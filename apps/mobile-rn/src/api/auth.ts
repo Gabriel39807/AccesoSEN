@@ -1,7 +1,7 @@
 import { api } from "./client";
 import { saveTokens } from "../storage/tokens";
 
-export type Rol = "admin" | "aprendiz" | "guarda";
+export type Rol = "admin" | "superadmin" | "admin_sede" | "aprendiz" | "guarda";
 
 export type Usuario = {
   id: number;
@@ -13,10 +13,15 @@ export type Usuario = {
   documento?: string | null;
   sede_principal?: string | null;
   programa_formacion?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  force_password_reset?: boolean;
 };
 
-export async function login(username: string, password: string) {
-  const r = await api.post("/api/token/", { username, password });
+export async function login(username: string, password: string, expected_role?: "admin" | "guarda" | "aprendiz") {
+  const payload: any = { username, password };
+  if (expected_role) payload.expected_role = expected_role;
+  const r = await api.post("/api/token/", payload);
   await saveTokens(r.data.access, r.data.refresh);
   return r.data as { access: string; refresh: string };
 }
@@ -27,16 +32,8 @@ export async function me() {
   return r.data as { permitido: boolean; motivo: string | null; usuario: Usuario };
 }
 
-export async function passwordResetRequest(params: {
-  channel?: "email" | "whatsapp";
-  email?: string;
-  telefono?: string;
-}) {
-  const channel = params.channel || "email";
-  const payload: any = { channel };
-  if (params.email) payload.email = params.email;
-  if (params.telefono) payload.telefono = params.telefono;
-  const r = await api.post("/api/auth/password-reset/request/", payload);
+export async function passwordResetRequest(email: string) {
+  const r = await api.post("/api/auth/password-reset/request/", { email: email.trim().toLowerCase() });
   return r.data as { permitido: boolean; motivo: string | null; mensaje?: string };
 }
 
@@ -46,36 +43,56 @@ export async function changeInitialPassword(current_password: string, new_passwo
 }
 
 export async function passwordResetVerify(email: string, otp: string) {
-  const r = await api.post("/api/auth/password-reset/verify/", { email, otp, channel: "email" });
-  return r.data as { permitido: boolean; motivo: string | null };
-}
-
-export async function passwordResetVerifyWithChannel(
-  identifier: { email?: string; telefono?: string },
-  otp: string,
-  channel: "email" | "whatsapp" = "email"
-) {
-  const payload: any = { otp, channel };
-  if (identifier.email) payload.email = identifier.email;
-  if (identifier.telefono) payload.telefono = identifier.telefono;
-  const r = await api.post("/api/auth/password-reset/verify/", payload);
+  const r = await api.post("/api/auth/password-reset/verify/", { email: email.trim().toLowerCase(), otp });
   return r.data as { permitido: boolean; motivo: string | null };
 }
 
 export async function passwordResetConfirm(email: string, otp: string, new_password: string) {
-  const r = await api.post("/api/auth/password-reset/confirm/", { email, otp, new_password, channel: "email" });
+  const r = await api.post("/api/auth/password-reset/confirm/", {
+    email: email.trim().toLowerCase(),
+    otp,
+    new_password,
+  });
   return r.data as { permitido: boolean; motivo: string | null };
 }
 
-export async function passwordResetConfirmWithChannel(
-  identifier: { email?: string; telefono?: string },
-  otp: string,
-  new_password: string,
-  channel: "email" | "whatsapp" = "email"
-) {
-  const payload: any = { otp, new_password, channel };
-  if (identifier.email) payload.email = identifier.email;
-  if (identifier.telefono) payload.telefono = identifier.telefono;
-  const r = await api.post("/api/auth/password-reset/confirm/", payload);
-  return r.data as { permitido: boolean; motivo: string | null };
+export type AprendizPerfil = {
+  id: number;
+  username: string;
+  email: string | null;
+  first_name: string;
+  last_name: string;
+  documento: string | null;
+  rol: Rol;
+  estado: string;
+  sede_principal: string | null;
+  jornada: string | null;
+  programa_formacion: string | null;
+  telefono: string | null;
+  must_change_password: boolean;
+  force_password_reset: boolean;
+  pending_email_change?: string | null;
+};
+
+export async function getAprendizPerfil() {
+  const r = await api.get("/api/aprendiz/perfil/");
+  return r.data as { permitido: boolean; motivo: string | null; perfil: AprendizPerfil };
+}
+
+export async function updateAprendizPerfil(input: { telefono: string }) {
+  const r = await api.patch("/api/aprendiz/perfil/", { telefono: input.telefono });
+  return r.data as { permitido: boolean; motivo: string | null; perfil: AprendizPerfil; mensaje?: string };
+}
+
+export async function requestAprendizEmailChange(new_email: string) {
+  const r = await api.post("/api/aprendiz/perfil/email-change/request/", { new_email: new_email.trim().toLowerCase() });
+  return r.data as { permitido: boolean; motivo: string | null; mensaje?: string };
+}
+
+export async function confirmAprendizEmailChange(new_email: string, otp: string) {
+  const r = await api.post("/api/aprendiz/perfil/email-change/confirm/", {
+    new_email: new_email.trim().toLowerCase(),
+    otp,
+  });
+  return r.data as { permitido: boolean; motivo: string | null; perfil: AprendizPerfil; mensaje?: string };
 }

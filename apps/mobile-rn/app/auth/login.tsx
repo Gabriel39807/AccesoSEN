@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { router, useLocalSearchParams } from "expo-router";
@@ -6,9 +6,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSessionStore } from "../../src/store/session";
 import type { Jornada, Sede } from "../../src/api/turnos";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
-
-const MAX_INTENTOS = 3;
-const BLOQUEO_SEG = 30;
 
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ rol?: "guarda" | "aprendiz" }>();
@@ -26,8 +23,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [intentos, setIntentos] = useState(0);
-  const [bloqueadoHasta, setBloqueadoHasta] = useState<number | null>(null);
+  const [lockRemainingSec, setLockRemainingSec] = useState(0);
 
   function onUsernameChange(value: string) {
     setUsername(value.replace(/\D/g, "").slice(0, 10));
@@ -37,12 +33,15 @@ export default function LoginScreen() {
     setPassword(value.slice(0, 20));
   }
 
-  const now = Date.now();
-  const bloqueado = bloqueadoHasta ? now < bloqueadoHasta : false;
-  const restante = useMemo(() => {
-    if (!bloqueadoHasta) return 0;
-    return Math.max(0, Math.ceil((bloqueadoHasta - now) / 1000));
-  }, [bloqueadoHasta, now]);
+  const bloqueado = lockRemainingSec > 0;
+
+  useEffect(() => {
+    if (lockRemainingSec <= 0) return;
+    const t = setInterval(() => {
+      setLockRemainingSec((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(t);
+  }, [lockRemainingSec]);
 
   async function onSubmit() {
     setError(null);
@@ -52,7 +51,7 @@ export default function LoginScreen() {
       return;
     }
     if (!password || password.length > 20) {
-      setError("La contrasena debe tener maximo 20 caracteres.");
+      setError("La contraseña debe tener maximo 20 caracteres.");
       return;
     }
 
@@ -73,11 +72,10 @@ export default function LoginScreen() {
       }
     } catch (e: any) {
       setError(e?.message || "No se pudo iniciar sesion.");
-      const next = intentos + 1;
-      setIntentos(next);
-      if (next >= MAX_INTENTOS) {
-        setBloqueadoHasta(Date.now() + BLOQUEO_SEG * 1000);
-        setIntentos(0);
+      const code = e?.code as string | undefined;
+      const secondsRemaining = Number(e?.detail?.seconds_remaining || 0);
+      if (code === "ACCOUNT_LOCKED_15MIN") {
+        setLockRemainingSec(secondsRemaining > 0 ? secondsRemaining : 15 * 60);
       }
     } finally {
       setLoading(false);
@@ -104,7 +102,7 @@ export default function LoginScreen() {
           />
 
           <InputField
-            label="Contrasena"
+            label="contraseña"
             value={password}
             onChangeText={onPasswordChange}
             placeholder="********"
@@ -112,7 +110,7 @@ export default function LoginScreen() {
           />
 
           <ModernButton
-            label={show ? "Ocultar contrasena" : "Mostrar contrasena"}
+            label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
             tone="light"
             onPress={() => setShow((v) => !v)}
           />
@@ -142,7 +140,7 @@ export default function LoginScreen() {
 
           {bloqueado ? (
             <Text style={{ color: "#b91c1c", fontWeight: "800" }}>
-              Bloqueado temporalmente. Intenta en {restante}s.
+              Bloqueado temporalmente. Intenta en {lockRemainingSec}s.
             </Text>
           ) : null}
 
@@ -157,7 +155,7 @@ export default function LoginScreen() {
           {loading ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
 
           <ModernButton
-            label="Olvide mi contrasena"
+            label="Olvide mi contraseña"
             tone="light"
             onPress={() => router.push({ pathname: "/auth/password-recovery" } as any)}
           />

@@ -24,9 +24,7 @@ function buildPasswordRules(password: string, confirmPassword: string): Password
 
 export default function PasswordRecovery() {
   const [step, setStep] = useState<Step>("email");
-  const [channel, setChannel] = useState<"email" | "whatsapp">("email");
   const [email, setEmail] = useState("");
-  const [telefono, setTelefono] = useState("");
   const [otp, setOtp] = useState("");
   const [newPass, setNewPass] = useState("");
   const [newPass2, setNewPass2] = useState("");
@@ -35,25 +33,20 @@ export default function PasswordRecovery() {
   const [msg, setMsg] = useState<string | null>(null);
   const rules = buildPasswordRules(newPass, newPass2);
   const allRulesValid = rules.every((rule) => rule.valid);
-  const identifier = channel === "whatsapp" ? { telefono: telefono.trim() } : { email: email.trim().toLowerCase() };
 
   async function onEmail() {
-    if (channel === "email" && !email.trim()) {
+    if (!email.trim()) {
       setMsg("Ingresa un correo para enviar el OTP.");
-      return;
-    }
-    if (channel === "whatsapp" && !telefono.trim()) {
-      setMsg("Ingresa un numero de celular para enviar el OTP.");
       return;
     }
     setLoading(true);
     setMsg(null);
     try {
-      await Auth.passwordResetRequest({ ...identifier, channel });
+      await Auth.passwordResetRequest(email.trim().toLowerCase());
       setStep("otp");
-      setMsg(`Si el usuario existe, enviamos un codigo OTP por ${channel === "whatsapp" ? "WhatsApp" : "correo"}.`);
+      setMsg("Si el usuario existe, enviamos un codigo OTP por correo.");
     } catch (e: any) {
-      setMsg(e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo enviar el codigo.");
+      setMsg(e?.message || e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo enviar el codigo.");
     } finally {
       setLoading(false);
     }
@@ -63,7 +56,7 @@ export default function PasswordRecovery() {
     setLoading(true);
     setMsg(null);
     try {
-      const r = await Auth.passwordResetVerifyWithChannel(identifier, otp.trim(), channel);
+      const r = await Auth.passwordResetVerify(email.trim().toLowerCase(), otp.trim());
       if (!r.permitido) throw new Error(r.motivo || "OTP invalido.");
       setStep("newpass");
     } catch (e: any) {
@@ -81,7 +74,7 @@ export default function PasswordRecovery() {
     setLoading(true);
     setMsg(null);
     try {
-      const r = await Auth.passwordResetConfirmWithChannel(identifier, otp.trim(), newPass, channel);
+      const r = await Auth.passwordResetConfirm(email.trim().toLowerCase(), otp.trim(), newPass);
       if (!r.permitido) throw new Error(r.motivo || "No se pudo cambiar la contrasena.");
       setStep("done");
     } catch (e: any) {
@@ -96,7 +89,7 @@ export default function PasswordRecovery() {
       <FadeInCard delay={0}>
         <Pill text="RECUPERACION" />
         <View style={{ marginTop: 8 }}>
-          <TitleBlock title="Recuperar contrasena" subtitle="Elige canal de verificacion y completa el flujo OTP." />
+          <TitleBlock title="Recuperar contrasena" subtitle="Completa el flujo OTP enviado a tu correo." />
         </View>
       </FadeInCard>
 
@@ -104,41 +97,15 @@ export default function PasswordRecovery() {
         <View style={{ gap: 10 }}>
           {step === "email" ? (
             <>
-              <Text style={{ fontWeight: "800", color: "#0f172a" }}>Canal de verificacion</Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <ModernButton label="Correo" tone={channel === "email" ? "primary" : "light"} onPress={() => setChannel("email")} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <ModernButton label="WhatsApp" tone={channel === "whatsapp" ? "primary" : "light"} onPress={() => setChannel("whatsapp")} />
-                </View>
-              </View>
-
-              {channel === "email" ? (
-                <>
-                  <InputField
-                    label="Correo"
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="correo@dominio.com"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-                  <Text style={{ color: "#64748b" }}>El OTP se enviara al correo registrado en la cuenta.</Text>
-                </>
-              ) : (
-                <>
-                  <InputField
-                    label="Numero de celular"
-                    value={telefono}
-                    onChangeText={setTelefono}
-                    placeholder="+573001112233"
-                    keyboardType="phone-pad"
-                  />
-                  <Text style={{ color: "#64748b" }}>El OTP se enviara por WhatsApp al numero registrado en la cuenta.</Text>
-                </>
-              )}
-
+              <InputField
+                label="Correo"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="correo@dominio.com"
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              <Text style={{ color: "#64748b" }}>El OTP se enviara al correo registrado en la cuenta.</Text>
               <ModernButton label={loading ? "Enviando..." : "Enviar codigo"} disabled={loading} onPress={onEmail} />
             </>
           ) : null}
@@ -154,9 +121,7 @@ export default function PasswordRecovery() {
                 maxLength={5}
                 style={{ letterSpacing: 6, textAlign: "center" }}
               />
-              <Text style={{ color: "#64748b" }}>
-                Ingresa el codigo enviado por {channel === "whatsapp" ? "WhatsApp" : "correo"}.
-              </Text>
+              <Text style={{ color: "#64748b" }}>Ingresa el codigo enviado por correo.</Text>
               <ModernButton label={loading ? "Verificando..." : "Verificar"} tone="dark" disabled={loading} onPress={onOtp} />
             </>
           ) : null}

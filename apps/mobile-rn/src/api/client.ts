@@ -4,10 +4,14 @@ import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "../sto
 
 export class UiError extends Error {
   code?: string;
-  constructor(message: string, code?: string) {
+  detail?: any;
+  status?: number;
+  constructor(message: string, code?: string, detail?: any, status?: number) {
     super(message);
     this.name = "UiError";
     this.code = code;
+    this.detail = detail;
+    this.status = status;
   }
 }
 
@@ -23,12 +27,16 @@ function mapCodeToMessage(code?: string, fallback?: string) {
     INVALID_CREDENTIALS: "Usuario o contrasena invalidos.",
     ACCOUNT_LOCKED_15MIN: "Tu cuenta esta temporalmente bloqueada. Intenta en 15 minutos.",
     ACCOUNT_DISABLED_SECURITY: "Tu cuenta esta deshabilitada por seguridad. Contacta al administrador.",
+    PASSWORD_RESET_REQUIRED: "Debes recuperar tu contrasena antes de iniciar sesion.",
     OTP_INVALID: "El codigo OTP no es valido.",
     OTP_EXPIRED: "El codigo OTP expiro. Solicita uno nuevo.",
     OTP_TOO_MANY_ATTEMPTS: "Demasiados intentos con OTP. Solicita uno nuevo.",
     TURNO_REQUIRED: "Debes iniciar turno para continuar.",
     TURNO_ALREADY_ACTIVE: "Ya tienes un turno activo.",
     ACCESO_INCONSISTENTE_EQUIPO: "Inconsistencia de equipos en el registro de acceso.",
+    EQUIPO_LIMIT_REACHED: "Solo puedes registrar hasta 4 equipos.",
+    MAX_ADMINS_PER_SEDE: "La sede ya alcanzo el limite de administradores.",
+    PASSKEY_INVALID: "No se pudo validar la passkey.",
     NETWORK_ERROR: "No se pudo conectar al servidor.",
   };
   return (code && map[code]) || fallback || "Ocurrio un error. Intenta nuevamente.";
@@ -87,14 +95,15 @@ api.interceptors.response.use(
     const data = error.response.data || {};
     const code = data.code as string | undefined;
     const message = (data.message as string | undefined) || (data.motivo as string | undefined);
+    const detail = data.detail;
 
     if (status === 401 || status === 423) {
       await clearTokens();
-      throw new UiError(mapCodeToMessage(code, message), code || "INVALID_CREDENTIALS");
+      throw new UiError(mapCodeToMessage(code, message), code || "INVALID_CREDENTIALS", detail, status);
     }
-    if (status === 403) throw new UiError(mapCodeToMessage(code, message), code || "FORBIDDEN");
-    if (status === 404) throw new UiError(mapCodeToMessage(code, message), code || "NOT_FOUND");
-    if (status >= 500) throw new UiError("Error del servidor. Intenta mas tarde.", "SERVER_ERROR");
-    throw new UiError(mapCodeToMessage(code, message), code || "VALIDATION_ERROR");
+    if (status === 403) throw new UiError(mapCodeToMessage(code, message), code || "FORBIDDEN", detail, status);
+    if (status === 404) throw new UiError(mapCodeToMessage(code, message), code || "NOT_FOUND", detail, status);
+    if (status >= 500) throw new UiError("Error del servidor. Intenta mas tarde.", "SERVER_ERROR", detail, status);
+    throw new UiError(mapCodeToMessage(code, message), code || "VALIDATION_ERROR", detail, status);
   }
 );

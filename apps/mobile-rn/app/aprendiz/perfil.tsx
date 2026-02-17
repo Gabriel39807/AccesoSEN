@@ -1,7 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
-
-import { useSessionStore } from "../../src/store/session";
 import * as Auth from "../../src/api/auth";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
@@ -23,15 +21,82 @@ function buildPasswordRules(password: string, confirmPassword: string): Password
 }
 
 export default function AprendizPerfil() {
-  const user = useSessionStore((s) => s.user);
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
+  const [perfil, setPerfil] = useState<Auth.AprendizPerfil | null>(null);
+  const [loadingPerfil, setLoadingPerfil] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const [telefono, setTelefono] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
   const rules = buildPasswordRules(next, confirm);
   const allRulesValid = rules.every((rule) => rule.valid);
+
+  async function loadPerfil() {
+    setLoadingPerfil(true);
+    try {
+      const r = await Auth.getAprendizPerfil();
+      const p = r.perfil;
+      setPerfil(p);
+      setTelefono(p.telefono || "");
+    } catch (e: any) {
+      setMsg(e?.message || "No se pudo cargar el perfil.");
+    } finally {
+      setLoadingPerfil(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadPerfil();
+  }, []);
+
+  async function guardarTelefono() {
+    setMsg(null);
+    setSaving(true);
+    try {
+      const r = await Auth.updateAprendizPerfil({ telefono });
+      setPerfil(r.perfil);
+      setTelefono(r.perfil.telefono || "");
+      setMsg(r.mensaje || "Perfil actualizado.");
+    } catch (e: any) {
+      setMsg(e?.message || "No se pudo actualizar el telefono.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function solicitarCambioCorreo() {
+    setMsg(null);
+    setSaving(true);
+    try {
+      const r = await Auth.requestAprendizEmailChange(newEmail);
+      setMsg(r.mensaje || "Enviamos OTP al nuevo correo.");
+    } catch (e: any) {
+      setMsg(e?.message || "No se pudo solicitar el cambio de correo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmarCambioCorreo() {
+    setMsg(null);
+    setSaving(true);
+    try {
+      const r = await Auth.confirmAprendizEmailChange(newEmail, emailOtp);
+      setPerfil(r.perfil);
+      setNewEmail("");
+      setEmailOtp("");
+      setMsg(r.mensaje || "Correo actualizado.");
+    } catch (e: any) {
+      setMsg(e?.message || "No se pudo confirmar el cambio de correo.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function actualizarClave() {
     setMsg(null);
@@ -47,8 +112,9 @@ export default function AprendizPerfil() {
       setNext("");
       setConfirm("");
       setMsg("Contrasena actualizada correctamente.");
+      await loadPerfil();
     } catch (e: any) {
-      setMsg(e?.response?.data?.message || e?.response?.data?.motivo || e?.message || "No se pudo actualizar.");
+      setMsg(e?.message || "No se pudo actualizar la contrasena.");
     } finally {
       setSaving(false);
     }
@@ -59,14 +125,65 @@ export default function AprendizPerfil() {
       <FadeInCard>
         <Pill text="MI PERFIL" />
         <View style={{ marginTop: 8 }}>
-          <TitleBlock title={`${user?.first_name || "-"} ${user?.last_name || ""}`.trim()} subtitle={`Documento ${user?.documento || "-"}`} />
+          <TitleBlock
+            title={loadingPerfil ? "Cargando..." : `${perfil?.first_name || "-"} ${perfil?.last_name || ""}`.trim()}
+            subtitle={`Documento ${perfil?.documento || "-"}`}
+          />
         </View>
-        <Text style={{ color: "#64748b", marginTop: 6 }}>Programa: {user?.programa_formacion || "-"}</Text>
-        <Text style={{ color: "#64748b" }}>Sede: {user?.sede_principal || "-"}</Text>
+        <Text style={{ color: "#64748b", marginTop: 6 }}>Correo: {perfil?.email || "-"}</Text>
+        <Text style={{ color: "#64748b" }}>Programa: {perfil?.programa_formacion || "-"}</Text>
+        <Text style={{ color: "#64748b" }}>Sede: {perfil?.sede_principal || "-"}</Text>
+        {perfil?.pending_email_change ? (
+          <Text style={{ color: "#b45309" }}>Correo pendiente: {perfil.pending_email_change}</Text>
+        ) : null}
       </FadeInCard>
 
       <FadeInCard delay={70}>
-        <TitleBlock title="Cambiar contrasena" subtitle="Mantiene tu cuenta protegida." />
+        <TitleBlock title="Datos de contacto" subtitle="Solo puedes editar telefono y correo con OTP." />
+        <View style={{ marginTop: 8, gap: 8 }}>
+          <InputField
+            label="Telefono"
+            value={telefono}
+            onChangeText={(v) => setTelefono(v.replace(/[^\d]/g, "").slice(0, 20))}
+            placeholder="3001234567"
+            keyboardType="phone-pad"
+          />
+          <ModernButton label={saving ? "Guardando..." : "Guardar telefono"} disabled={saving} onPress={guardarTelefono} />
+
+          <InputField
+            label="Nuevo correo"
+            value={newEmail}
+            onChangeText={setNewEmail}
+            placeholder="correo@dominio.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <ModernButton
+            label={saving ? "Enviando..." : "Enviar OTP correo"}
+            tone="light"
+            disabled={saving || !newEmail.trim()}
+            onPress={solicitarCambioCorreo}
+          />
+
+          <InputField
+            label="OTP de correo"
+            value={emailOtp}
+            onChangeText={(v) => setEmailOtp(v.replace(/[^\d]/g, "").slice(0, 5))}
+            placeholder="12345"
+            keyboardType="numeric"
+            maxLength={5}
+          />
+          <ModernButton
+            label={saving ? "Confirmando..." : "Confirmar cambio de correo"}
+            tone="dark"
+            disabled={saving || !newEmail.trim() || emailOtp.trim().length !== 5}
+            onPress={confirmarCambioCorreo}
+          />
+        </View>
+      </FadeInCard>
+
+      <FadeInCard delay={120}>
+        <TitleBlock title="Cambiar contrasena" subtitle="Requiere contrasena actual." />
         <View style={{ marginTop: 8, gap: 8 }}>
           <InputField label="Contrasena actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
           <InputField label="Nueva contrasena" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
@@ -81,10 +198,10 @@ export default function AprendizPerfil() {
             ))}
           </View>
 
-          {msg ? <Text style={{ color: msg.toLowerCase().includes("correctamente") ? "#15803d" : "#b91c1c" }}>{msg}</Text> : null}
+          {msg ? <Text style={{ color: msg.toLowerCase().includes("actualizada") ? "#15803d" : "#b91c1c" }}>{msg}</Text> : null}
 
-          <ModernButton label={saving ? "Guardando..." : "Guardar cambios"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
-          {saving ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
+          <ModernButton label={saving ? "Guardando..." : "Actualizar contrasena"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
+          {(saving || loadingPerfil) ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
         </View>
       </FadeInCard>
     </ModernScreen>

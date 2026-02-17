@@ -66,7 +66,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   signIn: async ({ username, password, rol, sede, jornada }) => {
     // 1) token
-    await Auth.login(username, password);
+    await Auth.login(username, password, rol);
 
     // 2) me
     const me = await Auth.me();

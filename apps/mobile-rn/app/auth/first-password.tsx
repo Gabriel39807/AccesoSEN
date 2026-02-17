@@ -34,7 +34,7 @@ export default function FirstPasswordScreen() {
   async function onSubmit() {
     setMsg(null);
     if (!allRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setMsg("La nueva contraseña no cumple todos los requisitos.");
       return;
     }
 
@@ -55,33 +55,33 @@ export default function FirstPasswordScreen() {
       <FadeInCard delay={0}>
         <Pill text="PRIMER ACCESO" />
         <View style={{ marginTop: 8 }}>
-          <TitleBlock title="Actualiza tu clave" subtitle="Para continuar, cambia tu contrasena temporal por una personal y segura." />
+          <TitleBlock title="Actualiza tu clave" subtitle="Para continuar, cambia tu contraseña temporal por una personal y segura." />
         </View>
       </FadeInCard>
 
       <FadeInCard delay={70}>
         <View style={{ gap: 10 }}>
           <InputField
-            label="Contrasena actual"
+            label="Contraseña actual"
             value={current}
-            onChangeText={setCurrent}
+            onChangeText={(v) => setCurrent(v.slice(0, 20))}
             placeholder="Ultimos digitos del documento"
             secureTextEntry
           />
 
           <InputField
-            label="Nueva contrasena"
+            label="Nueva contraseña"
             value={next}
-            onChangeText={setNext}
+            onChangeText={(v) => setNext(v.slice(0, 20))}
             placeholder="Minimo 8 caracteres"
             secureTextEntry
           />
 
           <InputField
-            label="Confirmar contrasena"
+            label="Confirmar contraseña"
             value={confirm}
-            onChangeText={setConfirm}
-            placeholder="Repite la nueva contrasena"
+            onChangeText={(v) => setConfirm(v.slice(0, 20))}
+            placeholder="Repite la nueva contraseña"
             secureTextEntry
           />
 
