@@ -3,10 +3,14 @@ from __future__ import annotations
 import base64
 import io
 import re
+import secrets
+import time
 from urllib.parse import unquote
 from uuid import uuid4
 
 import qrcode
+from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Q
 from django.core import signing
@@ -24,26 +28,46 @@ from rest_framework.views import APIView
 from .api_responses import error_response, ok_response
 from .error_codes import ErrorCode
 from .import_services import cache_import_payload, get_cached_import_payload, validate_excel
-from .models import Acceso, AprendizImportAudit, Equipo, Notificacion, PasswordResetOTP, Turno, Usuario
+from .jwt_views import issue_tokens_for_user
+from .models import (
+    Acceso,
+    AprendizImportAudit,
+    EmailChangeOTP,
+    Equipo,
+    Notificacion,
+    PasswordResetOTP,
+    Turno,
+    Usuario,
+    WebAuthnCredential,
+)
 from .otp_services import (
     OTP_MAX_ATTEMPTS,
     OTP_MAX_REQUESTS,
     OTP_REQUEST_LOCK_SEC,
     OTP_REQUEST_WINDOW_SEC,
     create_otp_for_user,
+    generate_otp_code,
     hash_code,
-    send_otp,
+    send_password_reset_email,
 )
-from .permissions import IsAdmin, IsAprendiz, IsGuarda
-from .rate_limit import bump_with_lock, get_client_ip, is_locked
+from .permissions import IsAdmin, IsAprendiz, IsGuarda, is_admin_role, is_admin_sede, is_superadmin
+from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, is_locked
 from .serializers import (
     AccesoSerializer,
+    AprendizEmailChangeConfirmSerializer,
+    AprendizEmailChangeRequestSerializer,
+    AprendizPerfilSerializer,
+    AprendizPerfilUpdateSerializer,
     ChangeInitialPasswordSerializer,
     EquipoRevisionSerializer,
     EquipoSerializer,
     ImportAprendicesConfirmSerializer,
     ImportAprendicesValidateSerializer,
     NotificacionSerializer,
+    PasskeyAuthOptionsSerializer,
+    PasskeyAuthVerifySerializer,
+    PasskeyRegisterOptionsSerializer,
+    PasskeyRegisterVerifySerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
@@ -53,6 +77,68 @@ from .serializers import (
     UsuarioSerializer,
     ValidarDocumentoSerializer,
 )
+
+PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
+PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
+MAX_ADMINS_PER_SEDE = 4
+
+
+def _webauthn_register_cache_key(user_id: int, request_id: str) -> str:
+    return f"sadi:webauthn:register:{user_id}:{request_id}"
+
+
+def _webauthn_auth_cache_key(request_id: str) -> str:
+    return f"sadi:webauthn:auth:{request_id}"
+
+
+def _scope_sede(user: Usuario) -> str | None:
+    if not user:
+        return None
+    return (getattr(user, "sede_principal", None) or "").strip() or None
+
+
+def _is_admin_full_access(user: Usuario) -> bool:
+    return bool(user and is_admin_role(user) and not is_admin_sede(user))
+
+
+def _same_sede_or_superadmin(actor: Usuario, target_sede: str | None) -> bool:
+    if not actor:
+        return False
+    if _is_admin_full_access(actor):
+        return True
+    if not is_admin_sede(actor):
+        return False
+    actor_sede = _scope_sede(actor)
+    if not actor_sede:
+        return False
+    return (target_sede or "").strip() == actor_sede
+
+
+def _admin_sede_qs(qs, user: Usuario, field_name: str):
+    if not is_admin_sede(user):
+        return qs
+    sede = _scope_sede(user)
+    if not sede:
+        return qs.none()
+    return qs.filter(**{field_name: sede})
+
+
+def _enforce_admin_sede_limit(target_sede: str | None, exclude_user_id: int | None = None) -> tuple[bool, int]:
+    sede = (target_sede or "").strip()
+    if not sede:
+        return False, 0
+    qs = Usuario.objects.filter(rol=Usuario.Rol.ADMIN_SEDE, sede_principal=sede)
+    if exclude_user_id:
+        qs = qs.exclude(id=exclude_user_id)
+    current = qs.count()
+    return current >= MAX_ADMINS_PER_SEDE, current
+
+
+def _uniform_response_delay(start_ts: float, min_ms: int = 220):
+    elapsed_ms = int((time.perf_counter() - start_ts) * 1000)
+    remaining_ms = max(0, min_ms - elapsed_ms)
+    if remaining_ms:
+        time.sleep(remaining_ms / 1000.0)
 
 
 def obtener_turno_activo(user):
@@ -125,26 +211,7 @@ def _extract_documento_from_scan(raw_value: str) -> str:
     return digits_only or raw
 
 
-def _phone_digits(value: str) -> str:
-    return re.sub(r"[^\d]", "", value or "")
-
-
-def _find_user_for_password_reset(channel: str, email: str = "", telefono: str = "") -> Usuario | None:
-    if channel == PasswordResetOTP.Channel.WHATSAPP:
-        if telefono:
-            input_digits = _phone_digits(telefono)
-            if input_digits:
-                candidates = Usuario.objects.exclude(telefono__isnull=True).exclude(telefono="")
-                for u in candidates.only("id", "telefono"):
-                    user_digits = _phone_digits(u.telefono or "")
-                    if not user_digits:
-                        continue
-                    # Match robusto ante formatos distintos (+57, espacios, guiones, etc.)
-                    if user_digits == input_digits or user_digits.endswith(input_digits) or input_digits.endswith(user_digits):
-                        return u
-        if email:
-            return Usuario.objects.filter(email__iexact=email).first()
-        return None
+def _find_user_for_password_reset(email: str = "") -> Usuario | None:
     if not email:
         return None
     return Usuario.objects.filter(email__iexact=email).first()
@@ -154,7 +221,176 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return ok_response({"usuario": UsuarioSerializer(request.user).data})
+        data = UsuarioSerializer(request.user).data
+        data["requires_password_reset"] = bool(getattr(request.user, "force_password_reset", False))
+        return ok_response({"usuario": data})
+
+
+class AprendizPerfilView(APIView):
+    permission_classes = [IsAuthenticated, IsAprendiz]
+
+    def get(self, request):
+        pending = (
+            EmailChangeOTP.objects.filter(user=request.user, used_at__isnull=True, expires_at__gt=timezone.now())
+            .order_by("-created_at")
+            .first()
+        )
+        payload = AprendizPerfilSerializer(request.user).data
+        payload["pending_email_change"] = pending.new_email if pending else None
+        return ok_response({"perfil": payload})
+
+    def patch(self, request):
+        s = AprendizPerfilUpdateSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        user: Usuario = request.user
+        user.telefono = s.validated_data.get("telefono", user.telefono)
+        user.save(update_fields=["telefono"])
+
+        pending = (
+            EmailChangeOTP.objects.filter(user=request.user, used_at__isnull=True, expires_at__gt=timezone.now())
+            .order_by("-created_at")
+            .first()
+        )
+        payload = AprendizPerfilSerializer(user).data
+        payload["pending_email_change"] = pending.new_email if pending else None
+        return ok_response({"perfil": payload, "mensaje": "Perfil actualizado."})
+
+
+class AprendizEmailChangeRequestView(APIView):
+    permission_classes = [IsAuthenticated, IsAprendiz]
+
+    def post(self, request):
+        s = AprendizEmailChangeRequestSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        user: Usuario = request.user
+        new_email = s.validated_data["new_email"]
+
+        if (user.email or "").strip().lower() == new_email:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="El nuevo correo debe ser diferente al correo actual.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="new_email",
+            )
+
+        if Usuario.objects.filter(email__iexact=new_email).exclude(id=user.id).exists():
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Ese correo ya esta en uso por otra cuenta.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="new_email",
+            )
+
+        ip = get_client_ip(request)
+        k_user = [str(user.id), "email-change"]
+        k_ip = [ip, "email-change"]
+        if is_locked("email-change-user", k_user) or is_locked("email-change-ip", k_ip):
+            remaining = max(get_lock_remaining("email-change-user", k_user), get_lock_remaining("email-change-ip", k_ip))
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiadas solicitudes. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining},
+            )
+
+        limit_user = bump_with_lock("email-change-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+        limit_ip = bump_with_lock("email-change-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+        if limit_user["locked"] or limit_ip["locked"]:
+            remaining = max(int(limit_user.get("remaining_sec", 0)), int(limit_ip.get("remaining_sec", 0)))
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiadas solicitudes. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining},
+            )
+
+        code = generate_otp_code()
+        salt = uuid4().hex
+        EmailChangeOTP.objects.filter(user=user, used_at__isnull=True).update(used_at=timezone.now())
+        EmailChangeOTP.objects.create(
+            user=user,
+            new_email=new_email,
+            salt=salt,
+            code_hash=hash_code(salt, code),
+            expires_at=timezone.now() + timezone.timedelta(minutes=5),
+        )
+        try:
+            send_password_reset_email(new_email, code)
+        except Exception:
+            return error_response(
+                code=ErrorCode.NETWORK_ERROR,
+                message="No se pudo enviar el codigo OTP al nuevo correo.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return ok_response({"mensaje": "Enviamos un codigo OTP al nuevo correo."})
+
+
+class AprendizEmailChangeConfirmView(APIView):
+    permission_classes = [IsAuthenticated, IsAprendiz]
+
+    def post(self, request):
+        s = AprendizEmailChangeConfirmSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        user: Usuario = request.user
+        new_email = s.validated_data["new_email"]
+        otp = s.validated_data["otp"]
+
+        otp_obj = (
+            EmailChangeOTP.objects.filter(user=user, new_email__iexact=new_email, used_at__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp_obj:
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if timezone.now() > otp_obj.expires_at:
+            return error_response(
+                code=ErrorCode.OTP_EXPIRED,
+                message="El codigo OTP expiro. Solicita uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_obj.attempts >= OTP_MAX_ATTEMPTS:
+            return error_response(
+                code=ErrorCode.OTP_TOO_MANY_ATTEMPTS,
+                message="Demasiados intentos con OTP. Solicita uno nuevo.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
+            otp_obj.attempts += 1
+            otp_obj.save(update_fields=["attempts"])
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if Usuario.objects.filter(email__iexact=new_email).exclude(id=user.id).exists():
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Ese correo ya esta en uso por otra cuenta.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.email = new_email
+        user.save(update_fields=["email"])
+
+        otp_obj.used_at = timezone.now()
+        otp_obj.save(update_fields=["used_at"])
+        EmailChangeOTP.objects.filter(user=user, used_at__isnull=True).exclude(id=otp_obj.id).update(used_at=timezone.now())
+
+        payload = AprendizPerfilSerializer(user).data
+        payload["pending_email_change"] = None
+        return ok_response({"perfil": payload, "mensaje": "Correo actualizado correctamente."})
 
 
 class ChangeInitialPasswordView(APIView):
@@ -178,8 +414,20 @@ class ChangeInitialPasswordView(APIView):
         user.set_password(new_password)
         user.must_change_password = False
         user.last_password_change_at = timezone.now()
-        user.save(update_fields=["password", "must_change_password", "last_password_change_at"])
-        return ok_response({"mensaje": "Contrasena actualizada correctamente."})
+        user.force_password_reset = False
+        user.failed_lockouts_count = 0
+        user.first_lockout_at = None
+        user.save(
+            update_fields=[
+                "password",
+                "must_change_password",
+                "force_password_reset",
+                "failed_lockouts_count",
+                "first_lockout_at",
+                "last_password_change_at",
+            ]
+        )
+        return ok_response({"mensaje": "contraseña actualizada correctamente."})
 
 
 class AprendizMiQRView(APIView):
@@ -242,7 +490,7 @@ class GuardiaEstadoActualView(APIView):
         return ok_response({"turno_activo": True, "turno": TurnoSerializer(turno).data})
 
 
-class PasswordResetRequestView(APIView):
+class LegacyPasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -291,7 +539,7 @@ class PasswordResetRequestView(APIView):
         return ok_response({"mensaje": "Si el usuario existe, enviamos un código OTP."})
 
 
-class PasswordResetVerifyView(APIView):
+class LegacyPasswordResetVerifyView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -349,7 +597,7 @@ class PasswordResetVerifyView(APIView):
         return ok_response()
 
 
-class PasswordResetConfirmView(APIView):
+class LegacyPasswordResetConfirmView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -424,6 +672,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset().order_by("id")
+        qs = _admin_sede_qs(qs, self.request.user, "sede_principal")
 
         q = (self.request.query_params.get("q") or "").strip()
         rol = (self.request.query_params.get("rol") or "").strip()
@@ -449,6 +698,128 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             qs = qs.filter(sede_principal=sede_principal)
 
         return qs
+
+    def _ensure_admin_sede_scope(self, payload: dict, instance: Usuario | None = None):
+        actor: Usuario = self.request.user
+        if not is_admin_sede(actor):
+            return None
+
+        actor_sede = _scope_sede(actor)
+        if not actor_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if instance and _scope_sede(instance) != actor_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo puedes gestionar usuarios de tu sede.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        rol = payload.get("rol")
+        current_rol = getattr(instance, "rol", None) if instance else None
+        if rol in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN, Usuario.Rol.ADMIN_SEDE} or current_rol in {
+            Usuario.Rol.SUPERADMIN,
+            Usuario.Rol.ADMIN,
+            Usuario.Rol.ADMIN_SEDE,
+        }:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="ADMIN_SEDE no puede crear ni editar cuentas administrativas.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not instance:
+            payload["sede_principal"] = actor_sede
+        elif "sede_principal" in payload and (payload.get("sede_principal") or actor_sede) != actor_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No puedes mover usuarios fuera de tu sede.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
+    def _enforce_admin_role_capacity(self, payload: dict, instance: Usuario | None = None):
+        target_role = payload.get("rol", getattr(instance, "rol", None))
+        target_sede = payload.get("sede_principal", getattr(instance, "sede_principal", None))
+        if target_role != Usuario.Rol.ADMIN_SEDE:
+            return None
+        blocked, current = _enforce_admin_sede_limit(target_sede, exclude_user_id=getattr(instance, "id", None))
+        if blocked:
+            return error_response(
+                code=ErrorCode.MAX_ADMINS_PER_SEDE,
+                message=f"La sede ya tiene {MAX_ADMINS_PER_SEDE} administradores.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"sede": target_sede, "limit": MAX_ADMINS_PER_SEDE, "current": current},
+            )
+        return None
+
+    def create(self, request, *args, **kwargs):
+        payload = request.data.copy()
+        scoped_error = self._ensure_admin_sede_scope(payload)
+        if scoped_error:
+            return scoped_error
+
+        limit_error = self._enforce_admin_role_capacity(payload)
+        if limit_error:
+            return limit_error
+        serializer = self.get_serializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        payload = request.data.copy()
+        scoped_error = self._ensure_admin_sede_scope(payload, instance=instance)
+        if scoped_error:
+            return scoped_error
+
+        limit_error = self._enforce_admin_role_capacity(payload, instance=instance)
+        if limit_error:
+            return limit_error
+        partial = kwargs.pop("partial", False)
+        serializer = self.get_serializer(instance, data=payload, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        payload = request.data.copy()
+        scoped_error = self._ensure_admin_sede_scope(payload, instance=instance)
+        if scoped_error:
+            return scoped_error
+
+        limit_error = self._enforce_admin_role_capacity(payload, instance=instance)
+        if limit_error:
+            return limit_error
+        serializer = self.get_serializer(instance, data=payload, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if is_admin_sede(request.user):
+            actor_sede = _scope_sede(request.user)
+            if not actor_sede or _scope_sede(instance) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes eliminar usuarios de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            if instance.rol in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN, Usuario.Rol.ADMIN_SEDE}:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="ADMIN_SEDE no puede eliminar cuentas administrativas.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=["post"], url_path="importar-aprendices/validar", parser_classes=[MultiPartParser])
     def importar_aprendices_validar(self, request):
@@ -488,6 +859,22 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         errors = payload.get("errors", [])
         created_count = 0
         updated_count = 0
+        if is_admin_sede(request.user):
+            actor_sede = _scope_sede(request.user)
+            if not actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            invalid_rows = [idx + 2 for idx, row in enumerate(rows) if row.get("sede_principal") != actor_sede]
+            if invalid_rows:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="El archivo contiene aprendices fuera de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"rows": invalid_rows[:20]},
+                )
 
         with transaction.atomic():
             for row in rows:
@@ -562,8 +949,13 @@ class NotificacionViewSet(viewsets.ModelViewSet):
         qs_user = Notificacion.objects.filter(user=user)
         qs_rol = Notificacion.objects.filter(user__isnull=True, rol_objetivo=rol)
         qs_global = Notificacion.objects.filter(user__isnull=True, rol_objetivo__isnull=True)
-
-        return (qs_user | qs_rol | qs_global).distinct().order_by("-created_at")
+        qs = (qs_user | qs_rol | qs_global).distinct().order_by("-created_at")
+        if is_admin_sede(user):
+            sede = _scope_sede(user)
+            if not sede:
+                return Notificacion.objects.none()
+            qs = qs.filter(Q(user__isnull=True) | Q(user__sede_principal=sede) | Q(user=user))
+        return qs
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
@@ -574,12 +966,20 @@ class NotificacionViewSet(viewsets.ModelViewSet):
     def leer(self, request, pk=None):
         obj = self.get_object()
 
-        if getattr(request.user, "rol", None) != "admin" and obj.user_id not in [None, request.user.id]:
+        if not is_admin_role(request.user) and obj.user_id not in [None, request.user.id]:
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="No autorizado.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
+        if is_admin_sede(request.user) and obj.user_id:
+            actor_sede = _scope_sede(request.user)
+            if not actor_sede or _scope_sede(obj.user) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No autorizado para notificaciones de otra sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
 
         if obj.read_at is None:
             obj.read_at = timezone.now()
@@ -595,11 +995,10 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        rol = getattr(user, "rol", None)
-
-        if rol == "admin":
+        if is_admin_role(user):
             qs = Equipo.objects.all().order_by("-creado_en")
-        elif rol == "aprendiz":
+            qs = _admin_sede_qs(qs, user, "propietario__sede_principal")
+        elif getattr(user, "rol", None) == Usuario.Rol.APRENDIZ:
             qs = Equipo.objects.filter(propietario=user).order_by("-creado_en")
         else:
             qs = Equipo.objects.none()
@@ -622,34 +1021,93 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            rol = getattr(self.request.user, "rol", None)
-            if rol == "admin":
+            if is_admin_role(self.request.user):
                 return [IsAuthenticated(), IsAdmin()]
             return [IsAuthenticated(), IsAprendiz()]
 
-        if self.action in ["update", "partial_update", "destroy", "revisar"]:
+        if self.action in ["update", "partial_update", "revisar"]:
             return [IsAuthenticated(), IsAdmin()]
 
+        if self.action == "destroy":
+            if is_admin_role(self.request.user):
+                return [IsAuthenticated(), IsAdmin()]
+            return [IsAuthenticated(), IsAprendiz()]
+
         return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+        if getattr(request.user, "rol", None) == Usuario.Rol.APRENDIZ:
+            total = Equipo.objects.filter(propietario=request.user).count()
+            if total >= 4:
+                return error_response(
+                    code=ErrorCode.EQUIPO_LIMIT_REACHED,
+                    message="Solo puedes registrar hasta 4 equipos.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+        return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         user = self.request.user
         rol = getattr(user, "rol", None)
 
-        if rol == "aprendiz":
+        if rol == Usuario.Rol.APRENDIZ:
+            total = Equipo.objects.filter(propietario=user).count()
+            if total >= 4:
+                raise ValidationError({"equipos": "Solo puedes registrar hasta 4 equipos."})
             serializer.save(propietario=user)
             return
 
         propietario = serializer.validated_data.get("propietario", None)
         if not propietario:
             raise ValidationError({"propietario": "Como admin debes enviar el propietario (id del aprendiz)."})
+        if is_admin_sede(user):
+            actor_sede = _scope_sede(user)
+            if not actor_sede or _scope_sede(propietario) != actor_sede:
+                raise ValidationError({"propietario": "Solo puedes registrar equipos para aprendices de tu sede."})
 
         equipo = serializer.save(propietario=propietario)
         equipo.estado = Equipo.Estado.APROBADO
         equipo.motivo_rechazo = None
         equipo.revisado_por = user
         equipo.revisado_en = timezone.now()
-        equipo.save()
+        equipo.save(update_fields=["estado", "motivo_rechazo", "revisado_por", "revisado_en"])
+
+    def destroy(self, request, *args, **kwargs):
+        equipo = self.get_object()
+        user = request.user
+
+        if getattr(user, "rol", None) == Usuario.Rol.APRENDIZ:
+            if equipo.propietario_id != user.id:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No puedes eliminar equipos de otro aprendiz.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            if equipo.estado != Equipo.Estado.PENDIENTE:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes eliminar equipos en estado PENDIENTE.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            return super().destroy(request, *args, **kwargs)
+
+        if is_admin_sede(user):
+            actor_sede = _scope_sede(user)
+            if not actor_sede or _scope_sede(equipo.propietario) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes eliminar equipos de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+        if not is_admin_role(user):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No autorizado.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=["patch"], url_path="revisar")
     def revisar(self, request, pk=None):
@@ -680,17 +1138,15 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == "finalizar_admin":
             return [IsAuthenticated(), IsAdmin()]
 
-        rol = getattr(self.request.user, "rol", None)
-        if rol == "admin":
+        if is_admin_role(self.request.user):
             return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated(), IsGuarda()]
 
     def get_queryset(self):
         user = self.request.user
-        rol = getattr(user, "rol", None)
-
-        if rol == "admin":
+        if is_admin_role(user):
             qs = Turno.objects.all().order_by("-inicio")
+            qs = _admin_sede_qs(qs, user, "sede")
         else:
             qs = Turno.objects.filter(guarda=user).order_by("-inicio")
 
@@ -774,6 +1230,14 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=["post"], url_path="finalizar_admin")
     def finalizar_admin(self, request, pk=None):
         turno = self.get_object()
+        if is_admin_sede(request.user):
+            actor_sede = _scope_sede(request.user)
+            if not actor_sede or turno.sede != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes cerrar turnos de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
 
         if not turno.activo and turno.fin is not None:
             return error_response(
@@ -802,6 +1266,14 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
                 message="No autorizado.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
+        if is_admin_sede(user):
+            actor_sede = _scope_sede(user)
+            if not actor_sede or turno.sede != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes ver turnos de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
 
         qs = Acceso.objects.filter(turno=turno)
         ingresos = qs.filter(tipo=Acceso.Tipo.INGRESO).count()
@@ -831,8 +1303,8 @@ class AccesoViewSet(viewsets.ModelViewSet):
             .order_by("-fecha")
         )
 
-        if rol == "admin":
-            pass
+        if is_admin_role(user):
+            qs = _admin_sede_qs(qs, user, "sede")
         elif rol == "guarda":
             qs = qs.filter(turno__guarda=user)
         elif rol == "aprendiz":
@@ -880,8 +1352,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
-            rol = getattr(self.request.user, "rol", None)
-            if rol == "admin":
+            if is_admin_role(self.request.user):
                 return [IsAuthenticated(), IsAdmin()]
             return [IsAuthenticated(), IsGuarda()]
 
@@ -922,7 +1393,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         request_user = request.user
         rol = getattr(request_user, "rol", None)
 
-        if rol not in ["admin", "guarda"]:
+        if rol not in [Usuario.Rol.ADMIN, Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA]:
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="No tienes permisos para registrar accesos.",
@@ -932,7 +1403,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         turno = None
         sede = None
 
-        if rol == "guarda":
+        if rol == Usuario.Rol.GUARDA:
             turno = obtener_turno_activo(request_user)
             if not turno:
                 return error_response(
@@ -941,6 +1412,14 @@ class AccesoViewSet(viewsets.ModelViewSet):
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
             sede = turno.sede
+        elif is_admin_sede(request_user):
+            sede = _scope_sede(request_user)
+            if not sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -948,6 +1427,14 @@ class AccesoViewSet(viewsets.ModelViewSet):
         aprendiz = serializer.validated_data["usuario"]
         tipo = serializer.validated_data["tipo"]
         equipos_enviados = serializer.validated_data.get("equipos", [])
+        if is_admin_sede(request_user):
+            actor_sede = _scope_sede(request_user)
+            if _scope_sede(aprendiz) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes registrar accesos para aprendices de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
 
         ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
 
@@ -977,6 +1464,14 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 )
             sede = ultimo.sede
             turno = ultimo.turno
+            if is_admin_sede(request_user):
+                actor_sede = _scope_sede(request_user)
+                if ultimo.sede != actor_sede:
+                    return error_response(
+                        code=ErrorCode.PERMISSION_DENIED,
+                        message="Solo puedes registrar salidas de tu sede.",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos_enviados))
 
         acceso = serializer.save(registrado_por=request_user, turno=turno, sede=sede)
@@ -1166,3 +1661,458 @@ class AccesoViewSet(viewsets.ModelViewSet):
         ultimo = Acceso.objects.filter(usuario=request.user).order_by("-fecha").first()
         estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
         return ok_response({"estado": estado})
+
+
+def _role_allowed_for_expected(actual_role: str | None, expected_role: str | None) -> bool:
+    if not expected_role:
+        return True
+    if expected_role == "admin":
+        return actual_role in {Usuario.Rol.ADMIN, Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE}
+    return actual_role == expected_role
+
+
+def _latest_password_reset_otp(user: Usuario):
+    return (
+        PasswordResetOTP.objects.filter(
+            user=user,
+            used_at__isnull=True,
+            channel=PasswordResetOTP.Channel.EMAIL,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
+class PasswordResetRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        started = time.perf_counter()
+        s = PasswordResetRequestSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        email = s.validated_data.get("email", "")
+        ip = get_client_ip(request)
+        user = _find_user_for_password_reset(email=email)
+
+        ip_key = [ip, "password-reset"]
+        if is_locked("otp-request-ip", ip_key):
+            remaining = get_lock_remaining("otp-request-ip", ip_key)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiadas solicitudes. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining},
+            )
+
+        ip_limit = bump_with_lock("otp-request-ip", ip_key, OTP_MAX_REQUESTS * 3, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+        if ip_limit["locked"]:
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiadas solicitudes. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": int(ip_limit.get("remaining_sec", 0))},
+            )
+
+        if user:
+            user_key = [str(user.id), "password-reset"]
+            if is_locked("otp-request-user", user_key):
+                remaining = get_lock_remaining("otp-request-user", user_key)
+                _uniform_response_delay(started)
+                return error_response(
+                    code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                    message="Demasiadas solicitudes. Intenta mas tarde.",
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={"seconds_remaining": remaining},
+                )
+
+            user_limit = bump_with_lock("otp-request-user", user_key, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            if user_limit["locked"]:
+                _uniform_response_delay(started)
+                return error_response(
+                    code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                    message="Demasiadas solicitudes. Intenta mas tarde.",
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={"seconds_remaining": int(user_limit.get("remaining_sec", 0))},
+                )
+
+            PasswordResetOTP.objects.filter(
+                user=user,
+                used_at__isnull=True,
+                channel=PasswordResetOTP.Channel.EMAIL,
+            ).update(used_at=timezone.now())
+            otp_obj, code = create_otp_for_user(user)
+            try:
+                send_password_reset_email(user.email, code)
+            except Exception:
+                otp_obj.delete()
+                _uniform_response_delay(started)
+                return error_response(
+                    code=ErrorCode.NETWORK_ERROR,
+                    message="No se pudo enviar el codigo OTP. Verifica la configuracion de correo.",
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+        _uniform_response_delay(started)
+        return ok_response({"mensaje": "Si el usuario existe, enviamos un codigo OTP."})
+
+
+class PasswordResetVerifyView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        started = time.perf_counter()
+        s = PasswordResetVerifySerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        email = s.validated_data.get("email", "")
+        otp = s.validated_data["otp"]
+        ip = get_client_ip(request)
+        ip_key = [ip, email]
+        user = _find_user_for_password_reset(email=email)
+
+        if is_locked("otp-verify-ip", ip_key):
+            remaining = get_lock_remaining("otp-verify-ip", ip_key)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiados intentos. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining},
+            )
+
+        if not user:
+            bump_with_lock("otp-verify-ip", ip_key, OTP_MAX_ATTEMPTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp_obj = _latest_password_reset_otp(user)
+        if not otp_obj:
+            bump_with_lock("otp-verify-ip", ip_key, OTP_MAX_ATTEMPTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if timezone.now() > otp_obj.expires_at:
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_EXPIRED,
+                message="El codigo OTP expiro. Solicita uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_obj.attempts >= OTP_MAX_ATTEMPTS:
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_TOO_MANY_ATTEMPTS,
+                message="Demasiados intentos con OTP. Solicita uno nuevo.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
+            otp_obj.attempts += 1
+            otp_obj.save(update_fields=["attempts"])
+            bump_with_lock("otp-verify-ip", ip_key, OTP_MAX_ATTEMPTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        _uniform_response_delay(started)
+        return ok_response()
+
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        started = time.perf_counter()
+        s = PasswordResetConfirmSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        email = s.validated_data.get("email", "")
+        otp = s.validated_data["otp"]
+        new_password = s.validated_data["new_password"]
+        ip = get_client_ip(request)
+        ip_key = [ip, email]
+        user = _find_user_for_password_reset(email=email)
+
+        if is_locked("otp-confirm-ip", ip_key):
+            remaining = get_lock_remaining("otp-confirm-ip", ip_key)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiados intentos. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining},
+            )
+
+        if not user:
+            bump_with_lock("otp-confirm-ip", ip_key, OTP_MAX_ATTEMPTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        otp_obj = _latest_password_reset_otp(user)
+        if not otp_obj:
+            bump_with_lock("otp-confirm-ip", ip_key, OTP_MAX_ATTEMPTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if timezone.now() > otp_obj.expires_at:
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_EXPIRED,
+                message="El codigo OTP expiro. Solicita uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if otp_obj.attempts >= OTP_MAX_ATTEMPTS:
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_TOO_MANY_ATTEMPTS,
+                message="Demasiados intentos con OTP. Solicita uno nuevo.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if hash_code(otp_obj.salt, otp) != otp_obj.code_hash:
+            otp_obj.attempts += 1
+            otp_obj.save(update_fields=["attempts"])
+            bump_with_lock("otp-confirm-ip", ip_key, OTP_MAX_ATTEMPTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            _uniform_response_delay(started)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.must_change_password = False
+        user.force_password_reset = False
+        user.failed_lockouts_count = 0
+        user.first_lockout_at = None
+        user.last_password_change_at = timezone.now()
+        user.save(
+            update_fields=[
+                "password",
+                "must_change_password",
+                "force_password_reset",
+                "failed_lockouts_count",
+                "first_lockout_at",
+                "last_password_change_at",
+            ]
+        )
+
+        otp_obj.used_at = timezone.now()
+        otp_obj.save(update_fields=["used_at"])
+        PasswordResetOTP.objects.filter(
+            user=user,
+            used_at__isnull=True,
+            channel=PasswordResetOTP.Channel.EMAIL,
+        ).exclude(id=otp_obj.id).update(used_at=timezone.now())
+        _uniform_response_delay(started)
+        return ok_response()
+
+
+class PasskeyRegisterOptionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        s = PasskeyRegisterOptionsSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        user: Usuario = request.user
+        request_id = uuid4().hex
+        challenge = secrets.token_urlsafe(32)
+        cache.set(
+            _webauthn_register_cache_key(user.id, request_id),
+            {"challenge": challenge, "nickname": s.validated_data.get("nickname", "")},
+            timeout=PASSKEY_REGISTER_CHALLENGE_TTL,
+        )
+
+        payload = {
+            "request_id": request_id,
+            "challenge": challenge,
+            "rp": {"name": getattr(settings, "WEBAUTHN_RP_NAME", "SADI"), "id": getattr(settings, "WEBAUTHN_RP_ID", "localhost")},
+            "user": {"id": str(user.id), "name": user.username, "displayName": f"{user.first_name} {user.last_name}".strip() or user.username},
+            "timeout": 60000,
+            "attestation": "none",
+            "exclude_credentials": list(user.webauthn_credentials.values("credential_id")),
+            "mock": bool(getattr(settings, "WEBAUTHN_MOCK", True)),
+        }
+        return ok_response(payload)
+
+
+class PasskeyRegisterVerifyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        s = PasskeyRegisterVerifySerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        user: Usuario = request.user
+        request_id = s.validated_data["request_id"]
+        key = _webauthn_register_cache_key(user.id, request_id)
+        saved = cache.get(key) or {}
+        if not saved:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="El reto de registro expiro. Intenta de nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        challenge = saved.get("challenge")
+        if challenge != s.validated_data["challenge"]:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="Verificacion passkey invalida.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        credential, _created = WebAuthnCredential.objects.update_or_create(
+            user=user,
+            credential_id=s.validated_data["credential_id"],
+            defaults={
+                "public_key": s.validated_data.get("public_key", ""),
+                "sign_count": s.validated_data.get("sign_count", 0),
+                "transports": s.validated_data.get("transports"),
+                "aaguid": s.validated_data.get("aaguid", ""),
+                "nickname": s.validated_data.get("nickname") or saved.get("nickname", ""),
+                "last_used_at": timezone.now(),
+            },
+        )
+        cache.delete(key)
+        return ok_response(
+            {
+                "credential": {
+                    "id": credential.id,
+                    "credential_id": credential.credential_id,
+                    "nickname": credential.nickname,
+                    "created_at": credential.created_at,
+                }
+            }
+        )
+
+
+class PasskeyAuthOptionsView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        s = PasskeyAuthOptionsSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        username = s.validated_data.get("username", "")
+        user = Usuario.objects.filter(username__iexact=username).first() if username else None
+        allow_credentials = []
+        if user:
+            allow_credentials = list(
+                user.webauthn_credentials.values("credential_id", "transports")
+            )
+
+        request_id = uuid4().hex
+        challenge = secrets.token_urlsafe(32)
+        cache.set(
+            _webauthn_auth_cache_key(request_id),
+            {"challenge": challenge, "username": username, "expected_role": s.validated_data.get("expected_role")},
+            timeout=PASSKEY_AUTH_CHALLENGE_TTL,
+        )
+        return ok_response(
+            {
+                "request_id": request_id,
+                "challenge": challenge,
+                "rp_id": getattr(settings, "WEBAUTHN_RP_ID", "localhost"),
+                "timeout": 60000,
+                "allow_credentials": allow_credentials,
+                "mock": bool(getattr(settings, "WEBAUTHN_MOCK", True)),
+            }
+        )
+
+
+class PasskeyAuthVerifyView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        s = PasskeyAuthVerifySerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+
+        request_id = s.validated_data["request_id"]
+        key = _webauthn_auth_cache_key(request_id)
+        payload = cache.get(key) or {}
+        if not payload:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="El reto de autenticacion expiro.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if payload.get("challenge") != s.validated_data["challenge"]:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="Verificacion passkey invalida.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        credential = (
+            WebAuthnCredential.objects.select_related("user")
+            .filter(credential_id=s.validated_data["credential_id"])
+            .first()
+        )
+        if not credential:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="Credencial passkey invalida.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        user: Usuario = credential.user
+        expected_username = (payload.get("username") or "").strip().lower()
+        if expected_username and (user.username or "").strip().lower() != expected_username:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="Credencial passkey invalida.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        expected_role = s.validated_data.get("expected_role") or payload.get("expected_role")
+        if getattr(user, "estado", None) == Usuario.Estado.BLOQUEADO:
+            return error_response(
+                code=ErrorCode.ACCOUNT_DISABLED_SECURITY,
+                message="Tu cuenta esta deshabilitada por seguridad.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if getattr(user, "force_password_reset", False):
+            return error_response(
+                code=ErrorCode.PASSWORD_RESET_REQUIRED,
+                message="Debes recuperar la contrasena antes de volver a iniciar sesion.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        if not _role_allowed_for_expected(getattr(user, "rol", None), expected_role):
+            return error_response(
+                code=ErrorCode.INVALID_CREDENTIALS,
+                message="Credenciales invalidas para este modulo.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        credential.last_used_at = timezone.now()
+        credential.sign_count = int(credential.sign_count or 0) + 1
+        credential.save(update_fields=["last_used_at", "sign_count"])
+        cache.delete(key)
+        tokens = issue_tokens_for_user(user, rotate_guard_session=True)
+        return Response(tokens, status=status.HTTP_200_OK)

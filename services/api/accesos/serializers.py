@@ -1,22 +1,26 @@
 from rest_framework import serializers
 from .models import Usuario, Acceso, Equipo, Turno
-from .models import Notificacion, PasswordResetOTP
-from .otp_services import normalize_phone_e164
+from .models import Notificacion
 
 
 def password_policy_errors(password: str) -> list[str]:
     errors: list[str] = []
     if len(password) < 8:
-        errors.append("La contrasena debe tener minimo 8 caracteres.")
+        errors.append("La contraseña debe tener minimo 8 caracteres.")
     if not any(c.isupper() for c in password):
-        errors.append("La contrasena debe incluir al menos 1 mayuscula.")
+        errors.append("La contraseña debe incluir al menos 1 mayuscula.")
     if not any(c.islower() for c in password):
-        errors.append("La contrasena debe incluir al menos 1 minuscula.")
+        errors.append("La contraseña debe incluir al menos 1 minuscula.")
     if not any(c.isdigit() for c in password):
-        errors.append("La contrasena debe incluir al menos 1 numero.")
+        errors.append("La contraseña debe incluir al menos 1 numero.")
     if all(c.isalnum() for c in password):
-        errors.append("La contrasena debe incluir al menos 1 caracter especial.")
+        errors.append("La contraseña debe incluir al menos 1 caracter especial.")
     return errors
+
+
+def normalize_phone(value: str) -> str:
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())
+    return digits[:20]
 
 # =========================
 # USUARIOS
@@ -44,6 +48,26 @@ class UsuarioSerializer(serializers.ModelSerializer):
             "must_change_password",
         ]
         read_only_fields = ["must_change_password"]
+
+    def validate_email(self, value):
+        value = (value or "").strip().lower()
+        if value and Usuario.objects.filter(email__iexact=value).exclude(id=getattr(self.instance, "id", None)).exists():
+            raise serializers.ValidationError("El correo ya esta registrado.")
+        return value
+
+    def validate_documento(self, value):
+        value = (value or "").strip()
+        if value and (not value.isdigit() or len(value) > 10):
+            raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
+        return value
+
+    def validate_telefono(self, value):
+        if value in [None, ""]:
+            return value
+        normalized = normalize_phone(value)
+        if len(normalized) < 7:
+            raise serializers.ValidationError("El telefono no es valido.")
+        return normalized
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
@@ -78,6 +102,57 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+
+class AprendizPerfilSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Usuario
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "documento",
+            "rol",
+            "estado",
+            "sede_principal",
+            "jornada",
+            "programa_formacion",
+            "telefono",
+            "must_change_password",
+            "force_password_reset",
+        ]
+
+
+class AprendizPerfilUpdateSerializer(serializers.Serializer):
+    telefono = serializers.CharField(required=False, allow_blank=True, max_length=20)
+
+    def validate_telefono(self, value):
+        return normalize_phone(value)
+
+    def validate(self, attrs):
+        if "telefono" not in attrs:
+            raise serializers.ValidationError({"telefono": "Debes enviar el telefono."})
+        return attrs
+
+
+class AprendizEmailChangeRequestSerializer(serializers.Serializer):
+    new_email = serializers.EmailField()
+
+    def validate_new_email(self, value):
+        return value.strip().lower()
+
+
+class AprendizEmailChangeConfirmSerializer(serializers.Serializer):
+    new_email = serializers.EmailField()
+    otp = serializers.CharField(min_length=5, max_length=5)
+
+    def validate_new_email(self, value):
+        return value.strip().lower()
+
+    def validate_otp(self, value):
+        return value.strip()
 
 
 # =========================
@@ -209,115 +284,42 @@ class NotificacionSerializer(serializers.ModelSerializer):
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=False, allow_blank=True)
-    telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
-    channel = serializers.ChoiceField(
-        choices=PasswordResetOTP.Channel.choices,
-        default=PasswordResetOTP.Channel.EMAIL,
-        required=False,
-    )
+    email = serializers.EmailField(required=True)
 
     def validate_email(self, value):
         return value.strip().lower()
-
-    def validate_telefono(self, value):
-        if not value:
-            return ""
-        return normalize_phone_e164(value)
-
-    def validate(self, attrs):
-        channel = attrs.get("channel", PasswordResetOTP.Channel.EMAIL)
-        email = (attrs.get("email") or "").strip().lower()
-        telefono = (attrs.get("telefono") or "").strip()
-        if channel == PasswordResetOTP.Channel.WHATSAPP:
-            if not telefono and not email:
-                raise serializers.ValidationError({"telefono": "Telefono o correo son obligatorios para WhatsApp."})
-        else:
-            if not email:
-                raise serializers.ValidationError({"email": "El correo es obligatorio para este canal."})
-        attrs["email"] = email
-        attrs["telefono"] = telefono
-        return attrs
 
 
 class PasswordResetVerifySerializer(serializers.Serializer):
-    email = serializers.EmailField(required=False, allow_blank=True)
-    telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    email = serializers.EmailField(required=True)
     otp = serializers.CharField(min_length=5, max_length=5)
-    channel = serializers.ChoiceField(
-        choices=PasswordResetOTP.Channel.choices,
-        default=PasswordResetOTP.Channel.EMAIL,
-        required=False,
-    )
 
     def validate_email(self, value):
         return value.strip().lower()
-
-    def validate_telefono(self, value):
-        if not value:
-            return ""
-        return normalize_phone_e164(value)
 
     def validate_otp(self, value):
         return value.strip()
 
-    def validate(self, attrs):
-        channel = attrs.get("channel", PasswordResetOTP.Channel.EMAIL)
-        email = (attrs.get("email") or "").strip().lower()
-        telefono = (attrs.get("telefono") or "").strip()
-        if channel == PasswordResetOTP.Channel.WHATSAPP:
-            if not telefono and not email:
-                raise serializers.ValidationError({"telefono": "Telefono o correo son obligatorios para WhatsApp."})
-        else:
-            if not email:
-                raise serializers.ValidationError({"email": "El correo es obligatorio para este canal."})
-        attrs["email"] = email
-        attrs["telefono"] = telefono
-        return attrs
-
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=False, allow_blank=True)
-    telefono = serializers.CharField(required=False, allow_blank=True, max_length=30)
+    email = serializers.EmailField(required=True)
     otp = serializers.CharField(min_length=5, max_length=5)
-    new_password = serializers.CharField(min_length=8, max_length=128)
-    channel = serializers.ChoiceField(
-        choices=PasswordResetOTP.Channel.choices,
-        default=PasswordResetOTP.Channel.EMAIL,
-        required=False,
-    )
+    new_password = serializers.CharField(min_length=8, max_length=20)
 
     def validate_email(self, value):
         return value.strip().lower()
-
-    def validate_telefono(self, value):
-        if not value:
-            return ""
-        return normalize_phone_e164(value)
 
     def validate_otp(self, value):
         return value.strip()
 
     def validate_new_password(self, value):
         value = value.strip()
+        if len(value) > 20:
+            raise serializers.ValidationError("La contrasena debe tener maximo 20 caracteres.")
         errors = password_policy_errors(value)
         if errors:
             raise serializers.ValidationError(errors[0])
         return value
-
-    def validate(self, attrs):
-        channel = attrs.get("channel", PasswordResetOTP.Channel.EMAIL)
-        email = (attrs.get("email") or "").strip().lower()
-        telefono = (attrs.get("telefono") or "").strip()
-        if channel == PasswordResetOTP.Channel.WHATSAPP:
-            if not telefono and not email:
-                raise serializers.ValidationError({"telefono": "Telefono o correo son obligatorios para WhatsApp."})
-        else:
-            if not email:
-                raise serializers.ValidationError({"email": "El correo es obligatorio para este canal."})
-        attrs["email"] = email
-        attrs["telefono"] = telefono
-        return attrs
 
 
 class ImportAprendicesValidateSerializer(serializers.Serializer):
@@ -329,8 +331,8 @@ class ImportAprendicesConfirmSerializer(serializers.Serializer):
 
 
 class ChangeInitialPasswordSerializer(serializers.Serializer):
-    current_password = serializers.CharField(min_length=4, max_length=128)
-    new_password = serializers.CharField(min_length=8, max_length=128)
+    current_password = serializers.CharField(min_length=4, max_length=20)
+    new_password = serializers.CharField(min_length=8, max_length=20)
 
     def validate_new_password(self, value):
         value = value.strip()
@@ -338,3 +340,43 @@ class ChangeInitialPasswordSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors[0])
         return value
+
+
+class PasskeyRegisterOptionsSerializer(serializers.Serializer):
+    nickname = serializers.CharField(required=False, allow_blank=True, max_length=120)
+
+
+class PasskeyRegisterVerifySerializer(serializers.Serializer):
+    request_id = serializers.CharField(max_length=120)
+    challenge = serializers.CharField(max_length=512)
+    credential_id = serializers.CharField(max_length=512)
+    public_key = serializers.CharField(required=False, allow_blank=True)
+    sign_count = serializers.IntegerField(required=False, min_value=0)
+    transports = serializers.ListField(
+        child=serializers.CharField(max_length=40),
+        required=False,
+        allow_empty=True,
+    )
+    aaguid = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    nickname = serializers.CharField(required=False, allow_blank=True, max_length=120)
+
+    def validate_credential_id(self, value):
+        return value.strip()
+
+
+class PasskeyAuthOptionsSerializer(serializers.Serializer):
+    username = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
+
+    def validate_username(self, value):
+        return value.strip().lower()
+
+
+class PasskeyAuthVerifySerializer(serializers.Serializer):
+    request_id = serializers.CharField(max_length=120)
+    challenge = serializers.CharField(max_length=512)
+    credential_id = serializers.CharField(max_length=512)
+    expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
+
+    def validate_credential_id(self, value):
+        return value.strip()

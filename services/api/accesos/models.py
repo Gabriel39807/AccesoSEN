@@ -8,6 +8,8 @@ from uuid import uuid4
 
 class Usuario(AbstractUser):
     class Rol(models.TextChoices):
+        SUPERADMIN = "superadmin", "Superadmin"
+        ADMIN_SEDE = "admin_sede", "Admin de sede"
         ADMIN = "admin", "Admin"
         GUARDA = "guarda", "Guarda"
         APRENDIZ = "aprendiz", "Aprendiz"
@@ -49,6 +51,9 @@ class Usuario(AbstractUser):
     last_guard_login_at = models.DateTimeField(null=True, blank=True)
     must_change_password = models.BooleanField(default=False)
     last_password_change_at = models.DateTimeField(null=True, blank=True)
+    failed_lockouts_count = models.PositiveIntegerField(default=0)
+    first_lockout_at = models.DateTimeField(null=True, blank=True)
+    force_password_reset = models.BooleanField(default=False)
 
 
 class Equipo(models.Model):
@@ -188,9 +193,9 @@ class PasswordResetOTP(models.Model):
 
     salt = models.CharField(max_length=64)
     code_hash = models.CharField(max_length=128)
+
     class Channel(models.TextChoices):
         EMAIL = "email", "Email"
-        WHATSAPP = "whatsapp", "WhatsApp"
 
     channel = models.CharField(max_length=20, choices=Channel.choices, default=Channel.EMAIL)
 
@@ -212,6 +217,51 @@ class PasswordResetOTP(models.Model):
 
     def __str__(self):
         return f"OTP(user={self.user_id}, exp={self.expires_at}, used={bool(self.used_at)})"
+
+
+class EmailChangeOTP(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="email_change_otps",
+    )
+    new_email = models.EmailField()
+    salt = models.CharField(max_length=64)
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "new_email", "expires_at"])]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"EmailChangeOTP(user={self.user_id}, new_email={self.new_email}, used={bool(self.used_at)})"
+
+
+class WebAuthnCredential(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="webauthn_credentials",
+    )
+    credential_id = models.CharField(max_length=512, unique=True)
+    public_key = models.TextField(blank=True, default="")
+    sign_count = models.PositiveIntegerField(default=0)
+    transports = models.JSONField(null=True, blank=True)
+    aaguid = models.CharField(max_length=64, blank=True, default="")
+    nickname = models.CharField(max_length=120, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "created_at"])]
+
+    def __str__(self):
+        return f"WebAuthnCredential(user={self.user_id}, credential_id={self.credential_id[:20]})"
 
 
 class AprendizImportAudit(models.Model):
