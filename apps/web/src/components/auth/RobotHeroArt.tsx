@@ -14,6 +14,14 @@ export default function RobotHeroArt({ role, tx, ty }: Props) {
   const ry = Math.max(-7, Math.min(7, tx * 0.05));
   const rx = Math.max(-4, Math.min(4, -ty * 0.04));
   const bob = Math.sin((tx + ty) * 0.02) * 1.6;
+
+  // Mouse-follow only for head: bounded rotation/translation to keep it natural.
+  const headYaw = Math.max(-16, Math.min(16, tx * 1.05));
+  const headPitch = Math.max(-10, Math.min(10, -ty * 0.62));
+  const headShiftX = Math.max(-6, Math.min(6, tx * 0.45));
+  const headShiftY = Math.max(-4, Math.min(4, ty * 0.2));
+  const headFollowTransform = `translate(${headShiftX} ${headShiftY}) rotate(${headYaw} 408 324) rotate(${headPitch * 0.35} 408 360)`;
+
   const move: CSSProperties = {
     transform: `perspective(1100px) rotateX(${rx}deg) rotateY(${ry}deg) translate3d(${tx * 0.4}px, ${ty * 0.36 + bob}px, 0)`,
     transformStyle: "preserve-3d",
@@ -120,22 +128,24 @@ export default function RobotHeroArt({ role, tx, ty }: Props) {
         <rect x="355" y="406" width="110" height="70" rx="18" fill="#111a29" filter="url(#contactShadow)" />
         <rect x="355" y="406" width="110" height="70" rx="18" fill="url(#metalSheen)" opacity="0.35" />
         <rect x="338" y="358" width="144" height="60" rx="20" fill="url(#headShell)" stroke="rgba(226,232,240,0.7)" strokeWidth="1.5" />
-        <g transform="translate(408 324) rotate(-8)" filter="url(#headShadow)">
-          <rect x="-180" y="-72" width="360" height="165" rx="34" fill="url(#headShell)" />
-          <path d="M178 -58 178 73 204 56 204 -38Z" fill="url(#headSide)" opacity="0.9" />
-          <rect x="-160" y="-52" width="320" height="122" rx="24" fill="url(#headInner)" />
-          <rect x="-160" y="-52" width="320" height="122" rx="24" fill="none" stroke="rgba(148,163,184,0.25)" strokeWidth="1.5" />
-          <rect x="-160" y="-52" width="320" height="122" rx="24" fill="url(#screenBloom)" opacity="0.65" />
-          <path d="M-170 -44h340" stroke="url(#headRim)" strokeWidth="3" opacity="0.8" />
-          <path d="M-146 -34h292" stroke="rgba(255,255,255,0.18)" strokeWidth="2" opacity="0.7" />
-          <circle cx="-58" cy="10" r="30" fill="url(#eyeGlow)" />
-          <circle cx="58" cy="10" r="30" fill="url(#eyeGlow)" />
-          <circle cx="-64" cy="2" r="16" fill="url(#eyeSpec)" opacity="0.34" />
-          <circle cx="52" cy="2" r="16" fill="url(#eyeSpec)" opacity="0.34" />
-          <circle cx="-58" cy="10" r="16" fill="rgba(255,255,255,0.25)" />
-          <circle cx="58" cy="10" r="16" fill="rgba(255,255,255,0.25)" />
-          <rect x="166" y="-8" width="18" height="40" rx="9" fill="#2dc5ae" />
-          <rect x="-150" y="-44" width="292" height="6" rx="3" fill="rgba(255,255,255,0.22)" />
+        <g transform={headFollowTransform}>
+          <g transform="translate(408 324) rotate(-8)" filter="url(#headShadow)">
+            <rect x="-180" y="-72" width="360" height="165" rx="34" fill="url(#headShell)" />
+            <path d="M178 -58 178 73 204 56 204 -38Z" fill="url(#headSide)" opacity="0.9" />
+            <rect x="-160" y="-52" width="320" height="122" rx="24" fill="url(#headInner)" />
+            <rect x="-160" y="-52" width="320" height="122" rx="24" fill="none" stroke="rgba(148,163,184,0.25)" strokeWidth="1.5" />
+            <rect x="-160" y="-52" width="320" height="122" rx="24" fill="url(#screenBloom)" opacity="0.65" />
+            <path d="M-170 -44h340" stroke="url(#headRim)" strokeWidth="3" opacity="0.8" />
+            <path d="M-146 -34h292" stroke="rgba(255,255,255,0.18)" strokeWidth="2" opacity="0.7" />
+            <circle cx="-58" cy="10" r="30" fill="url(#eyeGlow)" />
+            <circle cx="58" cy="10" r="30" fill="url(#eyeGlow)" />
+            <circle cx="-64" cy="2" r="16" fill="url(#eyeSpec)" opacity="0.34" />
+            <circle cx="52" cy="2" r="16" fill="url(#eyeSpec)" opacity="0.34" />
+            <circle cx="-58" cy="10" r="16" fill="rgba(255,255,255,0.25)" />
+            <circle cx="58" cy="10" r="16" fill="rgba(255,255,255,0.25)" />
+            <rect x="166" y="-8" width="18" height="40" rx="9" fill="#2dc5ae" />
+            <rect x="-150" y="-44" width="292" height="6" rx="3" fill="rgba(255,255,255,0.22)" />
+          </g>
         </g>
       </svg>
     </div>
