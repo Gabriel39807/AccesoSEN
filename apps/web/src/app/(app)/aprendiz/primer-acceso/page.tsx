@@ -36,7 +36,7 @@ export default function PrimerAccesoPage() {
     e.preventDefault();
     setMsg(null);
     if (!allRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setMsg("La nueva contraseña no cumple todos los requisitos.");
       return;
     }
 
@@ -47,7 +47,7 @@ export default function PrimerAccesoPage() {
         new_password: next,
       });
       router.replace("/aprendiz/inicio");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setMsg(toErrorMessage(e, "No se pudo actualizar."));
     } finally {
       setLoading(false);
@@ -58,7 +58,7 @@ export default function PrimerAccesoPage() {
     <div className="mx-auto max-w-xl rounded-3xl border bg-white p-6 shadow-sm">
       <h1 className="text-xl font-extrabold text-zinc-900">Primer ingreso</h1>
       <p className="mt-1 text-sm text-zinc-600">
-        Debes cambiar la contrasena inicial (ultimos 4 o 6 digitos del documento).
+        Debes cambiar la contraseña inicial (ultimos 4 o 6 digitos del documento).
       </p>
 
       <form onSubmit={onSubmit} className="mt-5 space-y-3">
@@ -66,21 +66,21 @@ export default function PrimerAccesoPage() {
           type="password"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
-          placeholder="Contrasena actual"
+          placeholder="Contraseña actual"
           className="w-full rounded-2xl border px-4 py-3 text-sm"
         />
         <input
           type="password"
           value={next}
           onChange={(e) => setNext(e.target.value)}
-          placeholder="Nueva contrasena"
+          placeholder="Nueva contraseña"
           className="w-full rounded-2xl border px-4 py-3 text-sm"
         />
         <input
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          placeholder="Confirmar contrasena"
+          placeholder="Confirmar contraseña"
           className="w-full rounded-2xl border px-4 py-3 text-sm"
         />
         <div className="rounded-2xl border bg-zinc-50 p-3 text-sm">
@@ -100,7 +100,7 @@ export default function PrimerAccesoPage() {
           disabled={loading || !allRulesValid}
           className="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
         >
-          {loading ? "Actualizando..." : "Actualizar contrasena"}
+          {loading ? "Actualizando..." : "Actualizar contraseña"}
         </button>
       </form>
     </div>

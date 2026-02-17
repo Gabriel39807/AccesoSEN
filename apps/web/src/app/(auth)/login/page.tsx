@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearTokens, saveTokens } from "@/lib/auth";
 import { toErrorMessage } from "@/lib/errors";
+import { AuthButton, AuthCard, AuthInput, AuthLayout, RoleSwitch, type AuthRole } from "@/components/auth";
+import styles from "@/components/auth/auth.module.css";
 
 type MeResponse = {
   permitido: boolean;
@@ -22,34 +24,67 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [role, setRole] = useState<"admin" | "student">("admin");
+  const [role, setRole] = useState<AuthRole>("admin");
+  const [showPassword, setShowPassword] = useState(false);
 
-  function onUsernameChange(value: string) {
-    if (role === "student") {
-      setUsername(value.replace(/\D/g, "").slice(0, 10));
+  const roleCopy = useMemo(
+    () =>
+      role === "admin"
+        ? {
+            title: "Control institucional seguro",
+            subtitle:
+              "Accede al panel de gestion de S.A.D.I con trazabilidad de ingresos y validacion de usuarios autorizados.",
+            field: "Correo institucional",
+            placeholder: "admin@sena.edu.co",
+            hint: "Usa tu cuenta institucional registrada.",
+            badge: "Acceso administrador",
+          }
+        : {
+            title: "Ingreso de aprendices SENA",
+            subtitle:
+              "Valida tu identidad para consultar tus accesos y mantener la credencial activa en el sistema.",
+            field: "Documento de identidad",
+            placeholder: "Ingresa tu documento",
+            hint: "Solo numeros (maximo 10 digitos).",
+            badge: "Acceso aprendiz",
+          },
+    [role]
+  );
+
+  function onUsernameChange(raw: string) {
+    if (role === "aprendiz") {
+      setUsername(raw.replace(/\D/g, "").slice(0, 10));
       return;
     }
-    setUsername(value);
+    setUsername(raw);
   }
 
-  function onPasswordChange(value: string) {
-    setPassword(value.slice(0, 20));
+  function onPasswordChange(raw: string) {
+    setPassword(raw.slice(0, 20));
+  }
+
+  function validateLogin(): string | null {
+    const user = username.trim();
+    if (!user) return `Ingresa ${role === "admin" ? "tu correo institucional" : "tu documento"}.`;
+    if (role === "admin" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user)) return "El correo no tiene un formato valido.";
+    if (role === "aprendiz" && !/^\d{1,10}$/.test(user)) return "El documento debe contener solo numeros (maximo 10 digitos).";
+    if (!password) return "Ingresa tu contrasena.";
+    if (password.length > 20) return "La contrasena debe tener maximo 20 caracteres.";
+    return null;
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const validationError = validateLogin();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setError(null);
-    if (role === "student" && !/^\d{1,10}$/.test(username.trim())) {
-      setError("Para aprendices, el documento debe ser numerico y maximo de 10 digitos.");
-      return;
-    }
-    if (!password || password.length > 20) {
-      setError("La contrasena debe tener maximo 20 caracteres.");
-      return;
-    }
     setLoading(true);
     try {
-      const tokenRes = await api.post("/api/token/", { username, password });
+      const tokenRes = await api.post("/api/token/", { username: username.trim(), password });
       saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh });
 
       const meRes = await api.get<MeResponse>("/api/me/");
@@ -60,7 +95,8 @@ export default function LoginPage() {
         setError("Este modulo solo permite credenciales de administrador.");
         return;
       }
-      if (role === "student" && rol !== "aprendiz") {
+
+      if (role === "aprendiz" && rol !== "aprendiz") {
         await clearTokens();
         setError("Este modulo solo permite credenciales de aprendiz.");
         return;
@@ -74,7 +110,7 @@ export default function LoginPage() {
         await clearTokens();
         setError("El rol guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(toErrorMessage(err, "Credenciales invalidas."));
     } finally {
       setLoading(false);
@@ -82,104 +118,87 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-gradient-to-b from-white to-emerald-50 px-4 py-10">
-      <div className="mx-auto flex w-full max-w-md items-center justify-center">
-        <div className="w-full rounded-3xl border bg-white p-6 shadow-sm md:p-8">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
-              SENA
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Sistema de Control de Acceso</h1>
-            </div>
+    <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge}>
+      <AuthCard className="p-5 md:p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Iniciar sesion</h2>
+            <p className="text-xs text-slate-500">Sistema de Administracion de Ingresos S.A.D.I</p>
           </div>
+          <span
+            className="rounded-full border border-white/70 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-slate-600"
+            style={{ background: "var(--auth-accent-soft)" }}
+          >
+            SENA
+          </span>
+        </div>
 
-          <div className="mt-6 flex items-center gap-2 rounded-2xl bg-emerald-50 p-2">
-            <button
-              type="button"
-              onClick={() => {
-                setRole("admin");
-                setError(null);
-              }}
-              className={[
-                "flex-1 rounded-xl px-4 py-2 text-sm font-medium transition",
-                role === "admin" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-800",
-              ].join(" ")}
-            >
-              Administrador
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRole("student");
-                setError(null);
-              }}
-              className={[
-                "flex-1 rounded-xl px-4 py-2 text-sm font-medium transition",
-                role === "student" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-800",
-              ].join(" ")}
-            >
-              Estudiante
-            </button>
-          </div>
-
-          <p className="mt-4 text-xs text-slate-600">
+        <div className="mt-5">
+          <RoleSwitch
+            value={role}
+            onChange={(nextRole) => {
+              setRole(nextRole);
+              setError(null);
+              setUsername("");
+            }}
+          />
+          <p className="mt-2 text-xs text-slate-600">
             {role === "admin"
-              ? "Administrador: ingresa con tu correo institucional."
-              : "Estudiante: ingresa con tu documento."}
+              ? "Vista de gestion con enfoque en seguridad y monitoreo."
+              : "Vista de aprendizaje para ingreso y validacion de identidad."}
           </p>
+        </div>
 
-          <form onSubmit={onSubmit} className="mt-6 space-y-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-800">
-                {role === "admin" ? "Correo institucional" : "Documento de identidad"}
-              </label>
-              <input
-                className="h-12 w-full rounded-2xl border bg-slate-50 px-4 outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200"
-                placeholder={role === "admin" ? "admin@sena.edu.co" : "Ingresa tu documento"}
-                value={username}
-                onChange={(e) => onUsernameChange(e.target.value)}
-                inputMode={role === "student" ? "numeric" : "email"}
-                maxLength={role === "student" ? 10 : 80}
-              />
-            </div>
+        <form onSubmit={onSubmit} className="mt-5 space-y-4">
+          <AuthInput
+            id="auth-username"
+            label={roleCopy.field}
+            placeholder={roleCopy.placeholder}
+            value={username}
+            onChange={(e) => onUsernameChange(e.target.value)}
+            autoComplete={role === "admin" ? "username" : "off"}
+            inputMode={role === "admin" ? "email" : "numeric"}
+            maxLength={role === "admin" ? 80 : 10}
+            error={null}
+            hint={roleCopy.hint}
+          />
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-slate-800">Contrasena</label>
+          <div className="space-y-1.5">
+            <label htmlFor="auth-password" className="block text-sm font-semibold text-slate-800">
+              Contrasena
+            </label>
+            <div className="relative">
               <input
-                type="password"
-                className="h-12 w-full rounded-2xl border bg-slate-50 px-4 outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200"
+                id="auth-password"
+                type={showPassword ? "text" : "password"}
+                className={styles.input}
                 placeholder="********"
                 value={password}
                 onChange={(e) => onPasswordChange(e.target.value)}
+                autoComplete="current-password"
                 maxLength={20}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+              >
+                {showPassword ? "Ocultar" : "Mostrar"}
+              </button>
             </div>
+          </div>
 
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-                {error}
-              </div>
-            )}
+          {error ? <p className={`${styles.status} ${styles.statusError}`}>{error}</p> : null}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-12 w-full rounded-2xl bg-emerald-600 font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {loading ? "Ingresando..." : "Iniciar sesion"}
-            </button>
+          <AuthButton type="submit" loading={loading} loadingLabel="Ingresando..." className="w-full">
+            Iniciar sesion
+          </AuthButton>
 
-            <button
-              type="button"
-              onClick={() => router.push("/password-recovery")}
-              className="w-full rounded-xl border p-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
-            >
-              Olvide mi contrasena
-            </button>
-          </form>
-        </div>
-      </div>
-    </main>
+          <AuthButton type="button" variant="secondary" className="w-full" onClick={() => router.push("/password-recovery")}>
+            Recuperar contrasena
+          </AuthButton>
+        </form>
+      </AuthCard>
+    </AuthLayout>
   );
 }
