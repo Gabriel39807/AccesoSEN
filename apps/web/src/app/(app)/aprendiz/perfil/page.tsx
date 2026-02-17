@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { api } from "@/lib/api";
 import { useMe } from "@/hooks/useMe";
+import { api } from "@/lib/api";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -13,6 +13,16 @@ type PasswordRule = {
   id: string;
   label: string;
   valid: boolean;
+};
+
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      detail?: string;
+      motivo?: string;
+      message?: string;
+    };
+  };
 };
 
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
@@ -26,19 +36,28 @@ function buildPasswordRules(password: string, confirmPassword: string): Password
   ];
 }
 
-function safeErrorMessage(e: any) {
+function safeErrorMessage(e: unknown) {
+  const err = e as ApiErrorShape;
   return (
-    e?.response?.data?.detail ??
-    e?.response?.data?.motivo ??
-    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
-    "No se pudo completar la acción."
+    err.response?.data?.detail ??
+    err.response?.data?.motivo ??
+    err.response?.data?.message ??
+    "No se pudo completar la accion."
+  );
+}
+
+function DataCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-[0_6px_18px_rgba(2,6,23,0.04)]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-zinc-900">{value || "-"}</p>
+    </div>
   );
 }
 
 export default function AprendizPerfilPage() {
   const { me, loadingMe } = useMe();
 
-  // modal editar
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -50,7 +69,6 @@ export default function AprendizPerfilPage() {
   const [sede, setSede] = useState("");
   const [programa, setPrograma] = useState("");
 
-  // cambiar contraseña
   const [pwOpen, setPwOpen] = useState(false);
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -67,7 +85,7 @@ export default function AprendizPerfilPage() {
   }, [me]);
 
   const nombreBonito = useMemo(() => {
-    if (!me) return "—";
+    if (!me) return "-";
     const n = `${me.first_name ?? ""} ${me.last_name ?? ""}`.trim();
     return n || me.username;
   }, [me]);
@@ -78,8 +96,6 @@ export default function AprendizPerfilPage() {
     setMsgTipo(null);
     setSaving(true);
     try {
-      // NOTA: En el backend actual, este endpoint suele ser solo Admin.
-      // Se deja implementado para cuando se habilite auto-actualización.
       await api.patch(`/api/usuarios/${me.id}/`, {
         first_name: first.trim(),
         last_name: last.trim(),
@@ -87,10 +103,10 @@ export default function AprendizPerfilPage() {
         sede_principal: sede ? sede : null,
         programa_formacion: programa ? programa : null,
       });
-      setMsg("✅ Perfil actualizado.");
+      setMsg("Perfil actualizado.");
       setMsgTipo("ok");
       setEditing(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setMsg(safeErrorMessage(e));
       setMsgTipo("err");
     } finally {
@@ -104,7 +120,7 @@ export default function AprendizPerfilPage() {
     setMsgTipo(null);
 
     if (!passwordRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setMsg("La nueva contraseña no cumple todos los requisitos.");
       setMsgTipo("err");
       return;
     }
@@ -114,12 +130,12 @@ export default function AprendizPerfilPage() {
       await api.patch(`/api/usuarios/${me.id}/`, {
         password: pw,
       });
-      setMsg("✅ Contraseña actualizada.");
+      setMsg("Contraseña actualizada.");
       setMsgTipo("ok");
       setPwOpen(false);
       setPw("");
       setPw2("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setMsg(safeErrorMessage(e));
       setMsgTipo("err");
     } finally {
@@ -129,115 +145,93 @@ export default function AprendizPerfilPage() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-3xl border bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_12px_34px_rgba(2,6,23,0.07)] backdrop-blur-sm">
+        <div className="pointer-events-none absolute -right-16 -top-14 h-44 w-44 rounded-full bg-emerald-300/25 blur-3xl" />
+        <div className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
+
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-lg font-extrabold text-zinc-900">Mi perfil</h2>
-            <p className="mt-1 text-sm text-zinc-600">
-              Consulta tus datos y gestiona tu cuenta.
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Perfil del aprendiz</p>
+            <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">Mi perfil</h2>
+            <p className="mt-1 text-sm text-zinc-600">Consulta tus datos personales y administra tu cuenta.</p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               onClick={() => setEditing(true)}
-              className="rounded-full border px-5 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+              className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-700 transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
             >
               Editar perfil
             </button>
             <button
               onClick={() => setPwOpen(true)}
-              className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
             >
               Cambiar contraseña
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="rounded-3xl border bg-white p-5 shadow-sm lg:col-span-2">
-          <div className="text-xs font-semibold tracking-wide text-emerald-700">Aprendiz</div>
-          <div className="mt-1 text-2xl font-extrabold text-zinc-900">
-            {loadingMe ? "Cargando..." : nombreBonito}
+      <div className="grid gap-5 xl:grid-cols-12">
+        <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm xl:col-span-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Aprendiz</div>
+              <div className="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900">
+                {loadingMe ? "Cargando..." : nombreBonito}
+              </div>
+            </div>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+              Cuenta {me?.estado ?? "-"}
+            </span>
           </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border bg-zinc-50 p-4">
-              <div className="text-xs text-zinc-500">Documento</div>
-              <div className="mt-1 text-sm font-semibold text-zinc-900">
-                {me?.documento ?? "—"}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-zinc-50 p-4">
-              <div className="text-xs text-zinc-500">Correo</div>
-              <div className="mt-1 text-sm font-semibold text-zinc-900">
-                {me?.email ?? "—"}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-zinc-50 p-4">
-              <div className="text-xs text-zinc-500">Centro de formación</div>
-              <div className="mt-1 text-sm font-semibold text-zinc-900">
-                {me?.sede_principal ?? "—"}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-zinc-50 p-4">
-              <div className="text-xs text-zinc-500">Programa</div>
-              <div className="mt-1 text-sm font-semibold text-zinc-900">
-                {me?.programa_formacion ?? "—"}
-              </div>
-            </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <DataCard label="Documento" value={me?.documento ?? "-"} />
+            <DataCard label="Correo" value={me?.email ?? "-"} />
+            <DataCard label="Centro de formacion" value={me?.sede_principal ?? "-"} />
+            <DataCard label="Programa" value={me?.programa_formacion ?? "-"} />
           </div>
 
-          {msg && (
+          {msg ? (
             <div
               className={cx(
                 "mt-5 rounded-2xl border p-4 text-sm",
-                msgTipo === "ok" && "border-emerald-200 bg-emerald-50 text-emerald-800",
-                msgTipo === "err" && "border-red-200 bg-red-50 text-red-700"
+                msgTipo === "ok" && "border-emerald-200 bg-emerald-50/90 text-emerald-800",
+                msgTipo === "err" && "border-red-200 bg-red-50/90 text-red-700"
               )}
             >
               {msg}
             </div>
-          )}
-        </div>
+          ) : null}
+        </section>
 
-        <div className="rounded-3xl border bg-white p-5 shadow-sm">
-          <h3 className="text-sm font-extrabold text-zinc-900">Seguridad</h3>
-          <div className="mt-4 space-y-3 text-sm text-zinc-700">
-            <div className="rounded-2xl border bg-zinc-50 p-4">
-              <div className="text-xs text-zinc-500">Estado de la cuenta</div>
-              <div className="mt-1 font-semibold text-zinc-900">
-                {me?.estado ?? "—"}
-              </div>
+        <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm xl:col-span-4">
+          <h3 className="text-base font-extrabold tracking-tight text-zinc-900">Seguridad</h3>
+          <div className="mt-4 space-y-3">
+            <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Estado de la cuenta</p>
+              <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{me?.estado ?? "-"}</p>
             </div>
-            <div className="rounded-2xl border bg-zinc-50 p-4">
-              <div className="text-xs text-zinc-500">Recomendación</div>
-              <div className="mt-1">
-                Usa una contraseña fuerte (mínimo 8 caracteres) y no la compartas.
-              </div>
+            <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4 text-sm text-zinc-700">
+              Usa una contraseña fuerte (minimo 8 caracteres), unica y evita compartirla.
             </div>
           </div>
-        </div>
+        </section>
       </div>
 
-      {/* MODAL EDITAR */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-2xl rounded-3xl border bg-white p-6 shadow-xl">
+      {editing ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-extrabold text-zinc-900">Editar perfil</h3>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Actualiza tus datos personales.
-                </p>
+                <p className="mt-1 text-sm text-zinc-600">Actualiza tus datos personales.</p>
               </div>
               <button
                 onClick={() => setEditing(false)}
-                className="rounded-full border px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
               >
                 Cerrar
               </button>
@@ -246,30 +240,16 @@ export default function AprendizPerfilPage() {
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="text-xs font-semibold text-zinc-700">Nombre</label>
-                <input
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={first}
-                  onChange={(e) => setFirst(e.target.value)}
-                />
+                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={first} onChange={(e) => setFirst(e.target.value)} />
               </div>
               <div>
                 <label className="text-xs font-semibold text-zinc-700">Apellido</label>
-                <input
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={last}
-                  onChange={(e) => setLast(e.target.value)}
-                />
+                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={last} onChange={(e) => setLast(e.target.value)} />
               </div>
-
               <div className="sm:col-span-2">
                 <label className="text-xs font-semibold text-zinc-700">Correo</label>
-                <input
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-zinc-700">Centro</label>
                 <input
@@ -281,11 +261,7 @@ export default function AprendizPerfilPage() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-zinc-700">Programa</label>
-                <input
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={programa}
-                  onChange={(e) => setPrograma(e.target.value)}
-                />
+                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={programa} onChange={(e) => setPrograma(e.target.value)} />
               </div>
             </div>
 
@@ -293,35 +269,32 @@ export default function AprendizPerfilPage() {
               <button
                 onClick={guardarPerfil}
                 disabled={saving}
-                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
               >
                 {saving ? "Guardando..." : "Guardar cambios"}
               </button>
               <button
                 onClick={() => setEditing(false)}
-                className="rounded-2xl border px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                className="rounded-2xl border px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
               >
                 Cancelar
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {/* MODAL CONTRASEÑA */}
-      {pwOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-lg rounded-3xl border bg-white p-6 shadow-xl">
+      {pwOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-lg rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contraseña</h3>
-                <p className="mt-1 text-sm text-zinc-600">
-                  Usa una clave fuerte y única.
-                </p>
+                <p className="mt-1 text-sm text-zinc-600">Usa una clave fuerte y unica.</p>
               </div>
               <button
                 onClick={() => setPwOpen(false)}
-                className="rounded-full border px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
               >
                 Cerrar
               </button>
@@ -330,21 +303,11 @@ export default function AprendizPerfilPage() {
             <div className="mt-5 space-y-3">
               <div>
                 <label className="text-xs font-semibold text-zinc-700">Nueva contraseña</label>
-                <input
-                  type="password"
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={pw}
-                  onChange={(e) => setPw(e.target.value)}
-                />
+                <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw} onChange={(e) => setPw(e.target.value)} />
               </div>
               <div>
                 <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contraseña</label>
-                <input
-                  type="password"
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={pw2}
-                  onChange={(e) => setPw2(e.target.value)}
-                />
+                <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw2} onChange={(e) => setPw2(e.target.value)} />
               </div>
               <div className="rounded-2xl border bg-zinc-50 p-4 text-xs text-zinc-600">
                 <div className="mb-2 font-semibold text-zinc-900">Checklist de seguridad</div>
@@ -362,20 +325,20 @@ export default function AprendizPerfilPage() {
               <button
                 onClick={cambiarContrasena}
                 disabled={saving || !passwordRulesValid}
-                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
               >
                 {saving ? "Guardando..." : "Actualizar contraseña"}
               </button>
               <button
                 onClick={() => setPwOpen(false)}
-                className="rounded-2xl border px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
+                className="rounded-2xl border px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
               >
                 Cancelar
               </button>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

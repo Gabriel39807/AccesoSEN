@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { toErrorMessage } from "@/lib/errors";
+import { AuthButton, AuthCard, AuthInput, AuthLayout } from "@/components/auth";
+import styles from "@/components/auth/auth.module.css";
 
-type Step = "email" | "otp" | "newpass" | "done";
-type Channel = "email" | "whatsapp";
+type Step = "request" | "sent" | "reset" | "done";
 type PasswordRule = {
   id: string;
   label: string;
@@ -25,41 +26,44 @@ function buildPasswordRules(password: string, confirmPassword: string): Password
 }
 
 export default function PasswordRecoveryWebPage() {
-  const [step, setStep] = useState<Step>("email");
-  const [channel, setChannel] = useState<Channel>("email");
-  const [email, setEmail] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [otp, setOtp] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryStep = searchParams.get("step");
+  const initialStep: Step =
+    queryStep === "sent" || queryStep === "reset" || queryStep === "done" ? queryStep : "request";
+  const [step, setStep] = useState<Step>(initialStep);
+  const [email, setEmail] = useState(searchParams.get("email") ?? "");
+  const [otp, setOtp] = useState(searchParams.get("otp") ?? "");
   const [newPass, setNewPass] = useState("");
   const [newPass2, setNewPass2] = useState("");
+  const [showPass1, setShowPass1] = useState(false);
+  const [showPass2, setShowPass2] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const rules = buildPasswordRules(newPass, newPass2);
   const allRulesValid = rules.every((rule) => rule.valid);
-  const identifier =
-    channel === "whatsapp"
-      ? { telefono: telefono.trim() }
-      : { email: email.trim().toLowerCase() };
+  const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
 
-  async function onEmail(e: React.FormEvent) {
+  async function onRequest(e: React.FormEvent) {
     e.preventDefault();
-    if (channel === "email" && !email.trim()) {
-      setMsg("Ingresa un correo para enviar el OTP.");
+    if (!normalizedEmail) {
+      setError("Ingresa un correo para enviar el codigo.");
       return;
     }
-    if (channel === "whatsapp" && !telefono.trim()) {
-      setMsg("Ingresa un numero de celular para enviar el OTP.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setError("El correo no tiene un formato valido.");
       return;
     }
     setLoading(true);
-    setMsg(null);
+    setError(null);
     try {
-      await api.post("/api/auth/password-reset/request/", { ...identifier, channel });
-      setStep("otp");
-      setMsg(`Si el usuario existe, enviamos un codigo OTP por ${channel === "whatsapp" ? "WhatsApp" : "correo"}.`);
-    } catch (err: any) {
-      setMsg(toErrorMessage(err, "No se pudo enviar el codigo."));
+      await api.post("/api/auth/password-reset/request/", { email: normalizedEmail, channel: "email" });
+      setStep("sent");
+      setNotice("Si la cuenta existe, enviamos un codigo de verificacion a tu correo.");
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, "No se pudo enviar el codigo."));
     } finally {
       setLoading(false);
     }
@@ -67,14 +71,37 @@ export default function PasswordRecoveryWebPage() {
 
   async function onVerify(e: React.FormEvent) {
     e.preventDefault();
+    if (!/^\d{5}$/.test(otp.trim())) {
+      setError("El codigo OTP debe tener 5 digitos.");
+      return;
+    }
     setLoading(true);
-    setMsg(null);
+    setError(null);
     try {
-      const r = await api.post("/api/auth/password-reset/verify/", { ...identifier, otp: otp.trim(), channel });
+      const r = await api.post("/api/auth/password-reset/verify/", {
+        email: normalizedEmail,
+        otp: otp.trim(),
+        channel: "email",
+      });
       if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "OTP invalido.");
-      setStep("newpass");
-    } catch (err: any) {
-      setMsg(toErrorMessage(err, "OTP invalido."));
+      setStep("reset");
+      setNotice("Codigo verificado. Ahora define tu nueva contraseña.");
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, "Codigo invalido o expirado."));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendCode() {
+    if (!normalizedEmail) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await api.post("/api/auth/password-reset/request/", { email: normalizedEmail, channel: "email" });
+      setNotice("Reenviamos un nuevo codigo al correo registrado.");
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, "No se pudo reenviar el codigo."));
     } finally {
       setLoading(false);
     }
@@ -83,146 +110,168 @@ export default function PasswordRecoveryWebPage() {
   async function onConfirm(e: React.FormEvent) {
     e.preventDefault();
     if (!allRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setError("La nueva contraseña no cumple todos los requisitos.");
       return;
     }
     setLoading(true);
-    setMsg(null);
+    setError(null);
     try {
       const r = await api.post("/api/auth/password-reset/confirm/", {
-        ...identifier,
+        email: normalizedEmail,
         otp: otp.trim(),
         new_password: newPass,
-        channel,
+        channel: "email",
       });
-      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contrasena.");
+      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contraseña.");
       setStep("done");
-    } catch (err: any) {
-      setMsg(toErrorMessage(err, "No se pudo cambiar la contrasena."));
+      setNotice("Contraseña actualizada correctamente.");
+    } catch (err: unknown) {
+      setError(toErrorMessage(err, "No se pudo cambiar la contraseña."));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="mx-auto mt-8 w-full max-w-md rounded-xl border bg-white p-6 shadow">
-        <h1 className="text-2xl font-bold text-zinc-900">Recuperar contrasena</h1>
+    <AuthLayout
+      role="aprendiz"
+      title="Recuperacion de contraseña"
+      subtitle="Protege tu cuenta con un flujo seguro de verificacion y cambio de clave."
+      badge="Soporte de acceso"
+    >
+      <AuthCard className="p-5 md:p-6">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Restablecer acceso</h2>
+          <p className="text-xs text-slate-500">Seguiremos un proceso corto para validar tu identidad.</p>
+        </div>
 
-        {step === "email" && (
-          <form onSubmit={onEmail} className="mt-4 space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setChannel("email")}
-                className={`rounded-lg border p-2 text-sm font-semibold ${channel === "email" ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-700"}`}
-              >
-                Correo
-              </button>
-              <button
-                type="button"
-                onClick={() => setChannel("whatsapp")}
-                className={`rounded-lg border p-2 text-sm font-semibold ${channel === "whatsapp" ? "border-emerald-600 bg-emerald-50 text-emerald-700" : "border-zinc-200 text-zinc-700"}`}
-              >
-                WhatsApp
-              </button>
-            </div>
-            {channel === "email" ? (
-              <input
-                className="w-full rounded-lg border p-2"
-                placeholder="correo@dominio.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            ) : (
-              <input
-                className="w-full rounded-lg border p-2"
-                placeholder="+573001112233"
-                value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
-              />
-            )}
-            <p className="text-sm text-zinc-600">
-              {channel === "whatsapp"
-                ? "El OTP se enviara por WhatsApp al numero de celular registrado en la cuenta."
-                : "El OTP se enviara al correo registrado en esta cuenta."}
-            </p>
-            <button disabled={loading} className="w-full rounded-lg bg-emerald-600 p-2 font-semibold text-white disabled:opacity-50">
-              {loading ? "Enviando..." : "Enviar codigo"}
-            </button>
+        {step === "request" ? (
+          <form onSubmit={onRequest} className="mt-5 space-y-4">
+            <AuthInput
+              id="recovery-email"
+              label="Correo institucional"
+              type="email"
+              placeholder="usuario@sena.edu.co"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              error={null}
+              hint="Enviaremos un OTP al correo asociado a tu cuenta."
+            />
+            <AuthButton type="submit" loading={loading} loadingLabel="Enviando..." className="w-full">
+              Enviar codigo
+            </AuthButton>
           </form>
-        )}
+        ) : null}
 
-        {step === "otp" && (
-          <form onSubmit={onVerify} className="mt-4 space-y-3">
-            <p className="text-sm text-zinc-600">
-              Ingresa el codigo enviado por {channel === "whatsapp" ? "WhatsApp" : "correo"}.
-            </p>
-            <input
-              className="w-full rounded-lg border p-2 text-center tracking-[0.4em]"
+        {step === "sent" ? (
+          <form onSubmit={onVerify} className="mt-5 space-y-4">
+            <p className={`${styles.status} ${styles.statusInfo}`}>Revisa tu correo y escribe el codigo OTP de 5 digitos.</p>
+            <AuthInput
+              id="recovery-otp"
+              label="Codigo OTP"
               placeholder="12345"
-              maxLength={5}
               value={otp}
-              onChange={(e) => setOtp(e.target.value)}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 5))}
+              inputMode="numeric"
+              maxLength={5}
+              className="text-center tracking-[0.36em]"
+              error={null}
+              hint={`Codigo enviado a ${normalizedEmail || "tu correo"}.`}
             />
-            <button disabled={loading} className="w-full rounded-lg bg-zinc-900 p-2 font-semibold text-white disabled:opacity-50">
-              {loading ? "Verificando..." : "Verificar OTP"}
-            </button>
-          </form>
-        )}
-
-        {step === "newpass" && (
-          <form onSubmit={onConfirm} className="mt-4 space-y-3">
-            <input
-              type="password"
-              className="w-full rounded-lg border p-2"
-              placeholder="Nueva contrasena"
-              value={newPass}
-              onChange={(e) => setNewPass(e.target.value)}
-            />
-            <input
-              type="password"
-              className="w-full rounded-lg border p-2"
-              placeholder="Confirmar contrasena"
-              value={newPass2}
-              onChange={(e) => setNewPass2(e.target.value)}
-            />
-            <div className="rounded-lg border bg-zinc-50 p-3 text-sm">
-              <div className="mb-1 font-semibold text-zinc-900">Checklist de seguridad</div>
-              <ul className="space-y-1 text-zinc-600">
-                {rules.map((rule) => (
-                  <li key={rule.id} className={rule.valid ? "text-emerald-700" : "text-zinc-600"}>
-                    {rule.valid ? "[OK]" : "[ ]"} {rule.label}
-                  </li>
-                ))}
-              </ul>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <AuthButton type="submit" loading={loading} loadingLabel="Verificando..." className="w-full">
+                Verificar codigo
+              </AuthButton>
+              <AuthButton type="button" variant="secondary" onClick={resendCode} loading={loading} className="w-full">
+                Reenviar
+              </AuthButton>
             </div>
-            <button
-              disabled={loading || !allRulesValid}
-              className="w-full rounded-lg bg-emerald-600 p-2 font-semibold text-white disabled:opacity-50"
-            >
-              {loading ? "Actualizando..." : "Cambiar contrasena"}
-            </button>
           </form>
-        )}
+        ) : null}
 
-        {step === "done" && (
-          <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-              Contrasena actualizada correctamente.
+        {step === "reset" ? (
+          <form onSubmit={onConfirm} className="mt-5 space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="new-pass" className="block text-sm font-semibold text-slate-800">
+                Nueva contraseña
+              </label>
+              <div className="relative">
+                <input
+                  id="new-pass"
+                  type={showPass1 ? "text" : "password"}
+                  className={styles.input}
+                  placeholder="Nueva contraseña"
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass1((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+                >
+                  {showPass1 ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
             </div>
-            <Link href="/login" className="block w-full rounded-lg bg-emerald-600 p-2 text-center text-sm font-semibold text-white">
-              Volver a iniciar sesion
-            </Link>
+
+            <div className="space-y-1.5">
+              <label htmlFor="confirm-pass" className="block text-sm font-semibold text-slate-800">
+                Confirmar contraseña
+              </label>
+              <div className="relative">
+                <input
+                  id="confirm-pass"
+                  type={showPass2 ? "text" : "password"}
+                  className={styles.input}
+                  placeholder="Confirmar contraseña"
+                  value={newPass2}
+                  onChange={(e) => setNewPass2(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass2((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200"
+                >
+                  {showPass2 ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {rules.map((rule) => (
+                <p key={rule.id} className={`${styles.checkItem} ${rule.valid ? styles.checkItemOk : ""}`}>
+                  {rule.valid ? "OK" : "..." } {rule.label}
+                </p>
+              ))}
+            </div>
+
+            <AuthButton type="submit" loading={loading} loadingLabel="Actualizando..." disabled={!allRulesValid} className="w-full">
+              Cambiar contraseña
+            </AuthButton>
+          </form>
+        ) : null}
+
+        {step === "done" ? (
+          <div className="mt-5 space-y-4">
+            <p className={`${styles.status} ${styles.statusSuccess}`}>Tu contraseña fue actualizada exitosamente.</p>
+            <AuthButton type="button" className="w-full" onClick={() => router.push("/login")}>
+              Ir a iniciar sesion
+            </AuthButton>
           </div>
-        )}
+        ) : null}
 
-        {msg && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{msg}</div>}
+        {notice ? <p className={`mt-4 ${styles.status} ${styles.statusSuccess}`}>{notice}</p> : null}
+        {error ? <p className={`mt-4 ${styles.status} ${styles.statusError}`}>{error}</p> : null}
 
-        <Link href="/login" className="mt-4 inline-block text-sm font-semibold text-zinc-600 hover:underline">
-          Volver
-        </Link>
-      </div>
-    </div>
+        {step !== "done" ? (
+          <AuthButton type="button" variant="secondary" className="mt-4 w-full" onClick={() => router.push("/login")}>
+            Volver al login
+          </AuthButton>
+        ) : null}
+      </AuthCard>
+    </AuthLayout>
   );
 }

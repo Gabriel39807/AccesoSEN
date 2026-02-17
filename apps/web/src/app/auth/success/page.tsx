@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function SuccessPage() {
+export default function SuccessAliasPage() {
   redirect("/password-recovery?step=done");
 }
