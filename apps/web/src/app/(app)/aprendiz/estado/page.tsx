@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 type EstadoResponse = {
   estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS";
@@ -19,12 +20,8 @@ export default function AprendizEstadoPage() {
     try {
       const res = await api.get<EstadoResponse>("/api/accesos/estado/");
       setEstado(res.data?.estado ?? "SIN_REGISTROS");
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.detail ??
-        e?.response?.data?.message ??
-        "No se pudo cargar el estado.";
-      setError(msg);
+    } catch (e: unknown) {
+      setError(toErrorMessage(e, "No se pudo cargar el estado."));
     } finally {
       setLoading(false);
     }

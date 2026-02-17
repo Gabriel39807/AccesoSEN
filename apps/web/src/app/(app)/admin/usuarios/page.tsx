@@ -33,7 +33,7 @@ type ImportValidationError = {
   fields?: string[];
 };
 
-const ROLES = ["admin", "guarda", "aprendiz"] as const;
+const ROLES = ["superadmin", "admin", "admin_sede", "guarda", "aprendiz"] as const;
 const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
 function useDebounced<T>(value: T, delay = 450) {
@@ -62,6 +62,8 @@ function badgeBase() {
   return "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold";
 }
 function badgeRol(rol?: string) {
+  if (rol === "superadmin") return `${badgeBase()} bg-fuchsia-100 text-fuchsia-800`;
+  if (rol === "admin_sede") return `${badgeBase()} bg-violet-100 text-violet-800`;
   if (rol === "admin") return `${badgeBase()} bg-purple-100 text-purple-800`;
   if (rol === "guarda") return `${badgeBase()} bg-blue-100 text-blue-800`;
   return `${badgeBase()} bg-emerald-100 text-emerald-800`; // aprendiz
@@ -189,7 +191,7 @@ export default function AdminUsuariosPage() {
 
   // UI controls
   const [q, setQ] = useState("");
-  const [rolFilter, setRolFilter] = useState<"todos" | "admin" | "guarda" | "aprendiz">("todos");
+  const [rolFilter, setRolFilter] = useState<"todos" | "superadmin" | "admin" | "admin_sede" | "guarda" | "aprendiz">("todos");
   const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
   const [sedeFilter, setSedeFilter] = useState<"todos" | (typeof SEDES)[number]>("todos");
 
@@ -344,7 +346,7 @@ export default function AdminUsuariosPage() {
     const activos = base.filter((u) => (u.estado ?? "").toLowerCase() === "activo").length;
     const bloqueados = base.filter((u) => (u.estado ?? "").toLowerCase() === "bloqueado").length;
 
-    const admins = base.filter((u) => u.rol === "admin").length;
+    const admins = base.filter((u) => ["admin", "superadmin", "admin_sede"].includes(String(u.rol))).length;
     const guardas = base.filter((u) => u.rol === "guarda").length;
     const aprendices = base.filter((u) => u.rol === "aprendiz").length;
 
@@ -352,7 +354,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, count, serverPaginated]);
 
   function aplicarFiltrosDesdeCard(next: {
-    rol?: "todos" | "admin" | "guarda" | "aprendiz";
+    rol?: "todos" | "superadmin" | "admin" | "admin_sede" | "guarda" | "aprendiz";
     estado?: "todos" | "activo" | "bloqueado";
   }) {
     setQ("");
@@ -646,7 +648,9 @@ export default function AdminUsuariosPage() {
             onChange={(e) => setRolFilter(e.target.value as any)}
           >
             <option value="todos">Rol: Todos</option>
+            <option value="superadmin">Rol: superadmin</option>
             <option value="admin">Rol: admin</option>
+            <option value="admin_sede">Rol: admin_sede</option>
             <option value="guarda">Rol: guarda</option>
             <option value="aprendiz">Rol: aprendiz</option>
           </select>

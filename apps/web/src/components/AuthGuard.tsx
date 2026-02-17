@@ -11,7 +11,7 @@ type MeResponse = {
   usuario: {
     id: number;
     username: string;
-    rol: "admin" | "aprendiz" | "guarda";
+    rol: "admin" | "superadmin" | "admin_sede" | "aprendiz" | "guarda";
     must_change_password?: boolean;
   };
 };
@@ -42,7 +42,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         }
 
         // Protecciones:
-        if (isAdminRoute && rol !== "admin") {
+        if (isAdminRoute && !["admin", "superadmin", "admin_sede"].includes(rol)) {
           router.replace("/aprendiz/inicio");
           return;
         }
@@ -53,7 +53,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
         // Si está en login y ya está autenticado, redirige
         if (pathname === "/login") {
-          if (rol === "admin") router.replace("/admin/usuarios");
+          if (["admin", "superadmin", "admin_sede"].includes(rol)) router.replace("/admin/usuarios");
           else if (rol === "aprendiz") router.replace("/aprendiz/inicio");
           else router.replace("/login");
           return;

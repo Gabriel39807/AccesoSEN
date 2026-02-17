@@ -31,6 +31,7 @@ export default function PasswordRecoveryWebPage() {
   const queryStep = searchParams.get("step");
   const initialStep: Step =
     queryStep === "sent" || queryStep === "reset" || queryStep === "done" ? queryStep : "request";
+
   const [step, setStep] = useState<Step>(initialStep);
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [otp, setOtp] = useState(searchParams.get("otp") ?? "");
@@ -59,7 +60,7 @@ export default function PasswordRecoveryWebPage() {
     setLoading(true);
     setError(null);
     try {
-      await api.post("/api/auth/password-reset/request/", { email: normalizedEmail, channel: "email" });
+      await api.post("/api/auth/password-reset/request/", { email: normalizedEmail });
       setStep("sent");
       setNotice("Si la cuenta existe, enviamos un codigo de verificacion a tu correo.");
     } catch (err: unknown) {
@@ -81,11 +82,10 @@ export default function PasswordRecoveryWebPage() {
       const r = await api.post("/api/auth/password-reset/verify/", {
         email: normalizedEmail,
         otp: otp.trim(),
-        channel: "email",
       });
       if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "OTP invalido.");
       setStep("reset");
-      setNotice("Codigo verificado. Ahora define tu nueva contraseña.");
+      setNotice("Codigo verificado. Ahora define tu nueva contrasena.");
     } catch (err: unknown) {
       setError(toErrorMessage(err, "Codigo invalido o expirado."));
     } finally {
@@ -98,7 +98,7 @@ export default function PasswordRecoveryWebPage() {
     setLoading(true);
     setError(null);
     try {
-      await api.post("/api/auth/password-reset/request/", { email: normalizedEmail, channel: "email" });
+      await api.post("/api/auth/password-reset/request/", { email: normalizedEmail });
       setNotice("Reenviamos un nuevo codigo al correo registrado.");
     } catch (err: unknown) {
       setError(toErrorMessage(err, "No se pudo reenviar el codigo."));
@@ -110,7 +110,7 @@ export default function PasswordRecoveryWebPage() {
   async function onConfirm(e: React.FormEvent) {
     e.preventDefault();
     if (!allRulesValid) {
-      setError("La nueva contraseña no cumple todos los requisitos.");
+      setError("La nueva contrasena no cumple todos los requisitos.");
       return;
     }
     setLoading(true);
@@ -120,13 +120,12 @@ export default function PasswordRecoveryWebPage() {
         email: normalizedEmail,
         otp: otp.trim(),
         new_password: newPass,
-        channel: "email",
       });
-      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contraseña.");
+      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contrasena.");
       setStep("done");
-      setNotice("Contraseña actualizada correctamente.");
+      setNotice("Contrasena actualizada correctamente.");
     } catch (err: unknown) {
-      setError(toErrorMessage(err, "No se pudo cambiar la contraseña."));
+      setError(toErrorMessage(err, "No se pudo cambiar la contrasena."));
     } finally {
       setLoading(false);
     }
@@ -135,7 +134,7 @@ export default function PasswordRecoveryWebPage() {
   return (
     <AuthLayout
       role="aprendiz"
-      title="Recuperacion de contraseña"
+      title="Recuperacion de contrasena"
       subtitle="Protege tu cuenta con un flujo seguro de verificacion y cambio de clave."
       badge="Soporte de acceso"
     >
@@ -149,7 +148,7 @@ export default function PasswordRecoveryWebPage() {
           <form onSubmit={onRequest} className="mt-5 space-y-4">
             <AuthInput
               id="recovery-email"
-              label="Correo institucional"
+              label="Correo"
               type="email"
               placeholder="usuario@sena.edu.co"
               value={email}
@@ -194,17 +193,18 @@ export default function PasswordRecoveryWebPage() {
           <form onSubmit={onConfirm} className="mt-5 space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="new-pass" className="block text-sm font-semibold text-slate-800">
-                Nueva contraseña
+                Nueva contrasena
               </label>
               <div className="relative">
                 <input
                   id="new-pass"
                   type={showPass1 ? "text" : "password"}
                   className={styles.input}
-                  placeholder="Nueva contraseña"
+                  placeholder="Nueva contrasena"
                   value={newPass}
                   onChange={(e) => setNewPass(e.target.value)}
                   autoComplete="new-password"
+                  maxLength={20}
                 />
                 <button
                   type="button"
@@ -218,17 +218,18 @@ export default function PasswordRecoveryWebPage() {
 
             <div className="space-y-1.5">
               <label htmlFor="confirm-pass" className="block text-sm font-semibold text-slate-800">
-                Confirmar contraseña
+                Confirmar contrasena
               </label>
               <div className="relative">
                 <input
                   id="confirm-pass"
                   type={showPass2 ? "text" : "password"}
                   className={styles.input}
-                  placeholder="Confirmar contraseña"
+                  placeholder="Confirmar contrasena"
                   value={newPass2}
                   onChange={(e) => setNewPass2(e.target.value)}
                   autoComplete="new-password"
+                  maxLength={20}
                 />
                 <button
                   type="button"
@@ -243,20 +244,20 @@ export default function PasswordRecoveryWebPage() {
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {rules.map((rule) => (
                 <p key={rule.id} className={`${styles.checkItem} ${rule.valid ? styles.checkItemOk : ""}`}>
-                  {rule.valid ? "OK" : "..." } {rule.label}
+                  {rule.valid ? "OK" : "..."} {rule.label}
                 </p>
               ))}
             </div>
 
             <AuthButton type="submit" loading={loading} loadingLabel="Actualizando..." disabled={!allRulesValid} className="w-full">
-              Cambiar contraseña
+              Cambiar contrasena
             </AuthButton>
           </form>
         ) : null}
 
         {step === "done" ? (
           <div className="mt-5 space-y-4">
-            <p className={`${styles.status} ${styles.statusSuccess}`}>Tu contraseña fue actualizada exitosamente.</p>
+            <p className={`${styles.status} ${styles.statusSuccess}`}>Tu contrasena fue actualizada exitosamente.</p>
             <AuthButton type="button" className="w-full" onClick={() => router.push("/login")}>
               Ir a iniciar sesion
             </AuthButton>
