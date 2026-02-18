@@ -10,7 +10,6 @@ class Usuario(AbstractUser):
     class Rol(models.TextChoices):
         SUPERADMIN = "superadmin", "Superadmin"
         ADMIN_SEDE = "admin_sede", "Admin de sede"
-        ADMIN = "admin", "Admin"
         GUARDA = "guarda", "Guarda"
         APRENDIZ = "aprendiz", "Aprendiz"
 

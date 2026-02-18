@@ -5,8 +5,15 @@ import { api } from "@/lib/api";
 import { toErrorMessage } from "@/lib/errors";
 
 type EstadoResponse = {
-  estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS";
+  estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS" | "dentro" | "fuera" | string;
 };
+
+function normalizeEstado(raw?: string | null): "DENTRO" | "FUERA" | "SIN_REGISTROS" {
+  const value = String(raw ?? "SIN_REGISTROS").trim().toUpperCase();
+  if (value === "DENTRO") return "DENTRO";
+  if (value === "FUERA") return "FUERA";
+  return "SIN_REGISTROS";
+}
 
 export default function AprendizEstadoPage() {
   const [estado, setEstado] = useState<string | null>(null);
@@ -19,7 +26,7 @@ export default function AprendizEstadoPage() {
 
     try {
       const res = await api.get<EstadoResponse>("/api/accesos/estado/");
-      setEstado(res.data?.estado ?? "SIN_REGISTROS");
+      setEstado(normalizeEstado(res.data?.estado));
     } catch (e: unknown) {
       setError(toErrorMessage(e, "No se pudo cargar el estado."));
     } finally {

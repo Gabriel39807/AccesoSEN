@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useMe } from "@/hooks/useMe";
 import { clearTokens } from "@/lib/auth";
@@ -20,7 +20,7 @@ import SidebarItem from "./dashboard/SidebarItem";
 import StatusChip from "./dashboard/StatusChip";
 
 type EstadoResponse = {
-  estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS";
+  estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS" | "dentro" | "fuera" | string;
   ultimo_tipo?: "ingreso" | "salida" | null;
   ultima_fecha?: string | null;
 };
@@ -52,21 +52,28 @@ export default function AprendizShell({
 
   const title = useMemo(() => prettyTitle(pathname), [pathname]);
 
-  useEffect(() => {
-    let mounted = true;
-    async function run() {
-      try {
-        const res = await api.get<EstadoResponse>("/api/accesos/estado/");
-        if (mounted) setEstado(res.data);
-      } catch {
-        if (mounted) setEstado(null);
-      }
+  const cargarEstado = useCallback(async () => {
+    try {
+      const res = await api.get<EstadoResponse>("/api/accesos/estado/");
+      setEstado(res.data ?? null);
+    } catch {
+      setEstado(null);
     }
-    run();
-    return () => {
-      mounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    void cargarEstado();
+  }, [cargarEstado, pathname]);
+
+  useEffect(() => {
+    const onRefresh = () => {
+      void cargarEstado();
+    };
+    window.addEventListener("aprendiz:refresh", onRefresh);
+    return () => {
+      window.removeEventListener("aprendiz:refresh", onRefresh);
+    };
+  }, [cargarEstado]);
 
   function logout() {
     clearTokens();

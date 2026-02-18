@@ -66,9 +66,9 @@ export default function AprendizPerfilPage() {
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
+  const [passkeySupported, setPasskeySupported] = useState(false);
   const passwordRules = buildPasswordRules(newPw, newPw2);
   const passwordRulesValid = passwordRules.every((rule) => rule.valid);
-  const passkeySupported = typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials;
 
   const nombreBonito = useMemo(() => {
     if (!perfil) return "-";
@@ -92,6 +92,10 @@ export default function AprendizPerfilPage() {
 
   useEffect(() => {
     void cargarPerfil();
+  }, []);
+
+  useEffect(() => {
+    setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials);
   }, []);
 
   async function guardarTelefono() {

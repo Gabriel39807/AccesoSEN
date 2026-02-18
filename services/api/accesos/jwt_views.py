@@ -4,6 +4,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.exceptions import AuthenticationFailed
@@ -58,8 +59,20 @@ def _role_allowed_for_expected(actual_role: str | None, expected_role: str | Non
     if not expected_role:
         return True
     if expected_role == "admin":
-        return actual_role in {"admin", "superadmin", "admin_sede"}
+        return actual_role in {"superadmin", "admin_sede"}
     return actual_role == expected_role
+
+
+def _find_user_by_login_identifier(User, identifier: str):
+    login_value = (identifier or "").strip()
+    if not login_value:
+        return None
+
+    # Prioriza username para evitar ambiguedad si existieran colisiones raras.
+    user = User.objects.filter(username__iexact=login_value).first()
+    if user:
+        return user
+    return User.objects.filter(Q(email__iexact=login_value)).first()
 
 
 def issue_tokens_for_user(user, rotate_guard_session: bool = True) -> dict[str, str]:
@@ -86,12 +99,25 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         request = self.context.get("request")
-        username = (attrs.get("username") or "").strip().lower()
+        login_identifier = (attrs.get("username") or "").strip().lower()
         expected_role = attrs.get("expected_role")
         ip = get_client_ip(request) if request else "unknown"
 
+        if expected_role in {"guarda", "aprendiz"} and (
+            not login_identifier.isdigit() or len(login_identifier) > 10
+        ):
+            raise AuthenticationFailed(
+                {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."}
+            )
+
         User = get_user_model()
-        user = User.objects.filter(username__iexact=username).first() if username else None
+        user = _find_user_by_login_identifier(User, login_identifier) if login_identifier else None
+        canonical_login = ((getattr(user, "username", "") or "").strip().lower() if user else login_identifier)
+
+        # SimpleJWT autentica con USERNAME_FIELD (username); si el cliente envio email
+        # y existe un usuario asociado, normalizamos antes de autenticar.
+        if user and getattr(user, "username", None):
+            attrs["username"] = user.username
 
         if user and getattr(user, "force_password_reset", False):
             raise AuthenticationFailed(
@@ -101,7 +127,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
                 }
             )
 
-        remaining_user = get_lock_remaining("login-user", [username]) if username else 0
+        remaining_user = get_lock_remaining("login-user", [canonical_login]) if canonical_login else 0
         remaining_ip = get_lock_remaining("login-ip", [ip])
         remaining_lock = max(remaining_user, remaining_ip)
         if remaining_lock > 0:
@@ -125,8 +151,8 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
             data = super().validate(attrs)
         except Exception:
             lock_user = {"locked": False, "remaining_sec": 0, "just_locked": False}
-            if username:
-                lock_user = bump_with_lock("login-user", [username], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
+            if canonical_login:
+                lock_user = bump_with_lock("login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
             lock_ip = bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
 
             if user and lock_user.get("just_locked"):
@@ -156,13 +182,13 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         role = getattr(self.user, "rol", None)
         if not _role_allowed_for_expected(role, expected_role):
-            if username:
-                bump_with_lock("login-user", [username], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
+            if canonical_login:
+                bump_with_lock("login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
             bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
             raise AuthenticationFailed({"code": ErrorCode.INVALID_CREDENTIALS, "message": "Credenciales invalidas para este modulo."})
 
-        if username:
-            reset_counter("login-user", [username])
+        if canonical_login:
+            reset_counter("login-user", [canonical_login])
         reset_counter("login-ip", [ip])
 
         _clear_lockout_state(self.user)
@@ -196,4 +222,3 @@ class SadiTokenObtainPairView(TokenObtainPairView):
 
 class SadiTokenRefreshView(TokenRefreshView):
     pass
-

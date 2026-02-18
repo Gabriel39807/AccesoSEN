@@ -18,6 +18,13 @@ function statusClasses(status: StatusChipState) {
   return `${base} border-zinc-200/90 bg-zinc-100/80 text-zinc-700`;
 }
 
+function normalizeStatus(status: StatusChipState): "DENTRO" | "FUERA" | "SIN_REGISTROS" {
+  const raw = String(status ?? "SIN_REGISTROS").trim().toUpperCase();
+  if (raw === "DENTRO") return "DENTRO";
+  if (raw === "FUERA") return "FUERA";
+  return "SIN_REGISTROS";
+}
+
 export default function StatusChip({
   status,
   labelPrefix,
@@ -25,7 +32,7 @@ export default function StatusChip({
   status?: StatusChipState;
   labelPrefix?: string;
 }) {
-  const safeStatus = status ?? "SIN_REGISTROS";
+  const safeStatus = normalizeStatus(status);
   return (
     <span className={statusClasses(safeStatus)}>
       <span

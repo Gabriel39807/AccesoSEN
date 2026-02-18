@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { router } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { api } from "../../src/api/client";
 import { useSessionStore } from "../../src/store/session";
@@ -9,20 +10,28 @@ import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../
 type EstadoResponse = {
   permitido: boolean;
   motivo: string | null;
-  estado?: "dentro" | "fuera";
+  estado?: "dentro" | "fuera" | "DENTRO" | "FUERA" | "SIN_REGISTROS" | string;
 };
+
+function normalizeEstado(raw?: string | null): "dentro" | "fuera" | "sin_registros" | null {
+  const value = String(raw ?? "").trim().toUpperCase();
+  if (value === "DENTRO") return "dentro";
+  if (value === "FUERA") return "fuera";
+  if (value === "SIN_REGISTROS") return "sin_registros";
+  return null;
+}
 
 export default function AprendizHome() {
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
-  const [estado, setEstado] = useState<"dentro" | "fuera" | null>(null);
+  const [estado, setEstado] = useState<"dentro" | "fuera" | "sin_registros" | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function cargarEstado() {
     setLoading(true);
     try {
       const r = await api.get<EstadoResponse>("/api/accesos/estado/");
-      setEstado(r.data?.estado ?? null);
+      setEstado(normalizeEstado(r.data?.estado));
     } catch {
       setEstado(null);
     } finally {
@@ -31,8 +40,15 @@ export default function AprendizHome() {
   }
 
   useEffect(() => {
-    cargarEstado();
+    void cargarEstado();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void cargarEstado();
+      return undefined;
+    }, [])
+  );
 
   return (
     <ModernScreen scroll>
@@ -56,7 +72,7 @@ export default function AprendizHome() {
               marginTop: 6,
               fontWeight: "900",
               fontSize: 22,
-              color: estado === "dentro" ? "#15803d" : "#a16207",
+              color: estado === "dentro" ? "#15803d" : estado === "fuera" ? "#a16207" : "#475569",
             }}
           >
             {estado ? estado.toUpperCase() : "NO DISPONIBLE"}

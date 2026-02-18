@@ -14,7 +14,7 @@ type MeResponse = {
   usuario: {
     id: number;
     username: string;
-    rol: "admin" | "superadmin" | "admin_sede" | "aprendiz" | "guarda";
+    rol: "superadmin" | "admin_sede" | "aprendiz" | "guarda";
     must_change_password?: boolean;
     force_password_reset?: boolean;
   };
@@ -52,9 +52,13 @@ export default function LoginPage() {
   const [role, setRole] = useState<AuthRole>("admin");
   const [showPassword, setShowPassword] = useState(false);
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
+  const [passkeySupported, setPasskeySupported] = useState(false);
 
-  const passkeySupported = typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials;
   const bloqueado = lockRemainingSec > 0;
+
+  useEffect(() => {
+    setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials);
+  }, []);
 
   useEffect(() => {
     if (lockRemainingSec <= 0) return;
@@ -71,9 +75,9 @@ export default function LoginPage() {
             title: "Control institucional seguro",
             subtitle:
               "Accede al panel de gestion de S.A.D.I con trazabilidad de ingresos y validacion de usuarios autorizados.",
-            field: "Correo institucional",
-            placeholder: "admin@sena.edu.co",
-            hint: "Usa tu cuenta institucional registrada.",
+            field: "Usuario o correo",
+            placeholder: "superadmin o admin@sena.edu.co",
+            hint: "Puedes iniciar con username o correo de tu cuenta administrativa.",
             badge: "Acceso administrador",
           }
         : {
@@ -102,8 +106,8 @@ export default function LoginPage() {
 
   function validateLogin(): string | null {
     const user = username.trim();
-    if (!user) return `Ingresa ${role === "admin" ? "tu correo institucional" : "tu documento"}.`;
-    if (role === "admin" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user)) return "El correo no tiene un formato valido.";
+    if (!user) return `Ingresa ${role === "admin" ? "tu usuario o correo" : "tu documento"}.`;
+    if (role === "admin" && user.length > 150) return "El usuario/correo supera el maximo permitido (150).";
     if (role === "aprendiz" && !/^\d{1,10}$/.test(user)) return "El documento debe contener solo numeros (maximo 10 digitos).";
     if (!password) return "Ingresa tu contrasena.";
     if (password.length > 20) return "La contrasena debe tener maximo 20 caracteres.";
@@ -145,7 +149,7 @@ export default function LoginPage() {
       const meRes = await api.get<MeResponse>("/api/me/");
       const rol = meRes.data.usuario.rol;
 
-      if (role === "admin" && !["admin", "superadmin", "admin_sede"].includes(rol)) {
+      if (role === "admin" && !["superadmin", "admin_sede"].includes(rol)) {
         await clearTokens();
         setError("Este modulo solo permite credenciales de administrador.");
         setLoginFailTick((v) => v + 1);
@@ -163,7 +167,7 @@ export default function LoginPage() {
         router.replace("/aprendiz/inicio");
         return;
       }
-      if (["admin", "superadmin", "admin_sede"].includes(rol)) {
+      if (["superadmin", "admin_sede"].includes(rol)) {
         router.replace("/admin/usuarios");
         return;
       }
@@ -229,7 +233,7 @@ export default function LoginPage() {
       const rol = meRes.data.usuario.rol;
       if (rol === "aprendiz") {
         router.replace("/aprendiz/inicio");
-      } else if (["admin", "superadmin", "admin_sede"].includes(rol)) {
+      } else if (["superadmin", "admin_sede"].includes(rol)) {
         router.replace("/admin/usuarios");
       } else {
         await clearTokens();
@@ -284,8 +288,8 @@ export default function LoginPage() {
             value={username}
             onChange={(e) => onUsernameChange(e.target.value)}
             autoComplete={role === "admin" ? "username" : "off"}
-            inputMode={role === "admin" ? "email" : "numeric"}
-            maxLength={role === "admin" ? 80 : 10}
+            inputMode={role === "admin" ? "text" : "numeric"}
+            maxLength={role === "admin" ? 150 : 10}
             error={null}
             hint={roleCopy.hint}
           />

@@ -9,7 +9,7 @@ type Usuario = {
   id: number;
   username: string;
   email?: string;
-  rol: "admin" | "guarda" | "aprendiz" | string;
+  rol: "superadmin" | "admin_sede" | "guarda" | "aprendiz" | string;
   first_name?: string;
   last_name?: string;
   documento?: string | null;

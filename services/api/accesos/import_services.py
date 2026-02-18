@@ -39,7 +39,7 @@ def _is_institutional_email(email: str) -> bool:
 
 
 def _normalize_phone(phone: str) -> str:
-    return re.sub(r"[^\d+]", "", phone)
+    return re.sub(r"\D", "", phone)[:20]
 
 
 def validate_excel(content) -> ImportValidationResult:
@@ -73,10 +73,33 @@ def validate_excel(content) -> ImportValidationResult:
             continue
 
         doc = data["Documento"]
+        if not doc.isdigit() or len(doc) > 10:
+            errors.append(
+                {
+                    "row": idx,
+                    "code": "INVALID_DOCUMENTO",
+                    "message": "El documento debe contener solo numeros (maximo 10 digitos).",
+                    "field": "Documento",
+                }
+            )
+            continue
+
         if doc in seen_docs:
             errors.append({"row": idx, "code": "DUPLICATE_IN_FILE", "message": "Documento duplicado dentro del archivo.", "field": "Documento"})
             continue
         seen_docs.add(doc)
+
+        phone = _normalize_phone(data["Telefono"])
+        if len(phone) < 7:
+            errors.append(
+                {
+                    "row": idx,
+                    "code": "INVALID_TELEFONO",
+                    "message": "El telefono debe contener solo numeros y al menos 7 digitos.",
+                    "field": "Telefono",
+                }
+            )
+            continue
 
         email = data["Correo"].lower()
         if not _is_institutional_email(email):
@@ -119,7 +142,7 @@ def validate_excel(content) -> ImportValidationResult:
                 "first_name": data["Nombres"],
                 "last_name": data["Apellidos"],
                 "documento": doc,
-                "telefono": _normalize_phone(data["Telefono"]),
+                "telefono": phone,
                 "email": email,
                 "jornada": jornada,
                 "programa_formacion": data["Programa"],

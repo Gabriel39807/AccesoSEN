@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import EmailChangeOTP, Equipo, PasswordResetOTP, WebAuthnCredential
+from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, WebAuthnCredential
 from .otp_services import hash_code
 
 
@@ -156,18 +156,20 @@ class EquipoRulesTests(BaseApiTest):
             documento="3030303030",
             email="equipos@sadi.test",
         )
-        self.admin = self.create_user(
-            username="admin_test",
+        self.superadmin = self.create_user(
+            username="superadmin_test",
             password="Passw0rd!",
-            rol="admin",
-            email="admin@sadi.test",
+            rol="superadmin",
+            email="superadmin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
         )
 
     def _auth_aprendiz(self):
         self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
 
-    def _auth_admin(self):
-        self.auth(self.admin.username, "Passw0rd!", expected_role="admin")
+    def _auth_superadmin(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
 
     def test_aprendiz_cannot_register_more_than_four_equipment(self):
         self._auth_aprendiz()
@@ -201,9 +203,36 @@ class EquipoRulesTests(BaseApiTest):
 
     def test_admin_can_delete_approved(self):
         approved = Equipo.objects.create(propietario=self.aprendiz, serial="APP-2", marca="HP", modelo="3", estado=Equipo.Estado.APROBADO)
-        self._auth_admin()
+        self._auth_superadmin()
         r = self.client.delete(f"/api/equipos/{approved.id}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_aprendiz_can_update_own_pending_equipment(self):
+        pending = Equipo.objects.create(propietario=self.aprendiz, serial="P-UPD-1", marca="HP", modelo="14", estado=Equipo.Estado.PENDIENTE)
+        self._auth_aprendiz()
+
+        r = self.client.patch(
+            f"/api/equipos/{pending.id}/",
+            {"serial": "P-UPD-2", "marca": "Lenovo", "modelo": "ThinkPad"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        pending.refresh_from_db()
+        self.assertEqual(pending.serial, "P-UPD-2")
+        self.assertEqual(pending.marca, "Lenovo")
+        self.assertEqual(pending.modelo, "ThinkPad")
+
+    def test_aprendiz_cannot_update_non_pending_equipment(self):
+        approved = Equipo.objects.create(propietario=self.aprendiz, serial="APP-UPD-1", marca="HP", modelo="15", estado=Equipo.Estado.APROBADO)
+        self._auth_aprendiz()
+
+        r = self.client.patch(
+            f"/api/equipos/{approved.id}/",
+            {"marca": "Dell"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+        self.assertEqual(r.data["code"], "PERMISSION_DENIED")
 
 
 class AdminSedeRulesTests(BaseApiTest):
@@ -254,6 +283,234 @@ class AdminSedeRulesTests(BaseApiTest):
         self.assertEqual(r5.data["code"], "MAX_ADMINS_PER_SEDE")
 
 
+class RolePermissionScopeTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="root_superadmin",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="root.superadmin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.admin_sede = self.create_user(
+            username="admin_sede_scope",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="admin.sede.scope@sadi.test",
+            sede_principal="CEGAFE",
+        )
+
+    def _auth_superadmin(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+
+    def _auth_admin_sede(self):
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+
+    def test_superadmin_can_create_admin_sede_account(self):
+        self._auth_superadmin()
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "new_admin_role",
+                "password": "Passw0rd!",
+                "first_name": "New",
+                "last_name": "Admin",
+                "email": "new.admin@sadi.test",
+                "rol": "admin_sede",
+                "estado": "activo",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+
+    def test_superadmin_cannot_create_legacy_admin_role(self):
+        self._auth_superadmin()
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "legacy_admin_role",
+                "password": "Passw0rd!",
+                "first_name": "Legacy",
+                "last_name": "Admin",
+                "email": "legacy.admin@sadi.test",
+                "rol": "admin",
+                "estado": "activo",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertIn("rol", r.data.get("detail", {}))
+
+    def test_admin_sede_cannot_create_administrative_account(self):
+        self._auth_admin_sede()
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "blocked_admin_create",
+                "password": "Passw0rd!",
+                "first_name": "Blocked",
+                "last_name": "Admin",
+                "email": "blocked.admin@sadi.test",
+                "rol": "admin_sede",
+                "estado": "activo",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+        self.assertEqual(r.data["code"], "PERMISSION_DENIED")
+
+    def test_admin_sede_can_create_aprendiz_and_guarda_in_own_sede(self):
+        self._auth_admin_sede()
+        aprendiz = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "7070707070",
+                "password": "Passw0rd!",
+                "first_name": "Aprendiz",
+                "last_name": "Admin",
+                "email": "aprendiz.admin@sadi.test",
+                "documento": "7070707070",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        guarda = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "8080808080",
+                "password": "Passw0rd!",
+                "first_name": "Guarda",
+                "last_name": "Admin",
+                "email": "guarda.admin@sadi.test",
+                "documento": "8080808080",
+                "rol": "guarda",
+                "estado": "activo",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(aprendiz.status_code, status.HTTP_201_CREATED, aprendiz.data)
+        self.assertEqual(guarda.status_code, status.HTTP_201_CREATED, guarda.data)
+
+    def test_admin_sede_cannot_create_user_for_other_sede(self):
+        self._auth_admin_sede()
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "9090909090",
+                "password": "Passw0rd!",
+                "first_name": "Otro",
+                "last_name": "Centro",
+                "email": "otro.centro@sadi.test",
+                "documento": "9090909090",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "sede_principal": "SANTA_CLARA",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+        self.assertEqual(r.data["code"], "PERMISSION_DENIED")
+
+    def test_admin_sede_can_create_aprendiz_in_own_sede(self):
+        self._auth_admin_sede()
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "9191919191",
+                "password": "Passw0rd!",
+                "first_name": "Misma",
+                "last_name": "Sede",
+                "email": "misma.sede@sadi.test",
+                "documento": "9191919191",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(r.data.get("sede_principal"), "CEGAFE")
+
+    def test_admin_sede_cannot_edit_or_delete_administrative_account(self):
+        self._auth_admin_sede()
+        patch = self.client.patch(
+            f"/api/usuarios/{self.admin_sede.id}/",
+            {"estado": "bloqueado"},
+            format="json",
+        )
+        delete = self.client.delete(f"/api/usuarios/{self.admin_sede.id}/")
+        self.assertEqual(patch.status_code, status.HTTP_403_FORBIDDEN, patch.data)
+        self.assertEqual(delete.status_code, status.HTTP_403_FORBIDDEN, delete.data)
+        self.assertEqual(patch.data["code"], "PERMISSION_DENIED")
+        self.assertEqual(delete.data["code"], "PERMISSION_DENIED")
+
+    def test_superadmin_can_delete_any_user_role(self):
+        victim = self.create_user(
+            username="del_target",
+            password="Passw0rd!",
+            rol="admin_sede",
+            sede_principal="SANTA_CLARA",
+            email="del.target@sadi.test",
+        )
+        self._auth_superadmin()
+        r = self.client.delete(f"/api/usuarios/{victim.id}/")
+        self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT, getattr(r, "data", None))
+
+    def test_admin_sede_can_delete_guarda_and_aprendiz_in_own_sede(self):
+        guarda = self.create_user(
+            username="9393939393",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="9393939393",
+            sede_principal="CEGAFE",
+            email="guarda.own.sede@sadi.test",
+        )
+        aprendiz = self.create_user(
+            username="9494949494",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="9494949494",
+            sede_principal="CEGAFE",
+            email="aprendiz.own.sede@sadi.test",
+        )
+        self._auth_admin_sede()
+        r1 = self.client.delete(f"/api/usuarios/{guarda.id}/")
+        r2 = self.client.delete(f"/api/usuarios/{aprendiz.id}/")
+        self.assertEqual(r1.status_code, status.HTTP_204_NO_CONTENT, getattr(r1, "data", None))
+        self.assertEqual(r2.status_code, status.HTTP_204_NO_CONTENT, getattr(r2, "data", None))
+
+    def test_admin_sede_cannot_delete_users_from_other_sede(self):
+        guarda_other = self.create_user(
+            username="9595959595",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="9595959595",
+            sede_principal="SANTA_CLARA",
+            email="guarda.other.sede@sadi.test",
+        )
+        aprendiz_other = self.create_user(
+            username="9696969696",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="9696969696",
+            sede_principal="SANTA_CLARA",
+            email="aprendiz.other.sede@sadi.test",
+        )
+        self._auth_admin_sede()
+        r1 = self.client.delete(f"/api/usuarios/{guarda_other.id}/")
+        r2 = self.client.delete(f"/api/usuarios/{aprendiz_other.id}/")
+        self.assertEqual(r1.status_code, status.HTTP_404_NOT_FOUND, r1.data)
+        self.assertEqual(r2.status_code, status.HTTP_404_NOT_FOUND, r2.data)
+
+
 class EmailChangeOtpTests(BaseApiTest):
     def setUp(self):
         super().setUp()
@@ -292,6 +549,49 @@ class EmailChangeOtpTests(BaseApiTest):
         self.assertEqual(ok.status_code, status.HTTP_200_OK, ok.data)
         self.aprendiz.refresh_from_db()
         self.assertEqual(self.aprendiz.email, "newmail@sadi.test")
+
+
+class NumericFieldValidationTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="numeric_superadmin",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="numeric.superadmin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.aprendiz = self.create_user(
+            username="4040404041",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="4040404041",
+            email="numeric.aprendiz@sadi.test",
+        )
+
+    def test_usuario_create_rejects_non_numeric_document(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "doc_invalid",
+                "password": "Passw0rd!",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "documento": "ABC123",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertIn("documento", r.data.get("detail", {}))
+
+    def test_aprendiz_profile_phone_normalizes_to_digits(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        r = self.client.patch("/api/aprendiz/perfil/", {"telefono": "+57 (300) 123-4567"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertEqual(r.data["perfil"]["telefono"], "573001234567")
 
 
 class PasskeyEndpointTests(BaseApiTest):
@@ -346,6 +646,36 @@ class PasskeyEndpointTests(BaseApiTest):
         self.assertEqual(auth_verify.status_code, status.HTTP_200_OK, auth_verify.data)
         self.assertIn("access", auth_verify.data)
         self.assertIn("refresh", auth_verify.data)
+
+
+class AprendizEstadoEndpointTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.aprendiz = self.create_user(
+            username="6060606060",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="6060606060",
+            email="estado@sadi.test",
+        )
+
+    def test_estado_endpoint_returns_canonical_values(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+
+        empty = self.client.get("/api/accesos/estado/")
+        self.assertEqual(empty.status_code, status.HTTP_200_OK, empty.data)
+        self.assertEqual(empty.data.get("estado"), "SIN_REGISTROS")
+        self.assertIsNone(empty.data.get("ultima_fecha"))
+
+        Acceso.objects.create(usuario=self.aprendiz, tipo=Acceso.Tipo.INGRESO)
+        ingreso = self.client.get("/api/accesos/estado/")
+        self.assertEqual(ingreso.status_code, status.HTTP_200_OK, ingreso.data)
+        self.assertEqual(ingreso.data.get("estado"), "DENTRO")
+
+        Acceso.objects.create(usuario=self.aprendiz, tipo=Acceso.Tipo.SALIDA)
+        salida = self.client.get("/api/accesos/estado/")
+        self.assertEqual(salida.status_code, status.HTTP_200_OK, salida.data)
+        self.assertEqual(salida.data.get("estado"), "FUERA")
 
 
 class FrontendContractSmokeTests(BaseApiTest):

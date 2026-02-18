@@ -1,7 +1,7 @@
 import { api } from "./client";
 import { saveTokens } from "../storage/tokens";
 
-export type Rol = "admin" | "superadmin" | "admin_sede" | "aprendiz" | "guarda";
+export type Rol = "superadmin" | "admin_sede" | "aprendiz" | "guarda";
 
 export type Usuario = {
   id: number;

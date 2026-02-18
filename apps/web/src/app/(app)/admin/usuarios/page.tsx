@@ -4,12 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { useMe } from "@/hooks/useMe";
 
 type Usuario = {
   id: number;
   username: string;
   email?: string | null;
-  rol?: "admin" | "aprendiz" | "guarda" | string;
+  rol?: "superadmin" | "admin_sede" | "aprendiz" | "guarda" | string;
   estado?: string;
   first_name?: string;
   last_name?: string;
@@ -33,8 +34,24 @@ type ImportValidationError = {
   fields?: string[];
 };
 
-const ROLES = ["superadmin", "admin", "admin_sede", "guarda", "aprendiz"] as const;
+const ROLES = ["superadmin", "admin_sede", "guarda", "aprendiz"] as const;
+const ROLES_NON_SUPERADMIN = ["guarda", "aprendiz"] as const;
 const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
+
+function isAdministrativeRole(rol?: string | null) {
+  return ["superadmin", "admin_sede"].includes(String(rol || ""));
+}
+
+function canDeleteByRole(actorRol?: string | null, actorSede?: string | null, target?: Usuario | null) {
+  if (!target) return false;
+  if (actorRol === "superadmin") return true;
+  if (actorRol === "admin_sede") {
+    const sameSede = String(target.sede_principal || "") === String(actorSede || "");
+    const targetAllowed = ["guarda", "aprendiz"].includes(String(target.rol || ""));
+    return sameSede && targetAllowed;
+  }
+  return false;
+}
 
 function useDebounced<T>(value: T, delay = 450) {
   const [debounced, setDebounced] = useState(value);
@@ -64,7 +81,6 @@ function badgeBase() {
 function badgeRol(rol?: string) {
   if (rol === "superadmin") return `${badgeBase()} bg-fuchsia-100 text-fuchsia-800`;
   if (rol === "admin_sede") return `${badgeBase()} bg-violet-100 text-violet-800`;
-  if (rol === "admin") return `${badgeBase()} bg-purple-100 text-purple-800`;
   if (rol === "guarda") return `${badgeBase()} bg-blue-100 text-blue-800`;
   return `${badgeBase()} bg-emerald-100 text-emerald-800`; // aprendiz
 }
@@ -179,6 +195,12 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
 
 export default function AdminUsuariosPage() {
+  const { me } = useMe();
+  const canManageAdminRoles = me?.rol === "superadmin";
+  const roleOptionsForActor = canManageAdminRoles ? ROLES : ROLES_NON_SUPERADMIN;
+  const actorRol = me?.rol ?? null;
+  const actorSede = me?.sede_principal ?? null;
+
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [count, setCount] = useState<number>(0);
@@ -191,7 +213,7 @@ export default function AdminUsuariosPage() {
 
   // UI controls
   const [q, setQ] = useState("");
-  const [rolFilter, setRolFilter] = useState<"todos" | "superadmin" | "admin" | "admin_sede" | "guarda" | "aprendiz">("todos");
+  const [rolFilter, setRolFilter] = useState<"todos" | "superadmin" | "admin_sede" | "guarda" | "aprendiz">("todos");
   const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
   const [sedeFilter, setSedeFilter] = useState<"todos" | (typeof SEDES)[number]>("todos");
 
@@ -209,6 +231,11 @@ export default function AdminUsuariosPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Usuario | null>(null);
+
+  // modal eliminar
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Usuario | null>(null);
 
   // form state (editar modal)
   const [rol, setRol] = useState<string>("aprendiz");
@@ -346,7 +373,7 @@ export default function AdminUsuariosPage() {
     const activos = base.filter((u) => (u.estado ?? "").toLowerCase() === "activo").length;
     const bloqueados = base.filter((u) => (u.estado ?? "").toLowerCase() === "bloqueado").length;
 
-    const admins = base.filter((u) => ["admin", "superadmin", "admin_sede"].includes(String(u.rol))).length;
+    const admins = base.filter((u) => ["superadmin", "admin_sede"].includes(String(u.rol))).length;
     const guardas = base.filter((u) => u.rol === "guarda").length;
     const aprendices = base.filter((u) => u.rol === "aprendiz").length;
 
@@ -354,7 +381,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, count, serverPaginated]);
 
   function aplicarFiltrosDesdeCard(next: {
-    rol?: "todos" | "superadmin" | "admin" | "admin_sede" | "guarda" | "aprendiz";
+    rol?: "todos" | "superadmin" | "admin_sede" | "guarda" | "aprendiz";
     estado?: "todos" | "activo" | "bloqueado";
   }) {
     setQ("");
@@ -386,7 +413,7 @@ export default function AdminUsuariosPage() {
         email: email.trim() ? email.trim() : undefined,
         sede_principal: sede ? sede : null,
         programa_formacion: programa.trim() ? programa.trim() : undefined,
-        documento: documento.trim() ? documento.trim() : undefined,
+        documento: documento.trim() ? documento.trim().replace(/\D/g, "").slice(0, 10) : undefined,
       };
 
       await api.patch(`/api/usuarios/${selected.id}/`, payload);
@@ -398,6 +425,35 @@ export default function AdminUsuariosPage() {
       alert(safeErrorMessage(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  function abrirEliminar(u: Usuario) {
+    if (!canDeleteByRole(actorRol, actorSede, u)) {
+      alert("No tienes permisos para eliminar este usuario.");
+      return;
+    }
+    setDeleteTarget(u);
+    setOpenDelete(true);
+  }
+
+  async function confirmarEliminar() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/api/usuarios/${deleteTarget.id}/`);
+      setOpenDelete(false);
+      setDeleteTarget(null);
+      if (selected?.id === deleteTarget.id) {
+        setOpen(false);
+        setSelected(null);
+      }
+      await cargar(page);
+      alert("✅ Usuario eliminado.");
+    } catch (e: any) {
+      alert(safeErrorMessage(e));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -441,7 +497,7 @@ export default function AdminUsuariosPage() {
         first_name: c_first.trim() || "",
         last_name: c_last.trim() || "",
         email: c_email.trim() || "",
-        documento: c_documento.trim() || "",
+        documento: c_documento.trim().replace(/\D/g, "").slice(0, 10) || "",
         rol: c_rol,
         estado: c_estado,
         sede_principal: c_sede ? c_sede : null,
@@ -601,7 +657,7 @@ export default function AdminUsuariosPage() {
               </button>
 
               <button
-                onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })}
+                onClick={() => aplicarFiltrosDesdeCard({ rol: "admin_sede", estado: "todos" })}
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Filtrar admins"
               >
@@ -649,7 +705,6 @@ export default function AdminUsuariosPage() {
           >
             <option value="todos">Rol: Todos</option>
             <option value="superadmin">Rol: superadmin</option>
-            <option value="admin">Rol: admin</option>
             <option value="admin_sede">Rol: admin_sede</option>
             <option value="guarda">Rol: guarda</option>
             <option value="aprendiz">Rol: aprendiz</option>
@@ -726,8 +781,9 @@ export default function AdminUsuariosPage() {
                             value={u.rol ?? "aprendiz"}
                             onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
                             title="Cambiar rol (rápido)"
+                            disabled={!canManageAdminRoles && isAdministrativeRole(u.rol)}
                           >
-                            {ROLES.map((r) => (
+                            {(canManageAdminRoles || !isAdministrativeRole(u.rol) ? roleOptionsForActor : ROLES).map((r) => (
                               <option key={r} value={r}>
                                 {r}
                               </option>
@@ -756,12 +812,22 @@ export default function AdminUsuariosPage() {
                       <td className="p-3">{u.programa_formacion ?? "-"}</td>
 
                       <td className="p-3">
-                        <button
-                          onClick={() => abrirEditar(u)}
-                          className="rounded-xl px-3 py-2 bg-white border hover:bg-emerald-50 shadow-sm transition"
-                        >
-                          Editar
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => abrirEditar(u)}
+                            className="rounded-xl px-3 py-2 bg-white border hover:bg-emerald-50 shadow-sm transition"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => abrirEliminar(u)}
+                            disabled={!canDeleteByRole(actorRol, actorSede, u)}
+                            className="rounded-xl px-3 py-2 border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={canDeleteByRole(actorRol, actorSede, u) ? "Eliminar usuario" : "No tienes permiso para eliminar este usuario"}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -803,8 +869,9 @@ export default function AdminUsuariosPage() {
                     className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={rol}
                     onChange={(e) => setRol(e.target.value)}
+                    disabled={!canManageAdminRoles && isAdministrativeRole(selected?.rol)}
                   >
-                    {ROLES.map((r) => (
+                    {(canManageAdminRoles || !isAdministrativeRole(selected?.rol) ? roleOptionsForActor : ROLES).map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -839,8 +906,10 @@ export default function AdminUsuariosPage() {
                   <input
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={documento}
-                    onChange={(e) => setDocumento(e.target.value)}
+                    onChange={(e) => setDocumento(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     placeholder="QR / documento"
+                    inputMode="numeric"
+                    maxLength={10}
                   />
                 </label>
 
@@ -872,6 +941,12 @@ export default function AdminUsuariosPage() {
                 </label>
               </div>
 
+              {!canManageAdminRoles && isAdministrativeRole(selected?.rol) ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  Solo SUPERADMIN puede editar cuentas administrativas.
+                </div>
+              ) : null}
+
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setOpen(false)}
@@ -881,7 +956,7 @@ export default function AdminUsuariosPage() {
                 </button>
 
                 <button
-                  disabled={saving}
+                  disabled={saving || (!canManageAdminRoles && isAdministrativeRole(selected?.rol))}
                   onClick={guardarModal}
                   className="bg-emerald-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-emerald-700 shadow-sm transition"
                 >
@@ -953,8 +1028,10 @@ export default function AdminUsuariosPage() {
                   <input
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_documento}
-                    onChange={(e) => setCDocumento(e.target.value)}
+                    onChange={(e) => setCDocumento(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     placeholder="1012345678"
+                    inputMode="numeric"
+                    maxLength={10}
                   />
                 </label>
 
@@ -965,7 +1042,7 @@ export default function AdminUsuariosPage() {
                     value={c_rol}
                     onChange={(e) => setCRol(e.target.value)}
                   >
-                    {ROLES.map((r) => (
+                    {roleOptionsForActor.map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -1029,6 +1106,43 @@ export default function AdminUsuariosPage() {
                   {creating ? "Creando..." : "Crear usuario"}
                 </button>
               </div>
+          </Modal>
+        )}
+
+        {openDelete && deleteTarget && (
+          <Modal
+            open={openDelete}
+            title={`Eliminar usuario #${deleteTarget.id}`}
+            onClose={() => (!deleting ? setOpenDelete(false) : null)}
+            maxWidthClassName="max-w-lg"
+            closeDisabled={deleting}
+          >
+            <div className="space-y-4">
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                Esta acción eliminará el usuario de forma permanente.
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                <div><span className="font-semibold">Usuario:</span> {deleteTarget.username}</div>
+                <div><span className="font-semibold">Rol:</span> {deleteTarget.rol ?? "-"}</div>
+                <div><span className="font-semibold">Sede:</span> {deleteTarget.sede_principal ?? "-"}</div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setOpenDelete(false)}
+                  disabled={deleting}
+                  className="border rounded-xl px-4 py-2 hover:bg-gray-50 transition disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarEliminar}
+                  disabled={deleting}
+                  className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-rose-700 hover:bg-rose-100 transition disabled:opacity-50"
+                >
+                  {deleting ? "Eliminando..." : "Eliminar usuario"}
+                </button>
+              </div>
+            </div>
           </Modal>
         )}
 

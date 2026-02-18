@@ -103,7 +103,7 @@ export function ScanQrScreen({ navigation }: Props) {
 
       <TextInput
         value={documento}
-        onChangeText={setDocumento}
+        onChangeText={(v) => setDocumento(v.replace(/[^\d]/g, "").slice(0, 10))}
         placeholder="Documento (ej: 1053444048)"
         keyboardType="numeric"
         style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, backgroundColor: "#fff" }}

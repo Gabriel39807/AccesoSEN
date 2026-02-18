@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 export type MeUser = {
   id: number;
   username: string;
-  rol: "admin" | "superadmin" | "admin_sede" | "aprendiz" | "guarda";
+  rol: "superadmin" | "admin_sede" | "aprendiz" | "guarda";
   first_name?: string;
   last_name?: string;
   email?: string;

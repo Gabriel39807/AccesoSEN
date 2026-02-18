@@ -121,7 +121,7 @@ export default function ScanScreen() {
         <InputField
           label="Documento"
           value={documento}
-          onChangeText={setDocumento}
+          onChangeText={(v) => setDocumento(v.replace(/[^\d]/g, "").slice(0, 10))}
           placeholder="1053444048"
           keyboardType="numeric"
         />

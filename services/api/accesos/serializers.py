@@ -22,6 +22,16 @@ def normalize_phone(value: str) -> str:
     digits = "".join(ch for ch in (value or "") if ch.isdigit())
     return digits[:20]
 
+
+def is_numeric_document(value: str) -> bool:
+    value = (value or "").strip()
+    return bool(value) and value.isdigit() and len(value) <= 10
+
+
+def is_signed_scan_token(value: str) -> bool:
+    value = (value or "").strip().upper()
+    return value.startswith("SADI1:") or value.startswith("SADI1B64:")
+
 # =========================
 # USUARIOS
 # =========================
@@ -57,7 +67,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
     def validate_documento(self, value):
         value = (value or "").strip()
-        if value and (not value.isdigit() or len(value) > 10):
+        if value and not is_numeric_document(value):
             raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
         return value
 
@@ -261,7 +271,10 @@ class ValidarDocumentoSerializer(serializers.Serializer):
     documento = serializers.CharField(max_length=30)
 
     def validate_documento(self, value):
-        return value.strip()
+        value = (value or "").strip()
+        if value and not is_numeric_document(value) and not is_signed_scan_token(value):
+            raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
+        return value
 
 
 class RegistrarAccesoDocumentoSerializer(serializers.Serializer):
@@ -270,7 +283,10 @@ class RegistrarAccesoDocumentoSerializer(serializers.Serializer):
     equipos = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False, allow_empty=True)
 
     def validate_documento(self, value):
-        return value.strip()
+        value = (value or "").strip()
+        if value and not is_numeric_document(value) and not is_signed_scan_token(value):
+            raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
+        return value
 
 
 # --- NUEVO: Notificaciones + Password Reset ---

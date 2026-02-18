@@ -4,6 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
+import Modal from "@/components/ui/Modal";
 
 type Equipo = {
   id: number;
@@ -75,6 +77,7 @@ export default function AprendizEquipoDetallePage() {
 
   // edición (se intenta, aunque el backend actual puede restringirlo)
   const [editing, setEditing] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [marca, setMarca] = useState("");
   const [modelo, setModelo] = useState("");
   const [serial, setSerial] = useState("");
@@ -86,6 +89,7 @@ export default function AprendizEquipoDetallePage() {
     if (!equipo) return "SIN_REGISTROS" as const;
     return ubicacionPorAccesos(equipo.id, accesos);
   }, [equipo, accesos]);
+  const canMutate = equipo?.estado === "pendiente";
 
   async function cargar() {
     if (!idNum || Number.isNaN(idNum)) {
@@ -115,11 +119,7 @@ export default function AprendizEquipoDetallePage() {
         : accesosRes.data?.results ?? [];
       setAccesos(accesosData);
     } catch (e: any) {
-      const msg =
-        e?.response?.data?.detail ??
-        e?.response?.data?.message ??
-        "No se pudo cargar el equipo.";
-      setError(msg);
+      setError(toErrorMessage(e, "No se pudo cargar el equipo."));
     } finally {
       setLoading(false);
     }
@@ -135,6 +135,11 @@ export default function AprendizEquipoDetallePage() {
     setMsgTipo(null);
 
     if (!equipo) return;
+    if (!canMutate) {
+      setMsg("Solo puedes editar equipos en estado PENDIENTE.");
+      setMsgTipo("err");
+      return;
+    }
     if (!serial.trim() || !marca.trim() || !modelo.trim()) {
       setMsg("Completa serial, marca y modelo.");
       setMsgTipo("err");
@@ -153,41 +158,36 @@ export default function AprendizEquipoDetallePage() {
       setEditing(false);
       await cargar();
     } catch (e: any) {
-      const err =
-        e?.response?.data?.detail ??
-        (typeof e?.response?.data === "object"
-          ? JSON.stringify(e.response.data)
-          : null) ??
-        "No se pudieron guardar los cambios.";
-      setMsg(err);
+      setMsg(toErrorMessage(e, "No se pudieron guardar los cambios."));
       setMsgTipo("err");
     } finally {
       setSaving(false);
     }
   }
 
-  async function eliminarEquipo() {
+  function solicitarEliminar() {
     setMsg(null);
     setMsgTipo(null);
-
     if (!equipo) return;
-    const ok = window.confirm(
-      "¿Seguro que deseas eliminar este equipo? Esta acción no se puede deshacer."
-    );
-    if (!ok) return;
+    if (!canMutate) {
+      setMsg("Solo puedes eliminar equipos en estado PENDIENTE.");
+      setMsgTipo("err");
+      return;
+    }
+    setConfirmDeleteOpen(true);
+  }
 
+  async function eliminarEquipo() {
+    if (!equipo) return;
     setSaving(true);
     try {
       await api.delete(`/api/equipos/${equipo.id}/`);
       setMsg("✅ Equipo eliminado.");
       setMsgTipo("ok");
+      setConfirmDeleteOpen(false);
       setTimeout(() => router.push("/aprendiz/equipos"), 500);
     } catch (e: any) {
-      const err =
-        e?.response?.data?.detail ??
-        e?.response?.data?.message ??
-        "No se pudo eliminar el equipo.";
-      setMsg(err);
+      setMsg(toErrorMessage(e, "No se pudo eliminar el equipo."));
       setMsgTipo("err");
     } finally {
       setSaving(false);
@@ -275,19 +275,35 @@ export default function AprendizEquipoDetallePage() {
 
               <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
-                  onClick={() => setEditing((v) => !v)}
+                  onClick={() => {
+                    if (editing) {
+                      setEditing(false);
+                      return;
+                    }
+                    if (!canMutate) {
+                      setMsg("Solo puedes editar equipos en estado PENDIENTE.");
+                      setMsgTipo("err");
+                      return;
+                    }
+                    setEditing(true);
+                  }}
                   className="rounded-2xl border px-5 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50"
                 >
                   {editing ? "Cancelar edición" : "Editar información"}
                 </button>
                 <button
-                  onClick={eliminarEquipo}
-                  disabled={saving}
+                  onClick={solicitarEliminar}
+                  disabled={saving || !canMutate}
                   className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
                 >
                   Eliminar equipo
                 </button>
               </div>
+              {!canMutate ? (
+                <div className="mt-2 text-xs text-zinc-500">
+                  Solo puedes editar o eliminar equipos en estado pendiente.
+                </div>
+              ) : null}
 
               {editing && (
                 <div className="mt-5 rounded-3xl border bg-white p-5">
@@ -373,6 +389,48 @@ export default function AprendizEquipoDetallePage() {
           </div>
         )}
       </div>
+      <Modal
+        open={confirmDeleteOpen}
+        title="Confirmar eliminacion de equipo"
+        onClose={() => {
+          if (saving) return;
+          setConfirmDeleteOpen(false);
+        }}
+        closeDisabled={saving}
+        maxWidthClassName="max-w-lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-700">
+            Vas a eliminar este equipo de forma permanente. Esta accion no se puede deshacer.
+          </p>
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+            <div>
+              <span className="font-semibold">Serial:</span> {equipo?.serial}
+            </div>
+            <div>
+              <span className="font-semibold">Equipo:</span> {equipo?.marca} {equipo?.modelo}
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteOpen(false)}
+              disabled={saving}
+              className="rounded-2xl border px-4 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={eliminarEquipo}
+              disabled={saving}
+              className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60"
+            >
+              {saving ? "Eliminando..." : "Eliminar equipo"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

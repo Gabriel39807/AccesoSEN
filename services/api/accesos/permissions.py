@@ -3,7 +3,7 @@ from __future__ import annotations
 from rest_framework.permissions import BasePermission
 
 
-ADMIN_ROLES = {"admin", "superadmin", "admin_sede"}
+ADMIN_ROLES = {"superadmin", "admin_sede"}
 
 
 def is_superadmin(user) -> bool:

@@ -171,6 +171,13 @@ def _build_aprendiz_qr_value(user: Usuario) -> str:
     return str(user.documento or "").strip()
 
 
+def _normalize_numeric_documento(documento: str) -> str:
+    normalized = re.sub(r"[^\d]", "", str(documento or "").strip())
+    if not normalized or len(normalized) > 10:
+        raise ValidationError({"documento": "El documento debe ser numerico y maximo de 10 digitos."})
+    return normalized
+
+
 def _extract_documento_from_scan(raw_value: str) -> str:
     raw = unquote((raw_value or "").strip())
     if not raw:
@@ -194,7 +201,7 @@ def _extract_documento_from_scan(raw_value: str) -> str:
                 signed_doc,
                 max_age=60 * 60 * 24 * 365,
             )
-            return str(doc).strip()
+            return _normalize_numeric_documento(str(doc).strip())
         except Exception:
             raise ValidationError({"documento": "QR invalido."})
 
@@ -205,10 +212,10 @@ def _extract_documento_from_scan(raw_value: str) -> str:
         data = signing.loads(token, salt="sadi.aprendiz.qr", max_age=60 * 60 * 24 * 365)
         if not isinstance(data, dict) or data.get("typ") != "aprendiz_qr" or not data.get("doc"):
             raise ValidationError({"documento": "QR invalido."})
-        return str(data["doc"]).strip()
+        return _normalize_numeric_documento(str(data["doc"]).strip())
 
     digits_only = re.sub(r"[^\d]", "", raw)
-    return digits_only or raw
+    return _normalize_numeric_documento(digits_only)
 
 
 def _find_user_for_password_reset(email: str = "") -> Usuario | None:
@@ -699,6 +706,23 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
         return qs
 
+    def _ensure_admin_role_scope(self, payload: dict, instance: Usuario | None = None):
+        actor: Usuario = self.request.user
+        if is_superadmin(actor):
+            return None
+
+        admin_roles = {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE}
+        target_role = payload.get("rol", getattr(instance, "rol", None))
+        current_role = getattr(instance, "rol", None) if instance else None
+
+        if target_role in admin_roles or current_role in admin_roles:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo SUPERADMIN puede crear, editar o eliminar cuentas administrativas.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
     def _ensure_admin_sede_scope(self, payload: dict, instance: Usuario | None = None):
         actor: Usuario = self.request.user
         if not is_admin_sede(actor):
@@ -721,9 +745,8 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
         rol = payload.get("rol")
         current_rol = getattr(instance, "rol", None) if instance else None
-        if rol in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN, Usuario.Rol.ADMIN_SEDE} or current_rol in {
+        if rol in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE} or current_rol in {
             Usuario.Rol.SUPERADMIN,
-            Usuario.Rol.ADMIN,
             Usuario.Rol.ADMIN_SEDE,
         }:
             return error_response(
@@ -733,6 +756,13 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             )
 
         if not instance:
+            requested_sede = (payload.get("sede_principal") or "").strip()
+            if requested_sede and requested_sede != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No puedes crear usuarios para otra sede diferente a la tuya.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
             payload["sede_principal"] = actor_sede
         elif "sede_principal" in payload and (payload.get("sede_principal") or actor_sede) != actor_sede:
             return error_response(
@@ -759,6 +789,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         payload = request.data.copy()
+        role_scope_error = self._ensure_admin_role_scope(payload)
+        if role_scope_error:
+            return role_scope_error
+
         scoped_error = self._ensure_admin_sede_scope(payload)
         if scoped_error:
             return scoped_error
@@ -775,6 +809,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         payload = request.data.copy()
+        role_scope_error = self._ensure_admin_role_scope(payload, instance=instance)
+        if role_scope_error:
+            return role_scope_error
+
         scoped_error = self._ensure_admin_sede_scope(payload, instance=instance)
         if scoped_error:
             return scoped_error
@@ -791,6 +829,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
         payload = request.data.copy()
+        role_scope_error = self._ensure_admin_role_scope(payload, instance=instance)
+        if role_scope_error:
+            return role_scope_error
+
         scoped_error = self._ensure_admin_sede_scope(payload, instance=instance)
         if scoped_error:
             return scoped_error
@@ -805,18 +847,24 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if is_admin_sede(request.user):
-            actor_sede = _scope_sede(request.user)
+        actor: Usuario = request.user
+
+        role_scope_error = self._ensure_admin_role_scope({}, instance=instance)
+        if role_scope_error:
+            return role_scope_error
+
+        if is_admin_sede(actor):
+            actor_sede = _scope_sede(actor)
             if not actor_sede or _scope_sede(instance) != actor_sede:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
                     message="Solo puedes eliminar usuarios de tu sede.",
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
-            if instance.rol in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN, Usuario.Rol.ADMIN_SEDE}:
+            if instance.rol not in {Usuario.Rol.GUARDA, Usuario.Rol.APRENDIZ}:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
-                    message="ADMIN_SEDE no puede eliminar cuentas administrativas.",
+                    message="ADMIN_SEDE solo puede eliminar guardas y aprendices de su sede.",
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
         return super().destroy(request, *args, **kwargs)
@@ -1025,8 +1073,13 @@ class EquipoViewSet(viewsets.ModelViewSet):
                 return [IsAuthenticated(), IsAdmin()]
             return [IsAuthenticated(), IsAprendiz()]
 
-        if self.action in ["update", "partial_update", "revisar"]:
+        if self.action == "revisar":
             return [IsAuthenticated(), IsAdmin()]
+
+        if self.action in ["update", "partial_update"]:
+            if is_admin_role(self.request.user):
+                return [IsAuthenticated(), IsAdmin()]
+            return [IsAuthenticated(), IsAprendiz()]
 
         if self.action == "destroy":
             if is_admin_role(self.request.user):
@@ -1034,6 +1087,44 @@ class EquipoViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsAprendiz()]
 
         return [IsAuthenticated()]
+
+    def _update_as_aprendiz(self, request, partial: bool):
+        user = request.user
+        equipo = self.get_object()
+
+        if equipo.propietario_id != user.id:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No puedes editar equipos de otro aprendiz.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if equipo.estado != Equipo.Estado.PENDIENTE:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo puedes editar equipos en estado PENDIENTE.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        payload = request.data.copy()
+        for blocked in ["propietario", "estado", "motivo_rechazo", "revisado_por", "revisado_en"]:
+            if blocked in payload:
+                payload.pop(blocked)
+
+        serializer = self.get_serializer(equipo, data=payload, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(propietario=user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        if is_admin_role(request.user):
+            return super().update(request, *args, **kwargs)
+        return self._update_as_aprendiz(request, partial=False)
+
+    def partial_update(self, request, *args, **kwargs):
+        if is_admin_role(request.user):
+            return super().partial_update(request, *args, **kwargs)
+        return self._update_as_aprendiz(request, partial=True)
 
     def create(self, request, *args, **kwargs):
         if getattr(request.user, "rol", None) == Usuario.Rol.APRENDIZ:
@@ -1059,7 +1150,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
         propietario = serializer.validated_data.get("propietario", None)
         if not propietario:
-            raise ValidationError({"propietario": "Como admin debes enviar el propietario (id del aprendiz)."})
+            raise ValidationError({"propietario": "Como usuario administrativo debes enviar el propietario (id del aprendiz)."})
         if is_admin_sede(user):
             actor_sede = _scope_sede(user)
             if not actor_sede or _scope_sede(propietario) != actor_sede:
@@ -1393,7 +1484,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         request_user = request.user
         rol = getattr(request_user, "rol", None)
 
-        if rol not in [Usuario.Rol.ADMIN, Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA]:
+        if rol not in [Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA]:
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="No tienes permisos para registrar accesos.",
@@ -1659,15 +1750,30 @@ class AccesoViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="estado")
     def estado(self, request):
         ultimo = Acceso.objects.filter(usuario=request.user).order_by("-fecha").first()
-        estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
-        return ok_response({"estado": estado})
+        if not ultimo:
+            return ok_response(
+                {
+                    "estado": "SIN_REGISTROS",
+                    "ultimo_tipo": None,
+                    "ultima_fecha": None,
+                }
+            )
+
+        estado = "DENTRO" if ultimo.tipo == Acceso.Tipo.INGRESO else "FUERA"
+        return ok_response(
+            {
+                "estado": estado,
+                "ultimo_tipo": ultimo.tipo,
+                "ultima_fecha": ultimo.fecha,
+            }
+        )
 
 
 def _role_allowed_for_expected(actual_role: str | None, expected_role: str | None) -> bool:
     if not expected_role:
         return True
     if expected_role == "admin":
-        return actual_role in {Usuario.Rol.ADMIN, Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE}
+        return actual_role in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE}
     return actual_role == expected_role
 
 
@@ -2019,8 +2125,12 @@ class PasskeyAuthOptionsView(APIView):
         s = PasskeyAuthOptionsSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        username = s.validated_data.get("username", "")
-        user = Usuario.objects.filter(username__iexact=username).first() if username else None
+        login_identifier = (s.validated_data.get("username", "") or "").strip().lower()
+        user = None
+        if login_identifier:
+            user = Usuario.objects.filter(username__iexact=login_identifier).first()
+            if not user:
+                user = Usuario.objects.filter(email__iexact=login_identifier).first()
         allow_credentials = []
         if user:
             allow_credentials = list(
@@ -2031,7 +2141,12 @@ class PasskeyAuthOptionsView(APIView):
         challenge = secrets.token_urlsafe(32)
         cache.set(
             _webauthn_auth_cache_key(request_id),
-            {"challenge": challenge, "username": username, "expected_role": s.validated_data.get("expected_role")},
+            {
+                "challenge": challenge,
+                "username": login_identifier,  # compatibilidad con payloads previos
+                "login_identifier": login_identifier,
+                "expected_role": s.validated_data.get("expected_role"),
+            },
             timeout=PASSKEY_AUTH_CHALLENGE_TTL,
         )
         return ok_response(
@@ -2083,13 +2198,17 @@ class PasskeyAuthVerifyView(APIView):
             )
 
         user: Usuario = credential.user
-        expected_username = (payload.get("username") or "").strip().lower()
-        if expected_username and (user.username or "").strip().lower() != expected_username:
-            return error_response(
-                code=ErrorCode.PASSKEY_INVALID,
-                message="Credencial passkey invalida.",
-                status_code=status.HTTP_401_UNAUTHORIZED,
-            )
+        expected_identifier = (payload.get("login_identifier") or payload.get("username") or "").strip().lower()
+        if expected_identifier:
+            username_ok = (user.username or "").strip().lower() == expected_identifier
+            email_ok = (user.email or "").strip().lower() == expected_identifier
+            if not (username_ok or email_ok):
+                return error_response(
+                    code=ErrorCode.PASSKEY_INVALID,
+                    message="Credencial passkey invalida.",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
         expected_role = s.validated_data.get("expected_role") or payload.get("expected_role")
         if getattr(user, "estado", None) == Usuario.Estado.BLOQUEADO:
             return error_response(

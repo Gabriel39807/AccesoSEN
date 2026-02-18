@@ -39,7 +39,7 @@ type Acceso = {
 };
 
 type EstadoResponse = {
-  estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS";
+  estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS" | "dentro" | "fuera" | string;
   ultimo_tipo?: "ingreso" | "salida" | null;
   ultima_fecha?: string | null;
 };
