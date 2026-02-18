@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
-import { toErrorMessage } from "@/lib/errors";
 
 type Equipo = {
   id: number;
@@ -23,16 +22,25 @@ type Acceso = {
   equipos?: number[];
 };
 
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      detail?: string;
+      message?: string;
+    };
+  };
+};
+
 function badgeEstado(estado: string) {
   const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
-  if (estado === "aprobado") return `${base} border-emerald-200 bg-emerald-50 text-emerald-800`;
+  if (estado === "aprobado") return `${base} border-sky-200 bg-sky-50 text-sky-800`;
   if (estado === "rechazado") return `${base} border-red-200 bg-red-50 text-red-800`;
   return `${base} border-amber-200 bg-amber-50 text-amber-900`;
 }
 
 function badgeUbicacion(ubi: "DENTRO" | "FUERA" | "SIN_REGISTROS") {
   const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
-  if (ubi === "DENTRO") return `${base} border-emerald-200 bg-emerald-50 text-emerald-800`;
+  if (ubi === "DENTRO") return `${base} border-sky-200 bg-sky-50 text-sky-800`;
   if (ubi === "FUERA") return `${base} border-cyan-200 bg-cyan-50 text-cyan-800`;
   return `${base} border-zinc-200 bg-zinc-100 text-zinc-700`;
 }
@@ -68,7 +76,8 @@ export default function AprendizEquiposPage() {
       const accesosData = Array.isArray(accesosRes.data) ? accesosRes.data : accesosRes.data?.results ?? [];
       setAccesos(accesosData);
     } catch (e: unknown) {
-      setError(toErrorMessage(e, "No se pudieron cargar tus equipos."));
+      const err = e as ApiErrorShape;
+      setError(err.response?.data?.detail ?? err.response?.data?.message ?? "No se pudieron cargar tus equipos.");
     } finally {
       setLoading(false);
     }
@@ -114,13 +123,13 @@ export default function AprendizEquiposPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Link
               href="/aprendiz/equipos/nuevo"
-              className="rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105"
+              className="rounded-full bg-gradient-to-r from-sky-600 to-cyan-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105"
             >
               Registrar nuevo
             </Link>
             <button
               onClick={() => void cargar()}
-              className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-700 transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               Recargar
             </button>
@@ -129,14 +138,14 @@ export default function AprendizEquiposPage() {
 
         <div className="mt-4 grid gap-3 xl:grid-cols-12">
           <input
-            className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 xl:col-span-5"
+            className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 xl:col-span-5"
             placeholder="Buscar por serial, marca o modelo..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
 
           <select
-            className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 xl:col-span-3"
+            className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 xl:col-span-3"
             value={filtro}
             onChange={(e) => setFiltro(e.target.value as "todos" | "pendiente" | "aprobado" | "rechazado")}
           >
@@ -207,17 +216,17 @@ export default function AprendizEquiposPage() {
                 {e.estado === "rechazado" && e.motivo_rechazo ? <span className="text-xs font-semibold text-red-700">{e.motivo_rechazo}</span> : null}
               </div>
 
-              <div className="mt-4 text-xs font-semibold text-emerald-700 transition group-hover:translate-x-0.5">Ver detalles {'>'}</div>
+              <div className="mt-4 text-xs font-semibold text-sky-700 transition group-hover:translate-x-0.5">Ver detalles {'>'}</div>
             </Link>
           ))}
 
           {filtrados.length === 0 ? (
-            <div className="sm:col-span-2 xl:col-span-3 rounded-3xl border border-dashed border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-cyan-50/60 p-8 text-center text-sm text-zinc-600">
+            <div className="sm:col-span-2 xl:col-span-3 rounded-3xl border border-dashed border-sky-200 bg-gradient-to-br from-sky-50/70 to-cyan-50/60 p-8 text-center text-sm text-zinc-600">
               <p className="font-semibold text-zinc-900">No hay equipos para mostrar con los filtros actuales.</p>
               <p className="mt-1">Prueba cambiando el filtro o registra un equipo nuevo.</p>
               <Link
                 href="/aprendiz/equipos/nuevo"
-                className="mt-4 inline-flex rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
+                className="mt-4 inline-flex rounded-full bg-sky-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-sky-700"
               >
                 Registrar equipo
               </Link>
@@ -228,3 +237,4 @@ export default function AprendizEquiposPage() {
     </div>
   );
 }
+

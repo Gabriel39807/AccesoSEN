@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 
@@ -21,10 +21,10 @@ export default function SidebarItem({
     <Link
       href={href}
       className={cx(
-        "group relative flex items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70",
+        "group relative flex items-center gap-3 overflow-hidden rounded-2xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70",
         active
-          ? "border-emerald-400/45 bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-900/10"
-          : "border-transparent bg-white/50 text-zinc-700 hover:border-emerald-200/70 hover:bg-white/90 hover:text-zinc-900"
+          ? "border-sky-400/45 bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-md shadow-sky-900/10"
+          : "border-transparent bg-white/50 text-zinc-700 hover:border-sky-200/70 hover:bg-white/90 hover:text-zinc-900"
       )}
       aria-current={active ? "page" : undefined}
     >
@@ -33,7 +33,7 @@ export default function SidebarItem({
           "inline-flex h-8 w-8 items-center justify-center rounded-xl transition",
           active
             ? "bg-white/20 text-white"
-            : "bg-emerald-100/70 text-emerald-700 group-hover:bg-emerald-100"
+            : "bg-sky-100/70 text-sky-700 group-hover:bg-sky-100"
         )}
       >
         {icon}
@@ -42,3 +42,4 @@ export default function SidebarItem({
     </Link>
   );
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -76,10 +76,10 @@ export default function MiQrPage() {
   return (
     <div className="space-y-5">
       <section className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_12px_34px_rgba(2,6,23,0.07)] backdrop-blur-sm">
-        <div className="pointer-events-none absolute -right-24 -top-16 h-44 w-44 rounded-full bg-emerald-300/25 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-16 h-44 w-44 rounded-full bg-sky-300/25 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 left-10 h-40 w-40 rounded-full bg-cyan-300/25 blur-3xl" />
         <div className="relative">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Acceso inteligente</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Acceso inteligente</p>
           <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900">Mi QR de acceso</h2>
           <p className="mt-1 max-w-2xl text-sm text-zinc-600">
             Presenta este codigo en porteria para validar tu ingreso y salida de forma rapida y segura.
@@ -108,8 +108,8 @@ export default function MiQrPage() {
 
         {!loading && !error ? (
           <div className="grid gap-4 lg:grid-cols-12">
-            <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-gradient-to-br from-white via-zinc-50 to-emerald-50/40 p-4 lg:col-span-8">
-              <div className="pointer-events-none absolute -right-14 top-12 h-40 w-40 rounded-full bg-emerald-200/35 blur-3xl" />
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-gradient-to-br from-white via-zinc-50 to-sky-50/40 p-4 lg:col-span-8">
+              <div className="pointer-events-none absolute -right-14 top-12 h-40 w-40 rounded-full bg-sky-200/35 blur-3xl" />
               <div className="pointer-events-none absolute -left-8 bottom-3 h-32 w-32 rounded-full bg-cyan-200/35 blur-3xl" />
               <div className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-[inset_0_0_0_1px_rgba(255,255,255,.75)]">
                 <Image
@@ -127,8 +127,8 @@ export default function MiQrPage() {
             </div>
 
             <div className="space-y-3 lg:col-span-4">
-              <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-cyan-50/75 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Documento</p>
+              <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-sky-50/90 to-cyan-50/75 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Documento</p>
                 <p className="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900">{doc}</p>
                 <p className="mt-2 text-xs text-zinc-600">Identificador asociado a este codigo QR.</p>
               </div>
@@ -139,7 +139,7 @@ export default function MiQrPage() {
                   <button
                     onClick={() => loadQr(true)}
                     disabled={reloading}
-                    className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 transition hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-50"
+                    className="rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 transition hover:border-sky-300 hover:text-sky-700 disabled:opacity-50"
                   >
                     {reloading ? "Recargando..." : "Recargar"}
                   </button>
@@ -147,13 +147,13 @@ export default function MiQrPage() {
                 <div className="mt-3 grid gap-2">
                   <button
                     onClick={() => downloadQr(pngBase64, doc)}
-                    className="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                    className="rounded-xl bg-gradient-to-r from-sky-600 to-cyan-600 px-3 py-2 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                   >
                     Descargar QR
                   </button>
                   <button
                     onClick={copyDoc}
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                   >
                     {copied ? "Documento copiado" : "Copiar documento"}
                   </button>
@@ -170,3 +170,4 @@ export default function MiQrPage() {
     </div>
   );
 }
+

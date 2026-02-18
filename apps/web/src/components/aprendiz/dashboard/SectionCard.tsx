@@ -1,4 +1,4 @@
-export default function SectionCard({
+﻿export default function SectionCard({
   title,
   subtitle,
   action,
@@ -30,3 +30,4 @@ export default function SectionCard({
     </section>
   );
 }
+
