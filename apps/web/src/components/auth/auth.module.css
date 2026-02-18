@@ -1371,8 +1371,8 @@
 .hero3Wrap {
   position: absolute;
   left: 50%;
-  top: 60%;
-  width: min(78%, 560px);
+  top: 62%;
+  width: min(88%, 660px);
   aspect-ratio: 1 / 1;
   transform: translate(-50%, -50%);
   z-index: 5;
@@ -1468,7 +1468,7 @@
   position: absolute;
   left: 50%;
   bottom: 4%;
-  width: 56%;
+  width: 64%;
   height: 12%;
   transform: translateX(-50%);
   border-radius: 999px;
@@ -1479,9 +1479,9 @@
 .splineViewport {
   position: absolute;
   left: 50%;
-  top: 55%;
-  width: 88%;
-  height: 88%;
+  top: 56%;
+  width: 94%;
+  height: 96%;
   transform: translate(-50%, -50%);
   opacity: 0;
   transition: opacity 360ms ease;
@@ -1619,9 +1619,9 @@
   }
 
   .splineViewport {
-    width: 86%;
-    height: 86%;
-    top: 56%;
+    width: 92%;
+    height: 94%;
+    top: 57%;
   }
 
   .splineHologram {

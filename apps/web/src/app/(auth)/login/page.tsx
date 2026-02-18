@@ -249,7 +249,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge} gestureTick={loginFailTick}>
+    <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge}>
       <AuthCard className="p-5 md:p-6">
         <div className="flex items-center justify-between gap-4">
           <div>

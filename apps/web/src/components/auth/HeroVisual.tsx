@@ -7,14 +7,13 @@ type Props = {
   role: AuthRole;
   tx: number;
   ty: number;
-  gestureTick?: number;
 };
 
 function shift(tx: number, ty: number, x: number, y: number, extra = ""): CSSProperties {
   return { transform: `translate3d(${tx * x}px, ${ty * y}px, 0) ${extra}`.trim() };
 }
 
-export default function HeroVisual({ role, tx, ty, gestureTick = 0 }: Props) {
+export default function HeroVisual({ role, tx, ty }: Props) {
   const admin = role === "admin";
 
   return (
@@ -79,7 +78,7 @@ export default function HeroVisual({ role, tx, ty, gestureTick = 0 }: Props) {
 
       <div className={styles.hero3Wrap}>
         <div className={styles.hero3LayerMid}>
-          <SplineHeroRobot role={role} tx={tx} ty={ty} gestureTick={gestureTick} />
+          <SplineHeroRobot role={role} tx={tx} ty={ty} />
         </div>
       </div>
     </div>

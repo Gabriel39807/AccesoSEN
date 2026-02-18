@@ -11,11 +11,10 @@ type Props = {
   title: string;
   subtitle: string;
   badge: string;
-  gestureTick?: number;
   children: ReactNode;
 };
 
-export default function AuthLayout({ role, title, subtitle, badge, gestureTick = 0, children }: Props) {
+export default function AuthLayout({ role, title, subtitle, badge, children }: Props) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [move, setMove] = useState({ x: 0, y: 0 });
 
@@ -44,7 +43,7 @@ export default function AuthLayout({ role, title, subtitle, badge, gestureTick =
         className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1.08fr_0.92fr]"
       >
         <section className="order-2 lg:order-1">
-          <HeroVisual role={role} tx={tilt.tx} ty={tilt.ty} gestureTick={gestureTick} />
+          <HeroVisual role={role} tx={tilt.tx} ty={tilt.ty} />
         </section>
         <section className="order-1 lg:order-2 flex items-center">
           <div className="w-full">
