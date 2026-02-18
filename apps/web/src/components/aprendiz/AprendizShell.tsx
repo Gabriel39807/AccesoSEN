@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -95,22 +95,22 @@ export default function AprendizShell({
   ] as const;
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-emerald-50/70 via-cyan-50/35 to-zinc-100/70">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-sky-50/70 via-cyan-50/35 to-zinc-100/70">
       <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-24 top-10 h-64 w-64 rounded-full bg-emerald-300/25 blur-3xl" />
+        <div className="absolute -left-24 top-10 h-64 w-64 rounded-full bg-sky-300/25 blur-3xl" />
         <div className="absolute right-0 top-0 h-80 w-80 rounded-full bg-cyan-300/25 blur-3xl" />
       </div>
 
       <div className="mx-auto flex w-full max-w-7xl gap-4 px-4 py-5 sm:px-6 lg:gap-5">
         <aside className="sticky top-5 hidden h-[calc(100vh-2.5rem)] w-64 shrink-0 rounded-3xl border border-white/65 bg-white/65 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.08)] backdrop-blur-xl lg:flex lg:flex-col xl:w-[17rem]">
           <div className="mb-6">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">SENA</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">SENA</div>
             <div className="text-lg font-extrabold tracking-tight text-zinc-900">AccesoSEN</div>
             <div className="mt-1 text-xs text-zinc-500">Sistema de Control de Acceso</div>
           </div>
 
-          <div className="mb-5 rounded-2xl border border-emerald-100/90 bg-gradient-to-br from-emerald-50/70 to-cyan-50/55 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Estado de acceso</div>
+          <div className="mb-5 rounded-2xl border border-sky-100/90 bg-gradient-to-br from-sky-50/70 to-cyan-50/55 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Estado de acceso</div>
             <div className="mt-1 text-xs text-zinc-600">Consulta rapida de tu estado actual en porteria.</div>
             <div className="mt-3">
               <StatusChip status={estado?.estado} />
@@ -130,7 +130,7 @@ export default function AprendizShell({
           <div className="mt-auto border-t border-zinc-200/75 pt-4">
             <button
               onClick={logout}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               <IconLogout className="h-4 w-4" />
               Cerrar sesion
@@ -143,7 +143,7 @@ export default function AprendizShell({
           <div className="sticky top-4 z-20 rounded-3xl border border-white/70 bg-white/72 px-4 py-4 shadow-[0_8px_30px_rgba(2,6,23,0.08)] backdrop-blur-xl sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Panel Aprendiz</div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Panel Aprendiz</div>
                 <h1 className="truncate text-xl font-extrabold tracking-tight text-zinc-900 sm:text-2xl">{title}</h1>
                 <p className="truncate text-xs text-zinc-500">
                   {loadingMe ? "Cargando perfil..." : `Hola, ${nombreBonito || "Aprendiz"}`}
@@ -154,14 +154,14 @@ export default function AprendizShell({
                 <StatusChip status={estado?.estado} />
                 <button
                   onClick={refreshPanel}
-                  className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                 >
                   <IconRefresh className="h-3.5 w-3.5" />
                   Recargar
                 </button>
                 <button
                   onClick={logout}
-                  className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 lg:hidden"
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 lg:hidden"
                 >
                   <IconLogout className="h-3.5 w-3.5" />
                   Salir
@@ -190,3 +190,4 @@ export default function AprendizShell({
     </div>
   );
 }
+

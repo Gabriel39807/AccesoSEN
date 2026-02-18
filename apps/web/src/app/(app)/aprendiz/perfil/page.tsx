@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -120,7 +120,7 @@ export default function AprendizPerfilPage() {
     setMsgTipo(null);
 
     if (!passwordRulesValid) {
-      setMsg("La nueva contraseña no cumple todos los requisitos.");
+      setMsg("La nueva contraseÃ±a no cumple todos los requisitos.");
       setMsgTipo("err");
       return;
     }
@@ -130,7 +130,7 @@ export default function AprendizPerfilPage() {
       await api.patch(`/api/usuarios/${me.id}/`, {
         password: pw,
       });
-      setMsg("Contraseña actualizada.");
+      setMsg("ContraseÃ±a actualizada.");
       setMsgTipo("ok");
       setPwOpen(false);
       setPw("");
@@ -146,12 +146,12 @@ export default function AprendizPerfilPage() {
   return (
     <div className="space-y-5">
       <section className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_12px_34px_rgba(2,6,23,0.07)] backdrop-blur-sm">
-        <div className="pointer-events-none absolute -right-16 -top-14 h-44 w-44 rounded-full bg-emerald-300/25 blur-3xl" />
+        <div className="pointer-events-none absolute -right-16 -top-14 h-44 w-44 rounded-full bg-sky-300/25 blur-3xl" />
         <div className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
 
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Perfil del aprendiz</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Perfil del aprendiz</p>
             <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">Mi perfil</h2>
             <p className="mt-1 text-sm text-zinc-600">Consulta tus datos personales y administra tu cuenta.</p>
           </div>
@@ -159,15 +159,15 @@ export default function AprendizPerfilPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               onClick={() => setEditing(true)}
-              className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-700 transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               Editar perfil
             </button>
             <button
               onClick={() => setPwOpen(true)}
-              className="rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="rounded-full bg-gradient-to-r from-sky-600 to-cyan-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
-              Cambiar contraseña
+              Cambiar contraseÃ±a
             </button>
           </div>
         </div>
@@ -177,12 +177,12 @@ export default function AprendizPerfilPage() {
         <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm xl:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Aprendiz</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Aprendiz</div>
               <div className="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900">
                 {loadingMe ? "Cargando..." : nombreBonito}
               </div>
             </div>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+            <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
               Cuenta {me?.estado ?? "-"}
             </span>
           </div>
@@ -198,7 +198,7 @@ export default function AprendizPerfilPage() {
             <div
               className={cx(
                 "mt-5 rounded-2xl border p-4 text-sm",
-                msgTipo === "ok" && "border-emerald-200 bg-emerald-50/90 text-emerald-800",
+                msgTipo === "ok" && "border-sky-200 bg-sky-50/90 text-sky-800",
                 msgTipo === "err" && "border-red-200 bg-red-50/90 text-red-700"
               )}
             >
@@ -215,7 +215,7 @@ export default function AprendizPerfilPage() {
               <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{me?.estado ?? "-"}</p>
             </div>
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4 text-sm text-zinc-700">
-              Usa una contraseña fuerte (minimo 8 caracteres), unica y evita compartirla.
+              Usa una contraseÃ±a fuerte (minimo 8 caracteres), unica y evita compartirla.
             </div>
           </div>
         </section>
@@ -269,7 +269,7 @@ export default function AprendizPerfilPage() {
               <button
                 onClick={guardarPerfil}
                 disabled={saving}
-                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
               >
                 {saving ? "Guardando..." : "Guardar cambios"}
               </button>
@@ -289,7 +289,7 @@ export default function AprendizPerfilPage() {
           <div className="w-full max-w-lg rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contraseña</h3>
+                <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contraseÃ±a</h3>
                 <p className="mt-1 text-sm text-zinc-600">Usa una clave fuerte y unica.</p>
               </div>
               <button
@@ -302,18 +302,18 @@ export default function AprendizPerfilPage() {
 
             <div className="mt-5 space-y-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Nueva contraseña</label>
+                <label className="text-xs font-semibold text-zinc-700">Nueva contraseÃ±a</label>
                 <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw} onChange={(e) => setPw(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contraseña</label>
+                <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contraseÃ±a</label>
                 <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw2} onChange={(e) => setPw2(e.target.value)} />
               </div>
               <div className="rounded-2xl border bg-zinc-50 p-4 text-xs text-zinc-600">
                 <div className="mb-2 font-semibold text-zinc-900">Checklist de seguridad</div>
                 <ul className="space-y-1">
                   {passwordRules.map((rule) => (
-                    <li key={rule.id} className={rule.valid ? "text-emerald-700" : "text-zinc-600"}>
+                    <li key={rule.id} className={rule.valid ? "text-sky-700" : "text-zinc-600"}>
                       {rule.valid ? "[OK]" : "[ ]"} {rule.label}
                     </li>
                   ))}
@@ -325,9 +325,9 @@ export default function AprendizPerfilPage() {
               <button
                 onClick={cambiarContrasena}
                 disabled={saving || !passwordRulesValid}
-                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
               >
-                {saving ? "Guardando..." : "Actualizar contraseña"}
+                {saving ? "Guardando..." : "Actualizar contraseÃ±a"}
               </button>
               <button
                 onClick={() => setPwOpen(false)}
@@ -342,3 +342,4 @@ export default function AprendizPerfilPage() {
     </div>
   );
 }
+

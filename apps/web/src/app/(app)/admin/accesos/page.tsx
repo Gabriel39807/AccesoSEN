@@ -324,8 +324,8 @@ export default function AdminAccesosPage() {
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   return (
-    <div className="min-h-screen bg-emerald-50/40">
-      <div className="max-w-6xl mx-auto p-6 space-y-4">
+    <div className="space-y-4">
+      <div className="space-y-4">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 
@@ -17,7 +17,7 @@ function FaqItem({
     <details className="group rounded-2xl border border-white/80 bg-white/80 p-4 shadow-[0_6px_18px_rgba(2,6,23,0.04)] transition hover:shadow-[0_10px_22px_rgba(2,6,23,0.06)]">
       <summary className="cursor-pointer list-none text-base font-bold tracking-tight text-zinc-900">
         <span className="inline-flex items-center gap-2">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 transition group-open:rotate-45">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-100 text-sky-700 transition group-open:rotate-45">
             +
           </span>
           {title}
@@ -46,10 +46,10 @@ export default function AprendizAyudaPage() {
   return (
     <div className="space-y-5">
       <section className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_12px_34px_rgba(2,6,23,0.07)] backdrop-blur-sm">
-        <div className="pointer-events-none absolute -right-20 -top-14 h-48 w-48 rounded-full bg-emerald-300/25 blur-3xl" />
+        <div className="pointer-events-none absolute -right-20 -top-14 h-48 w-48 rounded-full bg-sky-300/25 blur-3xl" />
         <div className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
         <div className="relative">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Centro de soporte</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Centro de soporte</p>
           <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">Ayuda y soporte</h2>
           <p className="mt-1 text-sm text-zinc-600">Resuelve dudas frecuentes o envia un caso al equipo de soporte.</p>
         </div>
@@ -59,7 +59,7 @@ export default function AprendizAyudaPage() {
         <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm xl:col-span-8">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-xl font-extrabold tracking-tight text-zinc-900">Preguntas frecuentes</h3>
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+            <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
               Respuestas rapidas
             </span>
           </div>
@@ -78,8 +78,8 @@ export default function AprendizAyudaPage() {
               solicita actualizacion al area administrativa.
             </FaqItem>
 
-            <FaqItem title="Olvide mi contraseña">
-              Ve a la opcion de recuperacion de contraseña en login, o contacta administracion con tu documento para
+            <FaqItem title="Olvide mi contraseÃ±a">
+              Ve a la opcion de recuperacion de contraseÃ±a en login, o contacta administracion con tu documento para
               restablecer acceso.
             </FaqItem>
           </div>
@@ -93,12 +93,12 @@ export default function AprendizAyudaPage() {
             <div>
               <label className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Motivo</label>
               <select
-                className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
               >
                 <option>Otro motivo</option>
-                <option>Olvide mi contraseña</option>
+                <option>Olvide mi contraseÃ±a</option>
                 <option>Problemas para registrar equipo</option>
                 <option>Datos personales</option>
               </select>
@@ -107,7 +107,7 @@ export default function AprendizAyudaPage() {
             <div>
               <label className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Asunto</label>
               <input
-                className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                 value={asunto}
                 onChange={(e) => setAsunto(e.target.value)}
                 placeholder="Ej: No puedo iniciar sesion"
@@ -120,7 +120,7 @@ export default function AprendizAyudaPage() {
                 <span className="text-[11px] font-semibold text-zinc-500">{charsLeft} caracteres restantes</span>
               </div>
               <textarea
-                className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                 rows={5}
                 maxLength={500}
                 value={mensaje}
@@ -134,7 +134,7 @@ export default function AprendizAyudaPage() {
               className={cx(
                 "block rounded-2xl px-5 py-3 text-center text-sm font-semibold transition",
                 canSend
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-[0_10px_22px_rgba(5,150,105,0.28)] hover:brightness-105"
+                  ? "bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-[0_10px_22px_rgba(5,150,105,0.28)] hover:brightness-105"
                   : "pointer-events-none bg-zinc-200 text-zinc-500"
               )}
             >
@@ -158,3 +158,4 @@ export default function AprendizAyudaPage() {
     </div>
   );
 }
+

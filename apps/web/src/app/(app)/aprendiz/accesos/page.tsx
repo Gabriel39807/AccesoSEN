@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -43,7 +43,7 @@ function cx(...c: Array<string | false | null | undefined>) {
 
 function tipoChip(tipo: string) {
   const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
-  if (tipo === "ingreso") return `${base} border-emerald-200 bg-emerald-50 text-emerald-800`;
+  if (tipo === "ingreso") return `${base} border-sky-200 bg-sky-50 text-sky-800`;
   if (tipo === "salida") return `${base} border-cyan-200 bg-cyan-50 text-cyan-800`;
   return `${base} border-zinc-200 bg-zinc-100 text-zinc-700`;
 }
@@ -120,7 +120,7 @@ export default function AprendizHistorialPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               onClick={() => void cargar()}
-              className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               Recargar
             </button>
@@ -137,8 +137,8 @@ export default function AprendizHistorialPage() {
                   className={cx(
                     "rounded-full px-4 py-2 text-sm font-semibold transition",
                     solo === t.key
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.25)]"
-                      : "border border-zinc-200 bg-white text-zinc-700 hover:border-emerald-200 hover:text-emerald-700"
+                      ? "bg-gradient-to-r from-sky-600 to-cyan-600 text-white shadow-[0_8px_18px_rgba(5,150,105,0.25)]"
+                      : "border border-zinc-200 bg-white text-zinc-700 hover:border-sky-200 hover:text-sky-700"
                   )}
                 >
                   {t.label}
@@ -252,3 +252,4 @@ export default function AprendizHistorialPage() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,7 +36,7 @@ export default function PrimerAccesoPage() {
     e.preventDefault();
     setMsg(null);
     if (!allRulesValid) {
-      setMsg("La nueva contraseña no cumple todos los requisitos.");
+      setMsg("La nueva contraseÃ±a no cumple todos los requisitos.");
       return;
     }
 
@@ -58,7 +58,7 @@ export default function PrimerAccesoPage() {
     <div className="mx-auto max-w-xl rounded-3xl border bg-white p-6 shadow-sm">
       <h1 className="text-xl font-extrabold text-zinc-900">Primer ingreso</h1>
       <p className="mt-1 text-sm text-zinc-600">
-        Debes cambiar la contraseña inicial (ultimos 4 o 6 digitos del documento).
+        Debes cambiar la contraseÃ±a inicial (ultimos 4 o 6 digitos del documento).
       </p>
 
       <form onSubmit={onSubmit} className="mt-5 space-y-3">
@@ -66,28 +66,28 @@ export default function PrimerAccesoPage() {
           type="password"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
-          placeholder="Contraseña actual"
+          placeholder="ContraseÃ±a actual"
           className="w-full rounded-2xl border px-4 py-3 text-sm"
         />
         <input
           type="password"
           value={next}
           onChange={(e) => setNext(e.target.value)}
-          placeholder="Nueva contraseña"
+          placeholder="Nueva contraseÃ±a"
           className="w-full rounded-2xl border px-4 py-3 text-sm"
         />
         <input
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          placeholder="Confirmar contraseña"
+          placeholder="Confirmar contraseÃ±a"
           className="w-full rounded-2xl border px-4 py-3 text-sm"
         />
         <div className="rounded-2xl border bg-zinc-50 p-3 text-sm">
           <div className="mb-1 font-semibold text-zinc-900">Checklist de seguridad</div>
           <ul className="space-y-1 text-zinc-600">
             {rules.map((rule) => (
-              <li key={rule.id} className={rule.valid ? "text-emerald-700" : "text-zinc-600"}>
+              <li key={rule.id} className={rule.valid ? "text-sky-700" : "text-zinc-600"}>
                 {rule.valid ? "[OK]" : "[ ]"} {rule.label}
               </li>
             ))}
@@ -98,11 +98,12 @@ export default function PrimerAccesoPage() {
 
         <button
           disabled={loading || !allRulesValid}
-          className="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+          className="w-full rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
         >
-          {loading ? "Actualizando..." : "Actualizar contraseña"}
+          {loading ? "Actualizando..." : "Actualizar contraseÃ±a"}
         </button>
       </form>
     </div>
   );
 }
+

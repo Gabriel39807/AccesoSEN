@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -64,7 +64,7 @@ function fmt(iso?: string | null) {
 
 function equipoStateClasses(state: string) {
   const base = "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold";
-  if (state === "aprobado") return `${base} border-emerald-200 bg-emerald-50 text-emerald-800`;
+  if (state === "aprobado") return `${base} border-sky-200 bg-sky-50 text-sky-800`;
   if (state === "rechazado") return `${base} border-red-200 bg-red-50 text-red-700`;
   return `${base} border-amber-200 bg-amber-50 text-amber-800`;
 }
@@ -148,7 +148,7 @@ export default function AprendizInicioPage() {
       <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Resumen de hoy</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Resumen de hoy</p>
             <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900">
               {loadingMe ? "Cargando..." : nombreBonito || "Aprendiz"}
             </h2>
@@ -162,7 +162,7 @@ export default function AprendizInicioPage() {
             <p className="text-xs text-zinc-500">Ultimo registro: {fmt(estado?.ultima_fecha)}</p>
             <button
               onClick={cargar}
-              className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-emerald-300 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+              className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               Actualizar panel
             </button>
@@ -221,7 +221,7 @@ export default function AprendizInicioPage() {
             subtitle="Vista rapida de tus equipos mas recientes"
             className="h-full"
             action={
-              <Link href="/aprendiz/equipos" className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-800">
+              <Link href="/aprendiz/equipos" className="text-sm font-semibold text-sky-700 transition hover:text-sky-800">
                 Ver todos
               </Link>
             }
@@ -255,7 +255,7 @@ export default function AprendizInicioPage() {
                   <Link
                     key={eq.id}
                     href={`/aprendiz/equipos/${eq.id}`}
-                    className="group rounded-2xl border border-white/90 bg-white/90 p-4 shadow-[0_8px_18px_rgba(2,6,23,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(2,6,23,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+                    className="group rounded-2xl border border-white/90 bg-white/90 p-4 shadow-[0_8px_18px_rgba(2,6,23,0.04)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(2,6,23,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -285,7 +285,7 @@ export default function AprendizInicioPage() {
             subtitle="Tus ultimos accesos y avisos del sistema"
             className="h-full"
             action={
-              <Link href="/aprendiz/accesos" className="text-sm font-semibold text-emerald-700 transition hover:text-emerald-800">
+              <Link href="/aprendiz/accesos" className="text-sm font-semibold text-sky-700 transition hover:text-sky-800">
                 Ver historial
               </Link>
             }
@@ -323,7 +323,7 @@ export default function AprendizInicioPage() {
                   </div>
                 ))}
 
-              <div className="rounded-2xl border border-cyan-100 bg-gradient-to-r from-cyan-50/90 to-emerald-50/90 p-4 text-sm text-zinc-700">
+              <div className="rounded-2xl border border-cyan-100 bg-gradient-to-r from-cyan-50/90 to-sky-50/90 p-4 text-sm text-zinc-700">
                 <span className="font-semibold">Recordatorio:</span> actualiza tus datos en la seccion Mi perfil.
               </div>
             </div>
@@ -333,3 +333,4 @@ export default function AprendizInicioPage() {
     </div>
   );
 }
+

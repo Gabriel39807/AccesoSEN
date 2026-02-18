@@ -1,4 +1,4 @@
-import Navbar from "@/components/Navbar";
+import AdminShell from "@/components/admin/AdminShell";
 
 /**
  * Layout de Administrador (desktop).
@@ -9,10 +9,5 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <>
-      <Navbar />
-      <div className="mx-auto w-full max-w-6xl">{children}</div>
-    </>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

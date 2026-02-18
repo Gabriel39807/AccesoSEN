@@ -17,6 +17,9 @@ export default function Navbar() {
 
   const isAdmin = pathname.startsWith("/admin");
   const isAprendiz = pathname.startsWith("/aprendiz");
+  const badgeClass = isAprendiz
+    ? "from-sky-700 to-cyan-600"
+    : "from-teal-700 to-emerald-600";
 
   const nombreBonito =
     me?.first_name || me?.last_name
@@ -27,7 +30,7 @@ export default function Navbar() {
     <div className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-4">
-          <span className="rounded-xl bg-gradient-to-r from-teal-700 to-emerald-600 px-3 py-1.5 text-sm font-bold tracking-wide text-white shadow-sm">
+          <span className={`rounded-xl bg-gradient-to-r ${badgeClass} px-3 py-1.5 text-sm font-bold tracking-wide text-white shadow-sm`}>
             SADI
           </span>
 

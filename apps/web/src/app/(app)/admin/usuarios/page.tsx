@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import BadgeChip from "@/components/admin/BadgeChip";
+import FilterBar from "@/components/admin/FilterBar";
+import PageHeader from "@/components/admin/PageHeader";
+import StatCard from "@/components/admin/StatCard";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 
@@ -36,6 +40,10 @@ type ImportValidationError = {
 const ROLES = ["admin", "guarda", "aprendiz"] as const;
 const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
+function cx(...c: Array<string | false | null | undefined>) {
+  return c.filter(Boolean).join(" ");
+}
+
 function useDebounced<T>(value: T, delay = 450) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -56,19 +64,6 @@ function safeErrorMessage(e: any) {
     e?.message ??
     "No se pudo completar la acción."
   );
-}
-
-function badgeBase() {
-  return "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold";
-}
-function badgeRol(rol?: string) {
-  if (rol === "admin") return `${badgeBase()} bg-purple-100 text-purple-800`;
-  if (rol === "guarda") return `${badgeBase()} bg-blue-100 text-blue-800`;
-  return `${badgeBase()} bg-emerald-100 text-emerald-800`; // aprendiz
-}
-function badgeEstado(estado?: string) {
-  if ((estado ?? "").toLowerCase() === "bloqueado") return `${badgeBase()} bg-red-100 text-red-800`;
-  return `${badgeBase()} bg-emerald-100 text-emerald-800`; // activo
 }
 
 function StatSkeleton() {
@@ -522,276 +517,239 @@ export default function AdminUsuariosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="max-w-6xl mx-auto p-6 space-y-4">
-        {/* Header */}
-        <div className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Admin / Usuarios</h1>
-            <p className="text-sm text-slate-500">Gestión de cuentas, roles y estado del sistema.</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+    <div className="space-y-5">
+      <PageHeader
+        breadcrumb="Admin > Usuarios"
+        title="Usuarios"
+        description="Gestion de cuentas, roles, estado y carga de aprendices."
+        actions={
+          <>
             <button
               onClick={abrirCrear}
-              className="rounded-xl px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
             >
-              ➕ Crear usuario
+              Crear usuario
             </button>
-
             <button
               onClick={abrirImportar}
-              className="rounded-xl px-4 py-2 bg-teal-700 text-white hover:bg-teal-800 shadow-sm transition"
+              className="rounded-xl bg-gradient-to-r from-teal-700 to-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105"
             >
               Cargar aprendices (Excel)
             </button>
-
             <button
               onClick={() => cargar(page)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50 shadow-sm transition"
+              className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
             >
               Recargar
             </button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        {/* STATS (clickeables) */}
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {loading ? (
-            <>
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })}
-                className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
-                title="Ver todos"
-              >
-                <div className="text-2xl">👤</div>
-                <div className="text-sm text-gray-500">Total</div>
-                <div className="text-2xl font-bold text-emerald-900">{stats.total}</div>
-              </button>
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {loading ? (
+          <>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </>
+        ) : (
+          <>
+            <StatCard label="Total" value={stats.total} onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
+            <StatCard label="Activos" value={stats.activos} tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
+            <StatCard label="Bloqueados" value={stats.bloqueados} tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
+            <StatCard label="Admins" value={stats.admins} tone="purple" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })} />
+            <StatCard label="Guardas" value={stats.guardas} tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
+            <StatCard label="Aprendices" value={stats.aprendices} tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
+          </>
+        )}
+      </div>
 
-              <button
-                onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })}
-                className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
-                title="Filtrar activos"
-              >
-                <div className="text-2xl">✅</div>
-                <div className="text-sm text-gray-500">Activos</div>
-                <div className="text-2xl font-bold text-emerald-700">{stats.activos}</div>
-              </button>
-
-              <button
-                onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })}
-                className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
-                title="Filtrar bloqueados"
-              >
-                <div className="text-2xl">⛔</div>
-                <div className="text-sm text-gray-500">Bloqueados</div>
-                <div className="text-2xl font-bold text-red-700">{stats.bloqueados}</div>
-              </button>
-
-              <button
-                onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })}
-                className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
-                title="Filtrar admins"
-              >
-                <div className="text-2xl">🛡️</div>
-                <div className="text-sm text-gray-500">Admins</div>
-                <div className="text-2xl font-bold text-purple-700">{stats.admins}</div>
-              </button>
-
-              <button
-                onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })}
-                className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
-                title="Filtrar guardas"
-              >
-                <div className="text-2xl">👮</div>
-                <div className="text-sm text-gray-500">Guardas</div>
-                <div className="text-2xl font-bold text-blue-700">{stats.guardas}</div>
-              </button>
-
-              <button
-                onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })}
-                className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
-                title="Filtrar aprendices"
-              >
-                <div className="text-2xl">🎓</div>
-                <div className="text-sm text-gray-500">Aprendices</div>
-                <div className="text-2xl font-bold text-emerald-800">{stats.aprendices}</div>
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Controls */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <FilterBar
+        footer={
+          error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
+          ) : null
+        }
+      >
+        <div className="relative w-full md:col-span-4">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">⌕</span>
           <input
-            className="border rounded-xl p-2 w-full sm:w-80 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            className="w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
             placeholder="Buscar: username, email, documento, nombre..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-
-          <select
-            className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            value={rolFilter}
-            onChange={(e) => setRolFilter(e.target.value as any)}
-          >
-            <option value="todos">Rol: Todos</option>
-            <option value="admin">Rol: admin</option>
-            <option value="guarda">Rol: guarda</option>
-            <option value="aprendiz">Rol: aprendiz</option>
-          </select>
-
-          <select
-            className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            value={estadoFilter}
-            onChange={(e) => setEstadoFilter(e.target.value as any)}
-          >
-            <option value="todos">Estado: Todos</option>
-            <option value="activo">Estado: activo</option>
-            <option value="bloqueado">Estado: bloqueado</option>
-          </select>
-
-          <select
-            className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            value={sedeFilter}
-            onChange={(e) => setSedeFilter(e.target.value as any)}
-          >
-            <option value="todos">Sede: Todas</option>
-            {SEDES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-
-          <div className="text-sm text-gray-600 sm:ml-auto font-medium">
-            {totalCount} usuarios
-          </div>
         </div>
 
-        {error && <div className="border border-red-300 bg-red-50 text-red-700 p-3 rounded-2xl">{error}</div>}
+        <select
+          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 md:col-span-2"
+          value={rolFilter}
+          onChange={(e) => setRolFilter(e.target.value as "todos" | "admin" | "guarda" | "aprendiz")}
+        >
+          <option value="todos">Rol: Todos</option>
+          <option value="admin">Rol: admin</option>
+          <option value="guarda">Rol: guarda</option>
+          <option value="aprendiz">Rol: aprendiz</option>
+        </select>
 
-        {/* Table */}
-        {loadingTable ? (
-          <TableSkeleton rows={Math.min(8, pageSize)} />
-        ) : (
-          <>
-            <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-emerald-50 text-emerald-900">
-                  <tr className="text-left">
-                    <th className="p-3">ID</th>
-                    <th className="p-3">Usuario</th>
-                    <th className="p-3">Nombre</th>
-                    <th className="p-3">Rol</th>
-                    <th className="p-3">Estado</th>
-                    <th className="p-3">Documento</th>
-                    <th className="p-3">Sede</th>
-                    <th className="p-3">Programa</th>
-                    <th className="p-3">Acciones</th>
-                  </tr>
-                </thead>
+        <select
+          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 md:col-span-2"
+          value={estadoFilter}
+          onChange={(e) => setEstadoFilter(e.target.value as "todos" | "activo" | "bloqueado")}
+        >
+          <option value="todos">Estado: Todos</option>
+          <option value="activo">Estado: activo</option>
+          <option value="bloqueado">Estado: bloqueado</option>
+        </select>
 
-                <tbody className="divide-y">
-                  {pageItems.map((u) => (
-                    <tr key={u.id} className="hover:bg-emerald-50/40 transition">
-                      <td className="p-3">{u.id}</td>
+        <select
+          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 md:col-span-2"
+          value={sedeFilter}
+          onChange={(e) => setSedeFilter(e.target.value as "todos" | (typeof SEDES)[number])}
+        >
+          <option value="todos">Sede: Todas</option>
+          {SEDES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
 
-                      <td className="p-3">
-                        <div className="font-semibold text-emerald-900">{u.username}</div>
-                        {u.email && <div className="text-gray-500">{u.email}</div>}
-                      </td>
+        <button
+          onClick={() => {
+            setQ("");
+            setRolFilter("todos");
+            setEstadoFilter("todos");
+            setSedeFilter("todos");
+            setPage(1);
+          }}
+          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 md:col-span-1"
+        >
+          Limpiar
+        </button>
 
-                      <td className="p-3">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</td>
+        <div className="flex items-center justify-end rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-600 md:col-span-1">
+          {totalCount} usuarios
+        </div>
+      </FilterBar>
 
-                      <td className="p-3">
-                        <div className="flex flex-col gap-2">
-                          <span className={badgeRol(u.rol)}>{u.rol ?? "-"}</span>
-                          <select
-                            className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                            value={u.rol ?? "aprendiz"}
-                            onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
-                            title="Cambiar rol (rápido)"
-                          >
-                            {ROLES.map((r) => (
-                              <option key={r} value={r}>
-                                {r}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </td>
+      {loadingTable ? (
+        <TableSkeleton rows={Math.min(8, pageSize)} />
+      ) : (
+        <>
+          <section className="overflow-auto rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-emerald-50 text-emerald-900">
+                <tr className="text-left">
+                  <th className="p-3">ID</th>
+                  <th className="p-3">Usuario</th>
+                  <th className="p-3">Nombre</th>
+                  <th className="p-3">Rol</th>
+                  <th className="p-3">Estado</th>
+                  <th className="p-3">Documento</th>
+                  <th className="p-3">Sede</th>
+                  <th className="p-3">Programa</th>
+                  <th className="p-3">Acciones</th>
+                </tr>
+              </thead>
 
-                      <td className="p-3">
-                        <div className="flex flex-col gap-2">
-                          <span className={badgeEstado(u.estado)}>{u.estado ?? "-"}</span>
-                          <select
-                            className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                            value={(u.estado ?? "activo").toLowerCase()}
-                            onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
-                            title="Cambiar estado (rápido)"
-                          >
-                            <option value="activo">activo</option>
-                            <option value="bloqueado">bloqueado</option>
-                          </select>
-                        </div>
-                      </td>
+              <tbody className="divide-y divide-zinc-100">
+                {pageItems.map((u, idx) => (
+                  <tr key={u.id} className={cx("transition hover:bg-emerald-50/35", idx % 2 === 1 && "bg-zinc-50/35")}>
+                    <td className="p-3">{u.id}</td>
 
-                      <td className="p-3">{u.documento ?? "-"}</td>
-                      <td className="p-3">{u.sede_principal ?? "-"}</td>
-                      <td className="p-3">{u.programa_formacion ?? "-"}</td>
+                    <td className="p-3">
+                      <div className="font-semibold text-emerald-900">{u.username}</div>
+                      {u.email ? <div className="text-zinc-500">{u.email}</div> : null}
+                    </td>
 
-                      <td className="p-3">
-                        <button
-                          onClick={() => abrirEditar(u)}
-                          className="rounded-xl px-3 py-2 bg-white border hover:bg-emerald-50 shadow-sm transition"
+                    <td className="p-3">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</td>
+
+                    <td className="p-3">
+                      <div className="flex flex-col gap-2">
+                        <BadgeChip tone={u.rol === "admin" ? "purple" : u.rol === "guarda" ? "info" : "success"}>{u.rol ?? "-"}</BadgeChip>
+                        <select
+                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                          value={u.rol ?? "aprendiz"}
+                          onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
+                          title="Cambiar rol (rapido)"
                         >
-                          Editar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          {ROLES.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </td>
 
-                  {pageItems.length === 0 && (
-                    <tr>
-                      <td className="p-4 text-gray-500" colSpan={9}>
-                        No hay usuarios para mostrar.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    <td className="p-3">
+                      <div className="flex flex-col gap-2">
+                        <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
+                        <select
+                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                          value={(u.estado ?? "activo").toLowerCase()}
+                          onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
+                          title="Cambiar estado (rapido)"
+                        >
+                          <option value="activo">activo</option>
+                          <option value="bloqueado">bloqueado</option>
+                        </select>
+                      </div>
+                    </td>
 
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              totalCount={totalCount}
-              pageSize={pageSize}
-              onPrev={() => setPage((p) => Math.max(1, p - 1))}
-              onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-            />
-          </>
-        )}
+                    <td className="p-3">{u.documento ?? "-"}</td>
+                    <td className="p-3">{u.sede_principal ?? "-"}</td>
+                    <td className="p-3">{u.programa_formacion ?? "-"}</td>
 
-        {/* MODAL EDITAR */}
-        {selected && (
-          <Modal
-            open={open}
-            title={`Editar usuario #${selected.id} - ${selected.username}`}
-            onClose={() => setOpen(false)}
-            maxWidthClassName="max-w-lg"
-          >
+                    <td className="p-3">
+                      <button
+                        onClick={() => abrirEditar(u)}
+                        className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                      >
+                        Editar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {pageItems.length === 0 ? (
+                  <tr>
+                    <td className="p-10 text-center" colSpan={9}>
+                      <div className="mx-auto max-w-md rounded-2xl border border-emerald-100 bg-gradient-to-b from-emerald-50/70 to-cyan-50/50 p-6 text-zinc-700">
+                        <p className="text-base font-semibold text-zinc-900">No hay usuarios para mostrar</p>
+                        <p className="mt-1 text-sm text-zinc-600">Prueba limpiando o ajustando los filtros activos.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </section>
+
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            onPrev={() => setPage((p) => Math.max(1, p - 1))}
+            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          />
+        </>
+      )}
+
+      {/* MODAL EDITAR */}
+      {selected && (
+        <Modal
+          open={open}
+          title={`Editar usuario #${selected.id} - ${selected.username}`}
+          onClose={() => setOpen(false)}
+          maxWidthClassName="max-w-lg"
+        >
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Rol</div>
@@ -1113,7 +1071,6 @@ export default function AdminUsuariosPage() {
             )}
           </div>
         </Modal>
-      </div>
     </div>
   );
 }
