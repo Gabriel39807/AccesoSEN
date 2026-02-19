@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { clearTokens, saveTokens } from "@/lib/auth";
 import { toErrorMessage } from "@/lib/errors";
+import { sanitizeDigits, validateDocument6to10 } from "@/lib/validators";
 import { AuthButton, AuthCard, AuthInput, AuthLayout, RoleSwitch, type AuthRole } from "@/components/auth";
 import styles from "@/components/auth/auth.module.css";
 
@@ -86,7 +87,7 @@ export default function LoginPage() {
               "Valida tu identidad para consultar tus accesos y mantener la credencial activa en el sistema.",
             field: "Documento de identidad",
             placeholder: "Ingresa tu documento",
-            hint: "Solo numeros (maximo 10 digitos).",
+            hint: "Solo numeros (entre 6 y 10 digitos).",
             badge: "Acceso aprendiz",
           },
     [role]
@@ -94,7 +95,7 @@ export default function LoginPage() {
 
   function onUsernameChange(raw: string) {
     if (role === "aprendiz") {
-      setUsername(raw.replace(/\D/g, "").slice(0, 10));
+      setUsername(sanitizeDigits(raw).slice(0, 10));
       return;
     }
     setUsername(raw);
@@ -108,7 +109,10 @@ export default function LoginPage() {
     const user = username.trim();
     if (!user) return `Ingresa ${role === "admin" ? "tu usuario o correo" : "tu documento"}.`;
     if (role === "admin" && user.length > 150) return "El usuario/correo supera el maximo permitido (150).";
-    if (role === "aprendiz" && !/^\d{1,10}$/.test(user)) return "El documento debe contener solo numeros (maximo 10 digitos).";
+    if (role === "aprendiz") {
+      const docError = validateDocument6to10(user);
+      if (docError) return docError;
+    }
     if (!password) return "Ingresa tu contrasena.";
     if (password.length > 20) return "La contrasena debe tener maximo 20 caracteres.";
     if (bloqueado) return `Cuenta bloqueada temporalmente. Intenta en ${lockRemainingSec}s.`;
@@ -289,6 +293,8 @@ export default function LoginPage() {
             onChange={(e) => onUsernameChange(e.target.value)}
             autoComplete={role === "admin" ? "username" : "off"}
             inputMode={role === "admin" ? "text" : "numeric"}
+            type="text"
+            pattern={role === "admin" ? undefined : "[0-9]*"}
             maxLength={role === "admin" ? 150 : 10}
             error={null}
             hint={roleCopy.hint}

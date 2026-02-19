@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSessionStore } from "../../src/store/session";
 import { toUiErrorMessage } from "../../src/api/client";
 import type { Jornada, Sede } from "../../src/api/turnos";
+import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 export default function LoginScreen() {
@@ -27,7 +28,7 @@ export default function LoginScreen() {
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
 
   function onUsernameChange(value: string) {
-    setUsername(value.replace(/\D/g, "").slice(0, 10));
+    setUsername(sanitizeDigits(value).slice(0, 10));
   }
 
   function onPasswordChange(value: string) {
@@ -47,8 +48,9 @@ export default function LoginScreen() {
   async function onSubmit() {
     setError(null);
     if (bloqueado) return;
-    if (!/^\d{1,10}$/.test(username.trim())) {
-      setError("El documento debe ser numerico y maximo de 10 digitos.");
+    const documentError = validateDocument6to10(username.trim());
+    if (documentError) {
+      setError(documentError);
       return;
     }
     if (!password || password.length > 20) {
@@ -100,6 +102,8 @@ export default function LoginScreen() {
             onChangeText={onUsernameChange}
             autoCapitalize="none"
             placeholder="1053444048"
+            keyboardType="number-pad"
+            maxLength={10}
           />
 
           <InputField

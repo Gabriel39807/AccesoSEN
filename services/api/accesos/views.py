@@ -298,9 +298,9 @@ def _build_aprendiz_qr_value(user: Usuario) -> str:
 
 
 def _normalize_numeric_documento(documento: str) -> str:
-    normalized = re.sub(r"[^\d]", "", str(documento or "").strip())
-    if not normalized or len(normalized) > 10:
-        raise ValidationError({"documento": "El documento debe ser numerico y maximo de 10 digitos."})
+    normalized = str(documento or "").strip()
+    if not re.fullmatch(r"\d{6,10}", normalized):
+        raise ValidationError({"documento": "El documento debe tener entre 6 y 10 digitos."})
     return normalized
 
 

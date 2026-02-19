@@ -20,14 +20,44 @@ def password_policy_errors(password: str) -> list[str]:
     return errors
 
 
+PHONE_10_RE = re.compile(r"^\d{10}$")
+DOCUMENT_6_TO_10_RE = re.compile(r"^\d{6,10}$")
+
+
+def validatePhone10(value, *, required: bool = False) -> str:
+    raw = "" if value is None else str(value)
+    clean = raw.strip()
+    if not clean:
+        if required:
+            raise serializers.ValidationError("El telefono debe tener exactamente 10 digitos.")
+        return ""
+    if not PHONE_10_RE.fullmatch(clean):
+        raise serializers.ValidationError("El telefono debe tener exactamente 10 digitos.")
+    return clean
+
+
+def validateDocument6to10(value, *, required: bool = False) -> str:
+    raw = "" if value is None else str(value)
+    clean = raw.strip()
+    if not clean:
+        if required:
+            raise serializers.ValidationError("El documento debe tener entre 6 y 10 digitos.")
+        return ""
+    if not DOCUMENT_6_TO_10_RE.fullmatch(clean):
+        raise serializers.ValidationError("El documento debe tener entre 6 y 10 digitos.")
+    return clean
+
+
 def normalize_phone(value: str) -> str:
-    digits = "".join(ch for ch in (value or "") if ch.isdigit())
-    return digits[:20]
+    return validatePhone10(value, required=False)
 
 
 def is_numeric_document(value: str) -> bool:
-    value = (value or "").strip()
-    return bool(value) and value.isdigit() and len(value) <= 10
+    try:
+        validateDocument6to10(value, required=True)
+    except serializers.ValidationError:
+        return False
+    return True
 
 
 def is_signed_scan_token(value: str) -> bool:
@@ -81,18 +111,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
         return value
 
     def validate_documento(self, value):
-        value = (value or "").strip()
-        if value and not is_numeric_document(value):
-            raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
-        return value
+        return validateDocument6to10(value, required=False)
 
     def validate_telefono(self, value):
-        if value in [None, ""]:
-            return value
-        normalized = normalize_phone(value)
-        if len(normalized) < 7:
-            raise serializers.ValidationError("El telefono no es valido.")
-        return normalized
+        return validatePhone10(value, required=False)
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
@@ -151,10 +173,10 @@ class AprendizPerfilSerializer(serializers.ModelSerializer):
 
 
 class AprendizPerfilUpdateSerializer(serializers.Serializer):
-    telefono = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    telefono = serializers.CharField(required=True, allow_blank=False, max_length=10)
 
     def validate_telefono(self, value):
-        return normalize_phone(value)
+        return validatePhone10(value, required=True)
 
     def validate(self, attrs):
         if "telefono" not in attrs:
@@ -288,7 +310,7 @@ class ValidarDocumentoSerializer(serializers.Serializer):
     def validate_documento(self, value):
         value = (value or "").strip()
         if value and not is_numeric_document(value) and not is_signed_scan_token(value):
-            raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
+            raise serializers.ValidationError("El documento debe tener entre 6 y 10 digitos.")
         return value
 
 
@@ -300,7 +322,7 @@ class RegistrarAccesoDocumentoSerializer(serializers.Serializer):
     def validate_documento(self, value):
         value = (value or "").strip()
         if value and not is_numeric_document(value) and not is_signed_scan_token(value):
-            raise serializers.ValidationError("El documento debe ser numerico y maximo de 10 digitos.")
+            raise serializers.ValidationError("El documento debe tener entre 6 y 10 digitos.")
         return value
 
 

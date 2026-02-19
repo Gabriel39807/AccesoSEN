@@ -5,6 +5,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { GuardStackParamList } from "../../navigation/GuardStack";
 import * as Accesos from "../../api/accesos";
 import { toUiErrorMessage } from "../../api/client";
+import { sanitizeDigits, validateDocument6to10 } from "../../lib/validators";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ScanQr">;
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
@@ -25,6 +26,11 @@ export function ScanQrScreen({ navigation }: Props) {
     const doc = documento.trim();
     if (!doc) {
       setMsg("Ingresa o escanea un documento.");
+      return;
+    }
+    const documentError = validateDocument6to10(doc);
+    if (documentError) {
+      setMsg(documentError);
       return;
     }
 
@@ -104,9 +110,10 @@ export function ScanQrScreen({ navigation }: Props) {
 
       <TextInput
         value={documento}
-        onChangeText={(v) => setDocumento(v.replace(/[^\d]/g, "").slice(0, 10))}
+        onChangeText={(v) => setDocumento(sanitizeDigits(v).slice(0, 10))}
         placeholder="Documento (ej: 1053444048)"
         keyboardType="numeric"
+        maxLength={10}
         style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 14, padding: 12, backgroundColor: "#fff" }}
       />
 

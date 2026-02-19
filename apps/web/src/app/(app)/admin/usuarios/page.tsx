@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { formatFieldLabel, normalizeApiErrors, toErrorMessage } from "@/lib/errors";
+import { sanitizeDigits, validateDocument6to10 } from "@/lib/validators";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { useMe } from "@/hooks/useMe";
@@ -335,7 +336,7 @@ export default function AdminUsuariosPage() {
     const firstName = c_first.trim();
     const lastName = c_last.trim();
     const email = c_email.trim().toLowerCase();
-    const documento = c_documento.trim().replace(/\D/g, "").slice(0, 10);
+    const documento = sanitizeDigits(c_documento).slice(0, 10);
     const role = c_rol.trim();
     const state = c_estado.trim();
     const sede = (isScopedAdmin ? actorSede || c_sede : c_sede).trim();
@@ -366,8 +367,9 @@ export default function AdminUsuariosPage() {
 
     if (!documento) {
       addFieldError(fieldErrors, "documento", "El campo documento es obligatorio.");
-    } else if (!/^\d{1,10}$/.test(documento)) {
-      addFieldError(fieldErrors, "documento", "El documento debe ser numerico y maximo de 10 digitos.");
+    } else {
+      const docError = validateDocument6to10(documento);
+      if (docError) addFieldError(fieldErrors, "documento", docError);
     }
 
     if (!role) {
@@ -566,13 +568,22 @@ export default function AdminUsuariosPage() {
     setSaving(true);
 
     try {
+      const sanitizedDocumento = sanitizeDigits(documento).slice(0, 10);
+      if (sanitizedDocumento) {
+        const docError = validateDocument6to10(sanitizedDocumento);
+        if (docError) {
+          showNotice("error", docError);
+          return;
+        }
+      }
+
       const payload: Partial<Usuario> = {
         rol,
         estado,
         email: email.trim() ? email.trim() : undefined,
         sede_principal: sede ? sede : null,
         programa_formacion: programa.trim() ? programa.trim() : undefined,
-        documento: documento.trim() ? documento.trim().replace(/\D/g, "").slice(0, 10) : undefined,
+        documento: sanitizedDocumento || undefined,
       };
 
       await api.patch(`/api/usuarios/${selected.id}/`, payload);
@@ -668,7 +679,7 @@ export default function AdminUsuariosPage() {
         first_name: c_first.trim() || "",
         last_name: c_last.trim() || "",
         email: c_email.trim().toLowerCase() || "",
-        documento: c_documento.trim().replace(/\D/g, "").slice(0, 10) || "",
+        documento: sanitizeDigits(c_documento).slice(0, 10) || "",
         rol: c_rol,
         estado: c_estado,
         sede_principal: isScopedAdmin ? actorSede || null : c_sede ? c_sede : null,
@@ -1118,9 +1129,11 @@ export default function AdminUsuariosPage() {
                   <input
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={documento}
-                    onChange={(e) => setDocumento(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    onChange={(e) => setDocumento(sanitizeDigits(e.target.value).slice(0, 10))}
                     placeholder="QR / documento"
+                    type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={10}
                   />
                 </label>
@@ -1332,11 +1345,13 @@ export default function AdminUsuariosPage() {
                     }`}
                     value={c_documento}
                     onChange={(e) => {
-                      setCDocumento(e.target.value.replace(/\D/g, "").slice(0, 10));
+                      setCDocumento(sanitizeDigits(e.target.value).slice(0, 10));
                       clearCreateErrorsOnChange("documento");
                     }}
                     placeholder="1012345678"
+                    type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
                     maxLength={10}
                     aria-invalid={createFieldErrors.documento?.length ? "true" : "false"}
                     aria-describedby={createFieldErrors.documento?.length ? "create-documento-error" : undefined}

@@ -5,6 +5,7 @@ import { Picker } from "@react-native-picker/picker";
 import { useSessionStore } from "../../store/session";
 import { toUiErrorMessage } from "../../api/client";
 import { Jornada, Sede } from "../../api/turnos";
+import { sanitizeDigits, validateDocument6to10 } from "../../lib/validators";
 
 export function GuardLoginScreen() {
   const signInGuarda = useSessionStore((s) => s.signInGuarda);
@@ -19,7 +20,7 @@ export function GuardLoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   function onUsernameChange(value: string) {
-    setUsername(value.replace(/\D/g, "").slice(0, 10));
+    setUsername(sanitizeDigits(value).slice(0, 10));
   }
 
   function onPasswordChange(value: string) {
@@ -28,8 +29,9 @@ export function GuardLoginScreen() {
 
   async function onSubmit() {
     setError(null);
-    if (!/^\d{1,10}$/.test(username.trim())) {
-      setError("El documento debe ser numerico y maximo de 10 digitos.");
+    const documentError = validateDocument6to10(username.trim());
+    if (documentError) {
+      setError(documentError);
       return;
     }
     if (!password || password.length > 20) {
@@ -60,6 +62,7 @@ export function GuardLoginScreen() {
           placeholder="1053444048"
           autoCapitalize="none"
           keyboardType="number-pad"
+          maxLength={10}
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 

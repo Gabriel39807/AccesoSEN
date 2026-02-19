@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import * as Auth from "../../src/api/auth";
 import { toUiErrorMessage } from "../../src/api/client";
+import { sanitizeDigits, validatePhone10 } from "../../src/lib/validators";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type PasswordRule = {
@@ -57,9 +58,14 @@ export default function AprendizPerfil() {
 
   async function guardarTelefono() {
     setMsg(null);
+    const phoneError = validatePhone10(telefono.trim());
+    if (phoneError) {
+      setMsg(phoneError);
+      return;
+    }
     setSaving(true);
     try {
-      const r = await Auth.updateAprendizPerfil({ telefono });
+      const r = await Auth.updateAprendizPerfil({ telefono: sanitizeDigits(telefono).slice(0, 10) });
       setPerfil(r.perfil);
       setTelefono(r.perfil.telefono || "");
       setMsg(r.mensaje || "Perfil actualizado.");
@@ -145,9 +151,10 @@ export default function AprendizPerfil() {
           <InputField
             label="Telefono"
             value={telefono}
-            onChangeText={(v) => setTelefono(v.replace(/[^\d]/g, "").slice(0, 20))}
+            onChangeText={(v) => setTelefono(sanitizeDigits(v).slice(0, 10))}
             placeholder="3001234567"
             keyboardType="phone-pad"
+            maxLength={10}
           />
           <ModernButton label={saving ? "Guardando..." : "Guardar telefono"} disabled={saving} onPress={guardarTelefono} />
 

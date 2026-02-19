@@ -5,6 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
+import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
@@ -25,6 +26,11 @@ export default function ScanScreen() {
     const clean = doc.trim();
     if (!clean) {
       setMsg("Ingresa o escanea un documento.");
+      return;
+    }
+    const documentError = validateDocument6to10(clean);
+    if (documentError) {
+      setMsg(documentError);
       return;
     }
 
@@ -122,9 +128,10 @@ export default function ScanScreen() {
         <InputField
           label="Documento"
           value={documento}
-          onChangeText={(v) => setDocumento(v.replace(/[^\d]/g, "").slice(0, 10))}
+          onChangeText={(v) => setDocumento(sanitizeDigits(v).slice(0, 10))}
           placeholder="1053444048"
           keyboardType="numeric"
+          maxLength={10}
         />
 
         {msg ? (

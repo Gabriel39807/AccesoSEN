@@ -110,7 +110,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         ip = get_client_ip(request) if request else "unknown"
 
         if expected_role in {"guarda", "aprendiz"} and (
-            not login_identifier.isdigit() or len(login_identifier) > 10
+            not login_identifier.isdigit() or len(login_identifier) < 6 or len(login_identifier) > 10
         ):
             raise AuthenticationFailed(
                 {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."}

@@ -17,6 +17,9 @@ EXPECTED_COLUMNS = [
     "Sede",
 ]
 
+PHONE_10_RE = re.compile(r"^\d{10}$")
+DOCUMENT_6_TO_10_RE = re.compile(r"^\d{6,10}$")
+
 VALID_JORNADAS = {"MAÑANA", "TARDE", "NOCHE"}
 VALID_SEDES = {"CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"}
 
@@ -39,7 +42,7 @@ def _is_institutional_email(email: str) -> bool:
 
 
 def _normalize_phone(phone: str) -> str:
-    return re.sub(r"\D", "", phone)[:20]
+    return str(phone or "").strip()
 
 
 def validate_excel(content) -> ImportValidationResult:
@@ -72,13 +75,13 @@ def validate_excel(content) -> ImportValidationResult:
             errors.append({"row": idx, "code": "MISSING_REQUIRED", "message": "Hay campos obligatorios vacíos.", "fields": missing})
             continue
 
-        doc = data["Documento"]
-        if not doc.isdigit() or len(doc) > 10:
+        doc = str(data["Documento"] or "").strip()
+        if not DOCUMENT_6_TO_10_RE.fullmatch(doc):
             errors.append(
                 {
                     "row": idx,
                     "code": "INVALID_DOCUMENTO",
-                    "message": "El documento debe contener solo numeros (maximo 10 digitos).",
+                    "message": "El documento debe tener entre 6 y 10 digitos.",
                     "field": "Documento",
                 }
             )
@@ -90,12 +93,12 @@ def validate_excel(content) -> ImportValidationResult:
         seen_docs.add(doc)
 
         phone = _normalize_phone(data["Telefono"])
-        if len(phone) < 7:
+        if not PHONE_10_RE.fullmatch(phone):
             errors.append(
                 {
                     "row": idx,
                     "code": "INVALID_TELEFONO",
-                    "message": "El telefono debe contener solo numeros y al menos 7 digitos.",
+                    "message": "El telefono debe tener exactamente 10 digitos.",
                     "field": "Telefono",
                 }
             )

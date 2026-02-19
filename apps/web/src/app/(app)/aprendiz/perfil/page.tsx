@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMe } from "@/hooks/useMe";
 import { api } from "@/lib/api";
 import { toErrorMessage } from "@/lib/errors";
+import { sanitizeDigits, validatePhone10 } from "@/lib/validators";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -36,17 +37,39 @@ function DataCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+type AprendizPerfilDto = {
+  id: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  documento?: string | null;
+  estado?: string;
+  sede_principal?: string | null;
+  programa_formacion?: string | null;
+  telefono?: string | null;
+  pending_email_change?: string | null;
+};
+
 export default function AprendizPerfilPage() {
   const { me, loadingMe } = useMe();
 
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [loadingPerfil, setLoadingPerfil] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [sendingEmailOtp, setSendingEmailOtp] = useState(false);
+  const [confirmingEmailOtp, setConfirmingEmailOtp] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTipo, setMsgTipo] = useState<"ok" | "err" | null>(null);
 
+  const [perfil, setPerfil] = useState<AprendizPerfilDto | null>(null);
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [email, setEmail] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [sede, setSede] = useState("");
   const [programa, setPrograma] = useState("");
 
@@ -56,34 +79,54 @@ export default function AprendizPerfilPage() {
   const passwordRules = buildPasswordRules(pw, pw2);
   const passwordRulesValid = passwordRules.every((rule) => rule.valid);
 
+  async function cargarPerfil() {
+    setLoadingPerfil(true);
+    try {
+      const res = await api.get("/api/aprendiz/perfil/");
+      const data = (res.data?.perfil ?? null) as AprendizPerfilDto | null;
+      setPerfil(data);
+      setFirst(data?.first_name ?? "");
+      setLast(data?.last_name ?? "");
+      setEmail(data?.email ?? "");
+      setNewEmail(data?.pending_email_change ?? data?.email ?? "");
+      setTelefono(data?.telefono ?? "");
+      setSede(data?.sede_principal ?? "");
+      setPrograma(data?.programa_formacion ?? "");
+    } catch (e: unknown) {
+      setMsg(toErrorMessage(e, "No se pudo cargar tu perfil."));
+      setMsgTipo("err");
+    } finally {
+      setLoadingPerfil(false);
+    }
+  }
+
   useEffect(() => {
     if (!me) return;
-    setFirst(me.first_name ?? "");
-    setLast(me.last_name ?? "");
-    setEmail(me.email ?? "");
-    setSede(me.sede_principal ?? "");
-    setPrograma(me.programa_formacion ?? "");
-  }, [me]);
+    cargarPerfil();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.id]);
 
   const nombreBonito = useMemo(() => {
-    if (!me) return "-";
-    const n = `${me.first_name ?? ""} ${me.last_name ?? ""}`.trim();
-    return n || me.username;
-  }, [me]);
+    const n = `${perfil?.first_name ?? me?.first_name ?? ""} ${perfil?.last_name ?? me?.last_name ?? ""}`.trim();
+    return n || perfil?.username || me?.username || "-";
+  }, [me, perfil]);
 
   async function guardarPerfil() {
-    if (!me) return;
+    if (!perfil) return;
     setMsg(null);
     setMsgTipo(null);
-    setSaving(true);
+    const phoneError = validatePhone10((telefono || "").trim());
+    if (phoneError) {
+      setMsg(phoneError);
+      setMsgTipo("err");
+      return;
+    }
+    setSavingProfile(true);
     try {
-      await api.patch(`/api/usuarios/${me.id}/`, {
-        first_name: first.trim(),
-        last_name: last.trim(),
-        email: email.trim(),
-        sede_principal: sede ? sede : null,
-        programa_formacion: programa ? programa : null,
+      await api.patch("/api/aprendiz/perfil/", {
+        telefono: sanitizeDigits(telefono).slice(0, 10),
       });
+      await cargarPerfil();
       setMsg("Perfil actualizado.");
       setMsgTipo("ok");
       setEditing(false);
@@ -91,7 +134,79 @@ export default function AprendizPerfilPage() {
       setMsg(toErrorMessage(e, "No se pudo actualizar tu perfil."));
       setMsgTipo("err");
     } finally {
-      setSaving(false);
+      setSavingProfile(false);
+    }
+  }
+
+  async function solicitarPinNuevoCorreo() {
+    const cleanEmail = newEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setMsg("Debes escribir el nuevo correo.");
+      setMsgTipo("err");
+      return;
+    }
+    if (cleanEmail === (email || "").trim().toLowerCase()) {
+      setMsg("El nuevo correo debe ser diferente al correo actual.");
+      setMsgTipo("err");
+      return;
+    }
+
+    setMsg(null);
+    setMsgTipo(null);
+    setSendingEmailOtp(true);
+    try {
+      await api.post("/api/aprendiz/perfil/email-change/request/", {
+        new_email: cleanEmail,
+      });
+      setMsg("Enviamos un PIN al nuevo correo. Verificalo para aplicar el cambio.");
+      setMsgTipo("ok");
+      setEmailOtp("");
+      await cargarPerfil();
+    } catch (e: unknown) {
+      setMsg(toErrorMessage(e, "No se pudo enviar el PIN al nuevo correo."));
+      setMsgTipo("err");
+    } finally {
+      setSendingEmailOtp(false);
+    }
+  }
+
+  async function confirmarPinNuevoCorreo() {
+    const cleanEmail = newEmail.trim().toLowerCase();
+    const cleanOtp = emailOtp.trim();
+    if (!cleanEmail) {
+      setMsg("Debes escribir el nuevo correo.");
+      setMsgTipo("err");
+      return;
+    }
+    if (!cleanOtp || cleanOtp.length !== 5) {
+      setMsg("Debes escribir un PIN valido de 5 digitos.");
+      setMsgTipo("err");
+      return;
+    }
+
+    setMsg(null);
+    setMsgTipo(null);
+    setConfirmingEmailOtp(true);
+    try {
+      const res = await api.post("/api/aprendiz/perfil/email-change/confirm/", {
+        new_email: cleanEmail,
+        otp: cleanOtp,
+      });
+      const perfilResp = res.data?.perfil as AprendizPerfilDto | undefined;
+      if (perfilResp) {
+        setPerfil(perfilResp);
+      }
+      setEmail(cleanEmail);
+      setNewEmail(cleanEmail);
+      setEmailOtp("");
+      setMsg("Correo verificado y actualizado correctamente.");
+      setMsgTipo("ok");
+      await cargarPerfil();
+    } catch (e: unknown) {
+      setMsg(toErrorMessage(e, "No se pudo verificar el PIN del correo."));
+      setMsgTipo("err");
+    } finally {
+      setConfirmingEmailOtp(false);
     }
   }
 
@@ -106,7 +221,7 @@ export default function AprendizPerfilPage() {
       return;
     }
 
-    setSaving(true);
+    setSavingPassword(true);
     try {
       await api.patch(`/api/usuarios/${me.id}/`, {
         password: pw,
@@ -120,7 +235,7 @@ export default function AprendizPerfilPage() {
       setMsg(toErrorMessage(e, "No se pudo actualizar la contrasena."));
       setMsgTipo("err");
     } finally {
-      setSaving(false);
+      setSavingPassword(false);
     }
   }
 
@@ -139,7 +254,17 @@ export default function AprendizPerfilPage() {
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                setFirst(perfil?.first_name ?? "");
+                setLast(perfil?.last_name ?? "");
+                setEmail(perfil?.email ?? "");
+                setNewEmail(perfil?.pending_email_change ?? perfil?.email ?? "");
+                setTelefono(perfil?.telefono ?? "");
+                setSede(perfil?.sede_principal ?? "");
+                setPrograma(perfil?.programa_formacion ?? "");
+                setEmailOtp("");
+                setEditing(true);
+              }}
               className="rounded-full border border-zinc-200 bg-white px-5 py-2 text-sm font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               Editar perfil
@@ -160,7 +285,7 @@ export default function AprendizPerfilPage() {
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Aprendiz</div>
               <div className="mt-1 text-2xl font-extrabold tracking-tight text-zinc-900">
-                {loadingMe ? "Cargando..." : nombreBonito}
+                {loadingMe || loadingPerfil ? "Cargando..." : nombreBonito}
               </div>
             </div>
             <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
@@ -169,10 +294,11 @@ export default function AprendizPerfilPage() {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <DataCard label="Documento" value={me?.documento ?? "-"} />
-            <DataCard label="Correo" value={me?.email ?? "-"} />
-            <DataCard label="Centro de formacion" value={me?.sede_principal ?? "-"} />
-            <DataCard label="Programa" value={me?.programa_formacion ?? "-"} />
+            <DataCard label="Documento" value={perfil?.documento ?? me?.documento ?? "-"} />
+            <DataCard label="Correo" value={perfil?.email ?? me?.email ?? "-"} />
+            <DataCard label="Telefono" value={perfil?.telefono ?? "-"} />
+            <DataCard label="Centro de formacion" value={perfil?.sede_principal ?? me?.sede_principal ?? "-"} />
+            <DataCard label="Programa" value={perfil?.programa_formacion ?? me?.programa_formacion ?? "-"} />
           </div>
 
           {msg ? (
@@ -193,7 +319,7 @@ export default function AprendizPerfilPage() {
           <div className="mt-4 space-y-3">
             <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Estado de la cuenta</p>
-              <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{me?.estado ?? "-"}</p>
+              <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{perfil?.estado ?? me?.estado ?? "-"}</p>
             </div>
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4 text-sm text-zinc-700">
               Usa una contraseÃ±a fuerte (minimo 8 caracteres), unica y evita compartirla.
@@ -220,39 +346,98 @@ export default function AprendizPerfilPage() {
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Nombre</label>
-                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={first} onChange={(e) => setFirst(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-700">Apellido</label>
-                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={last} onChange={(e) => setLast(e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs font-semibold text-zinc-700">Correo</label>
-                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-zinc-700">Centro</label>
+                <label className="text-xs font-semibold text-zinc-700">Correo actual</label>
                 <input
-                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
-                  value={sede}
-                  onChange={(e) => setSede(e.target.value)}
-                  placeholder="Ej: CEGAFE"
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500"
+                  value={email}
+                  disabled
                 />
               </div>
               <div>
+                <label className="text-xs font-semibold text-zinc-700">Telefono</label>
+                <input
+                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
+                  value={telefono}
+                  onChange={(e) => setTelefono(sanitizeDigits(e.target.value).slice(0, 10))}
+                  placeholder="Ej: 3001234567"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={10}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-semibold text-zinc-700">Nuevo correo (requiere PIN)</label>
+                <input
+                  className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="nuevo.correo@dominio.com"
+                />
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    onClick={solicitarPinNuevoCorreo}
+                    disabled={sendingEmailOtp || confirmingEmailOtp}
+                    className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60"
+                  >
+                    {sendingEmailOtp ? "Enviando PIN..." : "Enviar PIN al nuevo correo"}
+                  </button>
+                  <input
+                    className="w-full rounded-2xl border px-4 py-2 text-sm sm:max-w-[180px]"
+                    value={emailOtp}
+                    onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                    placeholder="PIN (5 digitos)"
+                    inputMode="numeric"
+                    maxLength={5}
+                  />
+                  <button
+                    onClick={confirmarPinNuevoCorreo}
+                    disabled={confirmingEmailOtp || sendingEmailOtp}
+                    className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
+                  >
+                    {confirmingEmailOtp ? "Verificando..." : "Verificar PIN"}
+                  </button>
+                </div>
+                {perfil?.pending_email_change ? (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Hay un correo pendiente de verificacion: <span className="font-semibold">{perfil.pending_email_change}</span>
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Nombre</label>
+                <input className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500" value={first} disabled />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Apellido</label>
+                <input className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500" value={last} disabled />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Documento</label>
+                <input
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500"
+                  value={perfil?.documento ?? ""}
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-zinc-700">Centro</label>
+                <input className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500" value={sede} disabled />
+              </div>
+              <div className="sm:col-span-2">
                 <label className="text-xs font-semibold text-zinc-700">Programa</label>
-                <input className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={programa} onChange={(e) => setPrograma(e.target.value)} />
+                <input className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-500" value={programa} disabled />
               </div>
             </div>
 
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <button
                 onClick={guardarPerfil}
-                disabled={saving}
+                disabled={savingProfile || sendingEmailOtp || confirmingEmailOtp}
                 className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
               >
-                {saving ? "Guardando..." : "Guardar cambios"}
+                {savingProfile ? "Guardando..." : "Guardar cambios"}
               </button>
               <button
                 onClick={() => setEditing(false)}
@@ -305,10 +490,10 @@ export default function AprendizPerfilPage() {
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <button
                 onClick={cambiarContrasena}
-                disabled={saving || !passwordRulesValid}
+                disabled={savingPassword || !passwordRulesValid}
                 className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
               >
-                {saving ? "Guardando..." : "Actualizar contraseÃ±a"}
+                {savingPassword ? "Guardando..." : "Actualizar contraseÃ±a"}
               </button>
               <button
                 onClick={() => setPwOpen(false)}

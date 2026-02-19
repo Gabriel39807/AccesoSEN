@@ -96,6 +96,22 @@ class LoginAndLockTests(BaseApiTest):
         self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED, r.data)
         self.assertEqual(r.data["code"], "INVALID_CREDENTIALS")
 
+    def test_aprendiz_login_rejects_document_shorter_than_six_digits(self):
+        short_doc_user = self.create_user(
+            username="short_doc_user",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="12345",
+            email="short.doc@sadi.test",
+        )
+        r = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": short_doc_user.documento, "password": "Passw0rd!", "expected_role": "aprendiz"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED, r.data)
+        self.assertEqual(r.data["code"], "INVALID_CREDENTIALS")
+
     def test_aprendiz_can_login_with_documento_when_username_is_text(self):
         mixed_user = self.create_user(
             username="aprendiz_test_1",
@@ -733,6 +749,41 @@ class NumericFieldValidationTests(BaseApiTest):
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
         self.assertIn("documento", r.data.get("detail", {}))
         self.assertEqual(r.data.get("field"), "documento")
+        self.assertIn("entre 6 y 10 digitos", str(r.data.get("detail", {}).get("documento", "")).lower())
+
+    def test_usuario_create_rejects_document_shorter_than_six_digits(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "doc_short",
+                "password": "Passw0rd!",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "documento": "12345",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertIn("documento", r.data.get("detail", {}))
+
+    def test_usuario_create_rejects_document_longer_than_ten_digits(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "doc_long",
+                "password": "Passw0rd!",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "documento": "12345678901",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertIn("documento", r.data.get("detail", {}))
 
     def test_usuario_create_accepts_non_numeric_username(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
@@ -766,11 +817,17 @@ class NumericFieldValidationTests(BaseApiTest):
         self.assertEqual(r.data.get("field"), "username")
         self.assertIn("nombre de usuario", (r.data.get("message") or "").lower())
 
-    def test_aprendiz_profile_phone_normalizes_to_digits(self):
+    def test_aprendiz_profile_phone_rejects_non_ten_digits(self):
         self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
         r = self.client.patch("/api/aprendiz/perfil/", {"telefono": "+57 (300) 123-4567"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertIn("telefono", r.data.get("detail", {}))
+
+    def test_aprendiz_profile_phone_accepts_exact_ten_digits(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        r = self.client.patch("/api/aprendiz/perfil/", {"telefono": "3001234567"}, format="json")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
-        self.assertEqual(r.data["perfil"]["telefono"], "573001234567")
+        self.assertEqual(r.data["perfil"]["telefono"], "3001234567")
 
 
 class PasskeyEndpointTests(BaseApiTest):
