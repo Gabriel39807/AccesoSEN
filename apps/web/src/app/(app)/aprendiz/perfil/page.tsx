@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useMe } from "@/hooks/useMe";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -15,16 +16,6 @@ type PasswordRule = {
   valid: boolean;
 };
 
-type ApiErrorShape = {
-  response?: {
-    data?: {
-      detail?: string;
-      motivo?: string;
-      message?: string;
-    };
-  };
-};
-
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
     { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
@@ -34,16 +25,6 @@ function buildPasswordRules(password: string, confirmPassword: string): Password
     { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
     { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
   ];
-}
-
-function safeErrorMessage(e: unknown) {
-  const err = e as ApiErrorShape;
-  return (
-    err.response?.data?.detail ??
-    err.response?.data?.motivo ??
-    err.response?.data?.message ??
-    "No se pudo completar la accion."
-  );
 }
 
 function DataCard({ label, value }: { label: string; value: string }) {
@@ -107,7 +88,7 @@ export default function AprendizPerfilPage() {
       setMsgTipo("ok");
       setEditing(false);
     } catch (e: unknown) {
-      setMsg(safeErrorMessage(e));
+      setMsg(toErrorMessage(e, "No se pudo actualizar tu perfil."));
       setMsgTipo("err");
     } finally {
       setSaving(false);
@@ -136,7 +117,7 @@ export default function AprendizPerfilPage() {
       setPw("");
       setPw2("");
     } catch (e: unknown) {
-      setMsg(safeErrorMessage(e));
+      setMsg(toErrorMessage(e, "No se pudo actualizar la contrasena."));
       setMsgTipo("err");
     } finally {
       setSaving(false);

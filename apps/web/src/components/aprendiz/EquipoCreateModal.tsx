@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 export default function EquipoCreateModal({
   open,
@@ -39,12 +40,7 @@ export default function EquipoCreateModal({
       setModelo("");
       onCreated();
     } catch (e: any) {
-      const err = e?.response?.data;
-      const txt =
-        err?.detail ??
-        (typeof err === "object" ? JSON.stringify(err) : null) ??
-        "No se pudo registrar el equipo.";
-      setMsg(txt);
+      setMsg(toErrorMessage(e, "No se pudo registrar el equipo."));
     } finally {
       setLoading(false);
     }

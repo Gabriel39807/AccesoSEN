@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -44,14 +45,8 @@ export default function AprendizNuevoEquipoPage() {
 
       // Lleva de vuelta a la lista (con una pausa mínima para que el usuario vea el mensaje)
       setTimeout(() => router.push("/aprendiz/equipos"), 450);
-    } catch (e: any) {
-      const err =
-        e?.response?.data?.detail ??
-        (typeof e?.response?.data === "object"
-          ? JSON.stringify(e.response.data)
-          : null) ??
-        "No se pudo registrar el equipo.";
-      setMsg(err);
+    } catch (e: unknown) {
+      setMsg(toErrorMessage(e, "No se pudo registrar el equipo."));
       setMsgTipo("err");
     } finally {
       setSaving(false);

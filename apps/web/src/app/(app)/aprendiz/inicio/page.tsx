@@ -19,6 +19,7 @@ import StatCard from "@/components/aprendiz/dashboard/StatCard";
 import StatusChip from "@/components/aprendiz/dashboard/StatusChip";
 import { useMe } from "@/hooks/useMe";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 type Equipo = {
   id: number;
@@ -41,15 +42,6 @@ type EstadoResponse = {
   estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS";
   ultimo_tipo?: "ingreso" | "salida" | null;
   ultima_fecha?: string | null;
-};
-
-type ApiErrorShape = {
-  response?: {
-    data?: {
-      detail?: string;
-      message?: string;
-    };
-  };
 };
 
 function fmt(iso?: string | null) {
@@ -106,8 +98,7 @@ export default function AprendizInicioPage() {
       const accesosData = Array.isArray(accesosRes.data) ? accesosRes.data : accesosRes.data?.results ?? [];
       setAccesos(accesosData);
     } catch (e: unknown) {
-      const err = e as ApiErrorShape;
-      setError(err.response?.data?.detail ?? err.response?.data?.message ?? "No se pudo cargar tu panel.");
+      setError(toErrorMessage(e, "No se pudo cargar tu panel."));
     } finally {
       setLoading(false);
     }

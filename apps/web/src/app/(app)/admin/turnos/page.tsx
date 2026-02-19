@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
+import { useMe } from "@/hooks/useMe";
 
 type Usuario = {
   id: number;
@@ -15,14 +17,14 @@ type Turno = {
   id: number;
   guarda: number; // en tu serializer viene como id del guarda
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MAÑANA" | "TARDE" | "NOCHE";
+  jornada: "MAÃƒâ€˜ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
 };
 
 const SEDES: Turno["sede"][] = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
-const JORNADAS: Turno["jornada"][] = ["MAÑANA", "TARDE", "NOCHE"];
+const JORNADAS: Turno["jornada"][] = ["MAÃƒâ€˜ANA", "TARDE", "NOCHE"];
 
 function badgeBase() {
   return "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
@@ -34,21 +36,21 @@ function badgeEstado(turno: Turno) {
     : `${badgeBase()} bg-gray-100 text-gray-800 border-gray-200`;
 }
 function badgeJornada(j: Turno["jornada"]) {
-  if (j === "MAÑANA") return `${badgeBase()} bg-sky-100 text-sky-800 border-sky-200`;
+  if (j === "MAÃƒâ€˜ANA") return `${badgeBase()} bg-sky-100 text-sky-800 border-sky-200`;
   if (j === "TARDE") return `${badgeBase()} bg-amber-100 text-amber-800 border-amber-200`;
   return `${badgeBase()} bg-indigo-100 text-indigo-800 border-indigo-200`;
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "—";
+  if (!u) return "Ã¢â‚¬â€";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "Ã¢â‚¬â€";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "Ã¢â‚¬â€";
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
@@ -58,18 +60,6 @@ function formatFecha(iso?: string | null) {
   }).format(d);
 }
 
-function safeErrorMessage(e: any) {
-  return (
-    (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
-    (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : null) ??
-    (typeof e?.response?.data?.motivo === "string" ? e.response.data.motivo : null) ??
-    e?.response?.data?.detail ??
-    e?.response?.data?.motivo ??
-    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
-    e?.message ??
-    "Ocurrio un error."
-  );
-}
 
 function Modal({
   open,
@@ -89,7 +79,7 @@ function Modal({
         <div className="px-5 py-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button onClick={onClose} className="px-3 py-1 rounded-lg border hover:bg-gray-50">
-            ✖
+            Ã¢Å“â€“
           </button>
         </div>
         <div className="p-5">{children}</div>
@@ -99,6 +89,10 @@ function Modal({
 }
 
 export default function AdminTurnosPage() {
+  const { me } = useMe();
+  const actorRol = me?.rol ?? null;
+  const actorSede = me?.sede_principal ?? null;
+  const isScopedAdmin = actorRol === "admin_sede";
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,9 +141,14 @@ export default function AdminTurnosPage() {
 
   async function cargarTurnos() {
     const params: any = {};
-    if (sede) params.sede = sede;
+    if (isScopedAdmin) {
+      if (actorSede) params.sede_id = actorSede;
+    } else if (sede) {
+      params.sede_id = sede;
+    }
     if (jornada) params.jornada = jornada;
     if (activo) params.activo = activo;
+    if (guardaId !== "") params.guardia_id = guardaId;
 
     const res = await api.get("/api/turnos/", { params });
     const data = Array.isArray(res.data) ? res.data : res.data?.results ?? [];
@@ -162,7 +161,7 @@ export default function AdminTurnosPage() {
     try {
       await Promise.all([cargarUsuarios(), cargarTurnos()]);
     } catch (e: any) {
-      setError(safeErrorMessage(e));
+      setError(toErrorMessage(e, "No se pudieron cargar los turnos."));
     } finally {
       setLoading(false);
     }
@@ -174,14 +173,15 @@ export default function AdminTurnosPage() {
     try {
       await cargarTurnos();
     } catch (e: any) {
-      setError(safeErrorMessage(e));
+      setError(toErrorMessage(e, "No se pudieron cargar los turnos."));
     } finally {
       setReloading(false);
     }
   }
 
   function resetFiltros() {
-    setSede("");
+    if (isScopedAdmin && actorSede) setSede(actorSede as Turno["sede"]);
+    else setSede("");
     setJornada("");
     setActivo("");
     setGuardaId("");
@@ -201,14 +201,14 @@ export default function AdminTurnosPage() {
       const res = await api.post(`/api/turnos/${turnoFinalizar.id}/finalizar_admin/`);
       // respuesta UI-friendly: { permitido, motivo, turno }
       if (res?.data?.permitido === false) {
-        alert(res?.data?.motivo ?? "No se pudo finalizar el turno.");
+        setError(toErrorMessage({ response: { data: res?.data } }, "No se pudo finalizar el turno."));
       }
       setOpenFinalizar(false);
       setTurnoFinalizar(null);
       await cargarTurnos();
     } catch (e: any) {
-      const msg = safeErrorMessage(e) || "No se pudo finalizar el turno.";
-      alert(msg);
+      const msg = toErrorMessage(e, "No se pudo finalizar el turno.");
+      setError(msg);
       await cargarTurnos();
     } finally {
       setFinalizando(false);
@@ -220,6 +220,12 @@ export default function AdminTurnosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!isScopedAdmin) return;
+    if (!actorSede) return;
+    setSede(actorSede as Turno["sede"]);
+  }, [isScopedAdmin, actorSede]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-4">
@@ -228,7 +234,7 @@ export default function AdminTurnosPage() {
           <div>
             <h1 className="text-2xl font-bold text-emerald-900">Admin / Turnos</h1>
             <p className="text-sm text-gray-500">
-              Lista de turnos por sede/jornada, con finalización manual por admin.
+              Lista de turnos por sede/jornada, con finalizaciÃƒÂ³n manual por admin.
             </p>
           </div>
 
@@ -244,20 +250,20 @@ export default function AdminTurnosPage() {
         {/* STATS */}
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="text-left bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-2xl">📋</div>
+            <div className="text-2xl">Ã°Å¸â€œâ€¹</div>
             <div className="text-sm text-gray-500">Total</div>
             <div className="text-2xl font-bold text-emerald-900">{stats.total}</div>
           </div>
 
           <div className="text-left bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-2xl">🟢</div>
+            <div className="text-2xl">Ã°Å¸Å¸Â¢</div>
             <div className="text-sm text-gray-500">Activos</div>
             <div className="text-2xl font-bold text-emerald-700">{stats.activos}</div>
             <div className="text-xs text-gray-500 mt-1">activo=true y sin fin</div>
           </div>
 
           <div className="text-left bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-2xl">✅</div>
+            <div className="text-2xl">Ã¢Å“â€¦</div>
             <div className="text-sm text-gray-500">Finalizados</div>
             <div className="text-2xl font-bold text-gray-900">{stats.finalizados}</div>
           </div>
@@ -266,18 +272,24 @@ export default function AdminTurnosPage() {
         {/* Filters */}
         <div className="bg-white rounded-2xl shadow-sm border p-4">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={sede}
-              onChange={(e) => setSede(e.target.value as any)}
-            >
-              <option value="">Sede</option>
-              {SEDES.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace("_", " ")}
-                </option>
-              ))}
-            </select>
+            {isScopedAdmin ? (
+              <div className="w-full rounded-xl border px-3 py-2 text-sm bg-slate-50 text-slate-700">
+                Sede fija: {String(actorSede || sede || "Sin sede")}
+              </div>
+            ) : (
+              <select
+                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
+                value={sede}
+                onChange={(e) => setSede(e.target.value as any)}
+              >
+                <option value="">Sede: Todas</option>
+                {SEDES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <select
               className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
@@ -287,7 +299,7 @@ export default function AdminTurnosPage() {
               <option value="">Jornada</option>
               {JORNADAS.map((j) => (
                 <option key={j} value={j}>
-                  {j === "MAÑANA" ? "Mañana" : j === "TARDE" ? "Tarde" : "Noche"}
+                  {j === "MAÃƒâ€˜ANA" ? "MaÃƒÂ±ana" : j === "TARDE" ? "Tarde" : "Noche"}
                 </option>
               ))}
             </select>
@@ -382,7 +394,7 @@ export default function AdminTurnosPage() {
                       <td className="px-4 py-3 text-gray-800">{t.sede.replace("_", " ")}</td>
                       <td className="px-4 py-3">
                         <span className={badgeJornada(t.jornada)}>
-                          {t.jornada === "MAÑANA" ? "Mañana" : t.jornada === "TARDE" ? "Tarde" : "Noche"}
+                          {t.jornada === "MAÃƒâ€˜ANA" ? "MaÃƒÂ±ana" : t.jornada === "TARDE" ? "Tarde" : "Noche"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-800">{formatFecha(t.inicio)}</td>
@@ -395,9 +407,9 @@ export default function AdminTurnosPage() {
                           onClick={() => abrirFinalizar(t)}
                           disabled={!isActivo}
                           className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                          title={isActivo ? "Finalizar turno (admin)" : "El turno ya está finalizado"}
+                          title={isActivo ? "Finalizar turno (admin)" : "El turno ya estÃƒÂ¡ finalizado"}
                         >
-                          ⛔ Finalizar
+                          Ã¢â€ºâ€ Finalizar
                         </button>
                       </td>
                     </tr>
@@ -436,8 +448,8 @@ export default function AdminTurnosPage() {
                 <div>
                   <span className="text-gray-500">Jornada:</span>{" "}
                   <span className="font-semibold">
-                    {turnoFinalizar.jornada === "MAÑANA"
-                      ? "Mañana"
+                    {turnoFinalizar.jornada === "MAÃƒâ€˜ANA"
+                      ? "MaÃƒÂ±ana"
                       : turnoFinalizar.jornada === "TARDE"
                       ? "Tarde"
                       : "Noche"}
@@ -450,7 +462,7 @@ export default function AdminTurnosPage() {
               </div>
 
               <div className="text-sm text-gray-700">
-                Esto finalizará el turno inmediatamente. Úsalo solo si el guarda olvidó cerrar el turno.
+                Esto finalizarÃƒÂ¡ el turno inmediatamente. ÃƒÅ¡salo solo si el guarda olvidÃƒÂ³ cerrar el turno.
               </div>
 
               <div className="flex items-center justify-end gap-2">
@@ -471,7 +483,7 @@ export default function AdminTurnosPage() {
                   className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-60"
                   disabled={finalizando}
                 >
-                  {finalizando ? "Finalizando..." : "Sí, finalizar"}
+                  {finalizando ? "Finalizando..." : "SÃƒÂ­, finalizar"}
                 </button>
               </div>
             </div>

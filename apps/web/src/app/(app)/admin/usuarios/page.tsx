@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { formatFieldLabel, normalizeApiErrors, toErrorMessage } from "@/lib/errors";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { useMe } from "@/hooks/useMe";
@@ -34,6 +35,8 @@ type ImportValidationError = {
   fields?: string[];
 };
 
+type NoticeTone = "success" | "error" | "info";
+
 const ROLES = ["superadmin", "admin_sede", "guarda", "aprendiz"] as const;
 const ROLES_NON_SUPERADMIN = ["guarda", "aprendiz"] as const;
 const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
@@ -62,17 +65,38 @@ function useDebounced<T>(value: T, delay = 450) {
   return debounced;
 }
 
-function safeErrorMessage(e: any) {
-  return (
-    (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
-    (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : null) ??
-    (typeof e?.response?.data?.motivo === "string" ? e.response.data.motivo : null) ??
-    e?.response?.data?.detail ??
-    e?.response?.data?.motivo ??
-    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
-    e?.message ??
-    "No se pudo completar la acción."
-  );
+function isValidUsername(username: string) {
+  return /^[A-Za-z0-9_@.+-]+$/.test(username);
+}
+
+function isInstitutionalEmail(email: string) {
+  const value = email.trim().toLowerCase();
+  return /@(sena\.edu\.co|soy\.sena\.edu\.co)$/.test(value);
+}
+
+function hasPasswordPolicyErrors(password: string): string[] {
+  const errors: string[] = [];
+  if (password.length < 8) errors.push("La contrasena debe tener minimo 8 caracteres.");
+  if (password.length > 20) errors.push("La contrasena debe tener maximo 20 caracteres.");
+  if (!/[A-Z]/.test(password)) errors.push("La contrasena debe incluir al menos 1 mayuscula.");
+  if (!/[a-z]/.test(password)) errors.push("La contrasena debe incluir al menos 1 minuscula.");
+  if (!/[0-9]/.test(password)) errors.push("La contrasena debe incluir al menos 1 numero.");
+  if (!/[^A-Za-z0-9]/.test(password)) errors.push("La contrasena debe incluir al menos 1 caracter especial.");
+  return errors;
+}
+
+function addFormError(target: string[], message: string) {
+  const clean = message.trim();
+  if (!clean) return;
+  if (!target.includes(clean)) target.push(clean);
+}
+
+function addFieldError(target: Record<string, string[]>, field: string, message: string) {
+  const key = String(field || "").trim();
+  const clean = String(message || "").trim();
+  if (!key || !clean) return;
+  if (!target[key]) target[key] = [];
+  if (!target[key].includes(clean)) target[key].push(clean);
 }
 
 function badgeBase() {
@@ -102,7 +126,7 @@ function StatSkeleton() {
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <>
-      {/* Tabla skeleton (misma “caja” que tu tabla real) */}
+      {/* Tabla skeleton (misma caja que tu tabla real) */}
       <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
         <table className="min-w-full text-sm">
           {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
@@ -128,7 +152,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
                   <div className="h-4 w-10 rounded sadi-skeleton" />
                 </td>
 
-                {/* Usuario (2 líneas: username + email) */}
+                {/* Usuario (2 lineas: username + email) */}
                 <td className="p-3">
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
@@ -170,7 +194,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botón) */}
+                {/* Acciones (boton) */}
                 <td className="p-3">
                   <div className="h-10 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -180,7 +204,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
         </table>
       </div>
 
-      {/* Paginación skeleton (misma caja que tu paginación real) */}
+      {/* Paginacion skeleton (misma caja que tu paginacion real) */}
       <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border p-3 mt-4">
         <div className="h-4 w-40 rounded sadi-skeleton" />
 
@@ -200,6 +224,7 @@ export default function AdminUsuariosPage() {
   const roleOptionsForActor = canManageAdminRoles ? ROLES : ROLES_NON_SUPERADMIN;
   const actorRol = me?.rol ?? null;
   const actorSede = me?.sede_principal ?? null;
+  const isScopedAdmin = actorRol === "admin_sede";
 
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -210,6 +235,7 @@ export default function AdminUsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [loadingTable, setLoadingTable] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: NoticeTone; text: string } | null>(null);
 
   // UI controls
   const [q, setQ] = useState("");
@@ -259,6 +285,9 @@ export default function AdminUsuariosPage() {
   const [c_estado, setCEstado] = useState<string>("activo");
   const [c_sede, setCSede] = useState<string>("");
   const [c_programa, setCPrograma] = useState("");
+  const [createFieldErrors, setCreateFieldErrors] = useState<Record<string, string[]>>({});
+  const [createFormErrors, setCreateFormErrors] = useState<string[]>([]);
+  const createInputRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({});
 
   // modal importar aprendices (excel 2 fases)
   const [openImportar, setOpenImportar] = useState(false);
@@ -270,6 +299,125 @@ export default function AdminUsuariosPage() {
   const [importErrores, setImportErrores] = useState<ImportValidationError[]>([]);
 
   const requestIdRef = useRef(0);
+
+  function setCreateInputRef(field: string) {
+    return (el: HTMLInputElement | HTMLSelectElement | null) => {
+      createInputRefs.current[field] = el;
+    };
+  }
+
+  function clearCreateFieldError(field: string) {
+    setCreateFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function clearCreateErrorsOnChange(field: string) {
+    clearCreateFieldError(field);
+    if (createFormErrors.length) setCreateFormErrors([]);
+  }
+
+  function focusFirstCreateError(fieldErrors: Record<string, string[]>) {
+    const firstField = Object.keys(fieldErrors)[0];
+    if (!firstField) return;
+    window.setTimeout(() => createInputRefs.current[firstField]?.focus(), 0);
+  }
+
+  function validateCreateUserForm() {
+    const fieldErrors: Record<string, string[]> = {};
+    const formErrors: string[] = [];
+
+    const username = c_username.trim();
+    const password = c_password.trim();
+    const firstName = c_first.trim();
+    const lastName = c_last.trim();
+    const email = c_email.trim().toLowerCase();
+    const documento = c_documento.trim().replace(/\D/g, "").slice(0, 10);
+    const role = c_rol.trim();
+    const state = c_estado.trim();
+    const sede = (isScopedAdmin ? actorSede || c_sede : c_sede).trim();
+    const programa = c_programa.trim();
+
+    if (!username) addFieldError(fieldErrors, "username", "El campo nombre de usuario es obligatorio.");
+    else if (!isValidUsername(username)) {
+      addFieldError(fieldErrors, "username", "Solo se permiten letras, numeros y los simbolos _ @ . + -");
+    } else if (username.length > 150) {
+      addFieldError(fieldErrors, "username", "El nombre de usuario no puede superar 150 caracteres.");
+    }
+
+    if (!password) addFieldError(fieldErrors, "password", "El campo contrasena es obligatorio.");
+    for (const passwordError of hasPasswordPolicyErrors(password)) {
+      addFieldError(fieldErrors, "password", passwordError);
+    }
+
+    if (!firstName) addFieldError(fieldErrors, "first_name", "El campo nombres es obligatorio.");
+    if (!lastName) addFieldError(fieldErrors, "last_name", "El campo apellidos es obligatorio.");
+
+    if (!email) {
+      addFieldError(fieldErrors, "email", "El campo correo es obligatorio.");
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      addFieldError(fieldErrors, "email", "El correo no tiene un formato valido.");
+    } else if (!isInstitutionalEmail(email)) {
+      addFieldError(fieldErrors, "email", "El email debe ser institucional @sena.edu.co o @soy.sena.edu.co.");
+    }
+
+    if (!documento) {
+      addFieldError(fieldErrors, "documento", "El campo documento es obligatorio.");
+    } else if (!/^\d{1,10}$/.test(documento)) {
+      addFieldError(fieldErrors, "documento", "El documento debe ser numerico y maximo de 10 digitos.");
+    }
+
+    if (!role) {
+      addFieldError(fieldErrors, "rol", "El campo rol es obligatorio.");
+    } else if (!roleOptionsForActor.includes(role as any)) {
+      addFieldError(fieldErrors, "rol", "El rol seleccionado no es valido para tu perfil.");
+    }
+
+    if (!state) {
+      addFieldError(fieldErrors, "estado", "El campo estado es obligatorio.");
+    } else if (!["activo", "bloqueado"].includes(state)) {
+      addFieldError(fieldErrors, "estado", "El estado seleccionado no es valido.");
+    }
+
+    if (!sede) {
+      addFieldError(fieldErrors, "sede_principal", "El campo sede principal es obligatorio.");
+    } else if (!SEDES.includes(sede as any)) {
+      addFieldError(fieldErrors, "sede_principal", "La sede seleccionada no es valida.");
+    }
+
+    if (role === "aprendiz" && !programa) {
+      addFieldError(fieldErrors, "programa_formacion", "El campo programa es obligatorio para aprendices.");
+    }
+
+    if (!canManageAdminRoles && isAdministrativeRole(role)) {
+      addFormError(formErrors, "No tienes permisos para crear usuarios administrativos.");
+    }
+
+    return { fieldErrors, formErrors };
+  }
+
+  const createErrorSummary = useMemo(() => {
+    const summary = [...createFormErrors];
+    for (const [field, messages] of Object.entries(createFieldErrors)) {
+      for (const message of messages) {
+        addFormError(summary, `${formatFieldLabel(field)}: ${message}`);
+      }
+    }
+    return summary;
+  }, [createFieldErrors, createFormErrors]);
+
+  function showNotice(tone: NoticeTone, text: string) {
+    setNotice({ tone, text });
+  }
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   async function cargar(p = page) {
     const rid = ++requestIdRef.current;
@@ -285,7 +433,11 @@ export default function AdminUsuariosPage() {
       if (dq.trim()) params.q = dq.trim();
       if (dRol !== "todos") params.rol = dRol;
       if (dEstado !== "todos") params.estado = dEstado;
-      if (dSede !== "todos") params.sede_principal = dSede;
+      if (isScopedAdmin) {
+        if (actorSede) params.sede_id = actorSede;
+      } else if (dSede !== "todos") {
+        params.sede_id = dSede;
+      }
 
       const res = await api.get<Paginated<Usuario> | Usuario[]>("/api/usuarios/", { params });
       const payload: any = res.data;
@@ -293,7 +445,7 @@ export default function AdminUsuariosPage() {
       if (rid !== requestIdRef.current) return;
 
       if (Array.isArray(payload)) {
-        // fallback: backend sin paginación
+        // fallback: backend sin paginacion
         setServerPaginated(false);
         setUsuarios(payload);
         setCount(payload.length);
@@ -304,7 +456,7 @@ export default function AdminUsuariosPage() {
       }
     } catch (e: any) {
       if (rid !== requestIdRef.current) return;
-      setError(safeErrorMessage(e));
+      setError(toErrorMessage(e, "No se pudo cargar la lista de usuarios."));
     } finally {
       if (rid === requestIdRef.current) {
         setLoading(false);
@@ -318,6 +470,12 @@ export default function AdminUsuariosPage() {
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isScopedAdmin) return;
+    if (!actorSede) return;
+    setSedeFilter(actorSede as (typeof SEDES)[number]);
+  }, [isScopedAdmin, actorSede]);
 
   // recargar al cambiar filtros debounced
   useEffect(() => {
@@ -366,7 +524,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, filtrados, page, serverPaginated]);
 
   const stats = useMemo(() => {
-    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseño)
+    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseno)
     const base = serverPaginated ? usuarios : usuarios;
 
     const total = serverPaginated ? count : base.length;
@@ -385,7 +543,8 @@ export default function AdminUsuariosPage() {
     estado?: "todos" | "activo" | "bloqueado";
   }) {
     setQ("");
-    setSedeFilter("todos");
+    if (isScopedAdmin && actorSede) setSedeFilter(actorSede as (typeof SEDES)[number]);
+    else setSedeFilter("todos");
     setRolFilter(next.rol ?? "todos");
     setEstadoFilter(next.estado ?? "todos");
     setPage(1);
@@ -395,7 +554,7 @@ export default function AdminUsuariosPage() {
     setSelected(u);
     setRol(u.rol ?? "aprendiz");
     setEstado(u.estado ?? "activo");
-    setSede(u.sede_principal ?? "");
+    setSede(isScopedAdmin && actorSede ? actorSede : u.sede_principal ?? "");
     setPrograma(u.programa_formacion ?? "");
     setDocumento(u.documento ?? "");
     setEmail(u.email ?? "");
@@ -421,8 +580,9 @@ export default function AdminUsuariosPage() {
       setOpen(false);
       setSelected(null);
       await cargar(page);
+      showNotice("success", "Cambios guardados correctamente.");
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      showNotice("error", toErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -430,7 +590,7 @@ export default function AdminUsuariosPage() {
 
   function abrirEliminar(u: Usuario) {
     if (!canDeleteByRole(actorRol, actorSede, u)) {
-      alert("No tienes permisos para eliminar este usuario.");
+      showNotice("error", "No tienes permisos para eliminar este usuario.");
       return;
     }
     setDeleteTarget(u);
@@ -449,22 +609,23 @@ export default function AdminUsuariosPage() {
         setSelected(null);
       }
       await cargar(page);
-      alert("✅ Usuario eliminado.");
+      showNotice("success", "Usuario eliminado correctamente.");
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      showNotice("error", toErrorMessage(e));
     } finally {
       setDeleting(false);
     }
   }
 
-  // ⚡ inline update: rol/estado (mantengo como lo tenías, no toco estética)
+  // inline update: rol/estado (mantengo la estetica actual)
   async function inlinePatch(id: number, patch: Partial<Usuario>) {
     setUsuarios((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
 
     try {
       await api.patch(`/api/usuarios/${id}/`, patch);
+      showNotice("success", "Usuario actualizado.");
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      showNotice("error", toErrorMessage(e));
       await cargar(page);
     }
   }
@@ -472,6 +633,8 @@ export default function AdminUsuariosPage() {
   function abrirCrear() {
     setOpenCrear(true);
     setCreating(false);
+    setCreateFieldErrors({});
+    setCreateFormErrors([]);
 
     setCUsername("");
     setCPassword("");
@@ -481,13 +644,21 @@ export default function AdminUsuariosPage() {
     setCDocumento("");
     setCRol("aprendiz");
     setCEstado("activo");
-    setCSede("");
+    setCSede(isScopedAdmin && actorSede ? actorSede : "");
     setCPrograma("");
   }
 
   async function crearUsuario() {
-    if (!c_username.trim()) return alert("Username es obligatorio.");
-    if (!c_password.trim()) return alert("Password es obligatorio.");
+    setCreateFieldErrors({});
+    setCreateFormErrors([]);
+
+    const localValidation = validateCreateUserForm();
+    if (Object.keys(localValidation.fieldErrors).length > 0 || localValidation.formErrors.length > 0) {
+      setCreateFieldErrors(localValidation.fieldErrors);
+      setCreateFormErrors(localValidation.formErrors);
+      focusFirstCreateError(localValidation.fieldErrors);
+      return;
+    }
 
     setCreating(true);
     try {
@@ -496,11 +667,11 @@ export default function AdminUsuariosPage() {
         password: c_password.trim(),
         first_name: c_first.trim() || "",
         last_name: c_last.trim() || "",
-        email: c_email.trim() || "",
+        email: c_email.trim().toLowerCase() || "",
         documento: c_documento.trim().replace(/\D/g, "").slice(0, 10) || "",
         rol: c_rol,
         estado: c_estado,
-        sede_principal: c_sede ? c_sede : null,
+        sede_principal: isScopedAdmin ? actorSede || null : c_sede ? c_sede : null,
         programa_formacion: c_programa.trim() || null,
       };
 
@@ -509,9 +680,23 @@ export default function AdminUsuariosPage() {
       setOpenCrear(false);
       setPage(1);
       await cargar(1);
-      alert("✅ Usuario creado.");
+      showNotice("success", "Usuario creado correctamente.");
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      const normalized = normalizeApiErrors(e, "No se pudo crear el usuario.");
+      if (Object.keys(normalized.fieldErrors).length > 0) {
+        setCreateFieldErrors(normalized.fieldErrors);
+        focusFirstCreateError(normalized.fieldErrors);
+      }
+      if (normalized.formErrors.length > 0) {
+        setCreateFormErrors(normalized.formErrors);
+      }
+
+      const firstGeneral =
+        normalized.formErrors[0] ||
+        Object.entries(normalized.fieldErrors)
+          .flatMap(([field, messages]) => messages.map((msg) => `${formatFieldLabel(field)}: ${msg}`))[0] ||
+        "No se pudo crear el usuario.";
+      showNotice("error", firstGeneral);
     } finally {
       setCreating(false);
     }
@@ -529,7 +714,7 @@ export default function AdminUsuariosPage() {
 
   async function validarImportacion() {
     if (!importFile) {
-      alert("Selecciona un archivo Excel antes de validar.");
+      showNotice("info", "Selecciona un archivo Excel antes de validar.");
       return;
     }
 
@@ -546,8 +731,9 @@ export default function AdminUsuariosPage() {
       setImportId(data.import_id ?? "");
       setImportResumen(data.resumen ?? null);
       setImportErrores(data.errores ?? []);
+      showNotice("success", "Archivo validado. Revisa el resumen y confirma la importacion.");
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      showNotice("error", toErrorMessage(e));
     } finally {
       setValidandoImport(false);
     }
@@ -555,7 +741,7 @@ export default function AdminUsuariosPage() {
 
   async function confirmarImportacion() {
     if (!importId) {
-      alert("Primero valida el archivo.");
+      showNotice("info", "Primero valida el archivo.");
       return;
     }
 
@@ -568,12 +754,12 @@ export default function AdminUsuariosPage() {
       const created = data.created ?? data.created_count ?? 0;
       const updated = data.updated ?? data.updated_count ?? 0;
 
-      alert(`Importación aplicada. Creados: ${created}. Actualizados: ${updated}.`);
+      showNotice("success", `Importacion aplicada. Creados: ${created}. Actualizados: ${updated}.`);
       setOpenImportar(false);
       setPage(1);
       await cargar(1);
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      showNotice("error", toErrorMessage(e));
     } finally {
       setConfirmandoImport(false);
     }
@@ -586,7 +772,7 @@ export default function AdminUsuariosPage() {
         <div className="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Admin / Usuarios</h1>
-            <p className="text-sm text-slate-500">Gestión de cuentas, roles y estado del sistema.</p>
+            <p className="text-sm text-slate-500">Gestion de cuentas, roles y estado del sistema.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -594,7 +780,7 @@ export default function AdminUsuariosPage() {
               onClick={abrirCrear}
               className="rounded-xl px-4 py-2 bg-slate-900 text-white hover:bg-slate-800 shadow-sm transition"
             >
-              ➕ Crear usuario
+              + Crear usuario
             </button>
 
             <button
@@ -612,6 +798,31 @@ export default function AdminUsuariosPage() {
             </button>
           </div>
         </div>
+
+        {notice ? (
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${
+              notice.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : notice.tone === "info"
+                  ? "border-sky-200 bg-sky-50 text-sky-800"
+                  : "border-rose-200 bg-rose-50 text-rose-800"
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span>{notice.text}</span>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                className="rounded-lg border border-current/20 px-2 py-0.5 text-xs hover:bg-white/60"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {/* STATS (clickeables) */}
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -631,7 +842,7 @@ export default function AdminUsuariosPage() {
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Ver todos"
               >
-                <div className="text-2xl">👤</div>
+                <div className="text-2xl">USR</div>
                 <div className="text-sm text-gray-500">Total</div>
                 <div className="text-2xl font-bold text-emerald-900">{stats.total}</div>
               </button>
@@ -641,7 +852,7 @@ export default function AdminUsuariosPage() {
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Filtrar activos"
               >
-                <div className="text-2xl">✅</div>
+                <div className="text-2xl">OK</div>
                 <div className="text-sm text-gray-500">Activos</div>
                 <div className="text-2xl font-bold text-emerald-700">{stats.activos}</div>
               </button>
@@ -651,7 +862,7 @@ export default function AdminUsuariosPage() {
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Filtrar bloqueados"
               >
-                <div className="text-2xl">⛔</div>
+                <div className="text-2xl">BLQ</div>
                 <div className="text-sm text-gray-500">Bloqueados</div>
                 <div className="text-2xl font-bold text-red-700">{stats.bloqueados}</div>
               </button>
@@ -661,7 +872,7 @@ export default function AdminUsuariosPage() {
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Filtrar admins"
               >
-                <div className="text-2xl">🛡️</div>
+                <div className="text-2xl">ADM</div>
                 <div className="text-sm text-gray-500">Admins</div>
                 <div className="text-2xl font-bold text-purple-700">{stats.admins}</div>
               </button>
@@ -671,7 +882,7 @@ export default function AdminUsuariosPage() {
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Filtrar guardas"
               >
-                <div className="text-2xl">👮</div>
+                <div className="text-2xl">GRD</div>
                 <div className="text-sm text-gray-500">Guardas</div>
                 <div className="text-2xl font-bold text-blue-700">{stats.guardas}</div>
               </button>
@@ -681,7 +892,7 @@ export default function AdminUsuariosPage() {
                 className="text-left bg-white rounded-2xl shadow-sm border p-4 hover:-translate-y-0.5 hover:shadow transition"
                 title="Filtrar aprendices"
               >
-                <div className="text-2xl">🎓</div>
+                <div className="text-2xl">APR</div>
                 <div className="text-sm text-gray-500">Aprendices</div>
                 <div className="text-2xl font-bold text-emerald-800">{stats.aprendices}</div>
               </button>
@@ -724,8 +935,9 @@ export default function AdminUsuariosPage() {
             className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
             value={sedeFilter}
             onChange={(e) => setSedeFilter(e.target.value as any)}
+            disabled={isScopedAdmin}
           >
-            <option value="todos">Sede: Todas</option>
+            {!isScopedAdmin ? <option value="todos">Sede: Todas</option> : null}
             {SEDES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -780,7 +992,7 @@ export default function AdminUsuariosPage() {
                             className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                             value={u.rol ?? "aprendiz"}
                             onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
-                            title="Cambiar rol (rápido)"
+                            title="Cambiar rol (rapido)"
                             disabled={!canManageAdminRoles && isAdministrativeRole(u.rol)}
                           >
                             {(canManageAdminRoles || !isAdministrativeRole(u.rol) ? roleOptionsForActor : ROLES).map((r) => (
@@ -799,7 +1011,7 @@ export default function AdminUsuariosPage() {
                             className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                             value={(u.estado ?? "activo").toLowerCase()}
                             onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
-                            title="Cambiar estado (rápido)"
+                            title="Cambiar estado (rapido)"
                           >
                             <option value="activo">activo</option>
                             <option value="bloqueado">bloqueado</option>
@@ -913,25 +1125,32 @@ export default function AdminUsuariosPage() {
                   />
                 </label>
 
-                {/* ✅ SEDE como SELECT en el MODAL (como pediste) */}
+                {/* SEDE como SELECT en el MODAL */}
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Sede principal</div>
                   <select
                     className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={sede}
                     onChange={(e) => setSede(e.target.value)}
+                    disabled={isScopedAdmin}
                   >
-                    <option value="">(sin sede)</option>
-                    {SEDES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {isScopedAdmin ? (
+                      <option value={actorSede ?? ""}>{actorSede ?? "Sin sede"}</option>
+                    ) : (
+                      <>
+                        <option value="">(sin sede)</option>
+                        {SEDES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Programa formación</div>
+                  <div className="text-xs text-gray-500">Programa formacion</div>
                   <input
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={programa}
@@ -975,72 +1194,172 @@ export default function AdminUsuariosPage() {
             maxWidthClassName="max-w-xl"
             closeDisabled={creating}
           >
+              {createErrorSummary.length > 0 ? (
+                <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert" aria-live="polite">
+                  <p className="font-semibold">No se pudo crear el usuario. Corrige lo siguiente:</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {createErrorSummary.map((msg, idx) => (
+                      <li key={`${msg}-${idx}`}>{msg}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Username *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("username")}
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.username?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_username}
-                    onChange={(e) => setCUsername(e.target.value)}
+                    onChange={(e) => {
+                      setCUsername(e.target.value.trimStart());
+                      clearCreateErrorsOnChange("username");
+                    }}
+                    aria-invalid={createFieldErrors.username?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.username?.length ? "create-username-error" : undefined}
+                    placeholder="Ej: aprendiz1 o gabriel_pico_8"
                   />
+                  <div className="text-[11px] text-slate-500">Solo letras, numeros y simbolos _ @ . + -</div>
+                  {createFieldErrors.username?.length ? (
+                    <div id="create-username-error" className="text-xs text-rose-700">
+                      {createFieldErrors.username[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Password *</div>
                   <input
+                    ref={setCreateInputRef("password")}
                     type="password"
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.password?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_password}
-                    onChange={(e) => setCPassword(e.target.value)}
+                    onChange={(e) => {
+                      setCPassword(e.target.value);
+                      clearCreateErrorsOnChange("password");
+                    }}
+                    maxLength={20}
+                    aria-invalid={createFieldErrors.password?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.password?.length ? "create-password-error" : undefined}
                   />
+                  {createFieldErrors.password?.length ? (
+                    <ul id="create-password-error" className="text-xs text-rose-700 list-disc pl-5">
+                      {createFieldErrors.password.map((msg, idx) => (
+                        <li key={`${msg}-${idx}`}>{msg}</li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Nombres</div>
+                  <div className="text-xs text-gray-500">Nombres *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("first_name")}
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.first_name?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_first}
-                    onChange={(e) => setCFirst(e.target.value)}
+                    onChange={(e) => {
+                      setCFirst(e.target.value);
+                      clearCreateErrorsOnChange("first_name");
+                    }}
+                    aria-invalid={createFieldErrors.first_name?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.first_name?.length ? "create-first-name-error" : undefined}
                   />
+                  {createFieldErrors.first_name?.length ? (
+                    <div id="create-first-name-error" className="text-xs text-rose-700">
+                      {createFieldErrors.first_name[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Apellidos</div>
+                  <div className="text-xs text-gray-500">Apellidos *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("last_name")}
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.last_name?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_last}
-                    onChange={(e) => setCLast(e.target.value)}
+                    onChange={(e) => {
+                      setCLast(e.target.value);
+                      clearCreateErrorsOnChange("last_name");
+                    }}
+                    aria-invalid={createFieldErrors.last_name?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.last_name?.length ? "create-last-name-error" : undefined}
                   />
+                  {createFieldErrors.last_name?.length ? (
+                    <div id="create-last-name-error" className="text-xs text-rose-700">
+                      {createFieldErrors.last_name[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
-                  <div className="text-xs text-gray-500">Email</div>
+                  <div className="text-xs text-gray-500">Email *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("email")}
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.email?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_email}
-                    onChange={(e) => setCEmail(e.target.value)}
+                    onChange={(e) => {
+                      setCEmail(e.target.value);
+                      clearCreateErrorsOnChange("email");
+                    }}
                     placeholder="usuario@sena.edu.co"
+                    aria-invalid={createFieldErrors.email?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.email?.length ? "create-email-error" : undefined}
                   />
+                  {createFieldErrors.email?.length ? (
+                    <div id="create-email-error" className="text-xs text-rose-700">
+                      {createFieldErrors.email[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
-                  <div className="text-xs text-gray-500">Documento (QR)</div>
+                  <div className="text-xs text-gray-500">Documento (QR) *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("documento")}
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.documento?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_documento}
-                    onChange={(e) => setCDocumento(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    onChange={(e) => {
+                      setCDocumento(e.target.value.replace(/\D/g, "").slice(0, 10));
+                      clearCreateErrorsOnChange("documento");
+                    }}
                     placeholder="1012345678"
                     inputMode="numeric"
                     maxLength={10}
+                    aria-invalid={createFieldErrors.documento?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.documento?.length ? "create-documento-error" : undefined}
                   />
+                  {createFieldErrors.documento?.length ? (
+                    <div id="create-documento-error" className="text-xs text-rose-700">
+                      {createFieldErrors.documento[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Rol</div>
+                  <div className="text-xs text-gray-500">Rol *</div>
                   <select
+                    ref={setCreateInputRef("rol")}
                     className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_rol}
-                    onChange={(e) => setCRol(e.target.value)}
+                    onChange={(e) => {
+                      setCRol(e.target.value);
+                      clearCreateErrorsOnChange("rol");
+                    }}
+                    aria-invalid={createFieldErrors.rol?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.rol?.length ? "create-rol-error" : undefined}
                   >
                     {roleOptionsForActor.map((r) => (
                       <option key={r} value={r}>
@@ -1048,44 +1367,93 @@ export default function AdminUsuariosPage() {
                       </option>
                     ))}
                   </select>
+                  {createFieldErrors.rol?.length ? (
+                    <div id="create-rol-error" className="text-xs text-rose-700">
+                      {createFieldErrors.rol[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Estado</div>
+                  <div className="text-xs text-gray-500">Estado *</div>
                   <select
+                    ref={setCreateInputRef("estado")}
                     className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_estado}
-                    onChange={(e) => setCEstado(e.target.value)}
+                    onChange={(e) => {
+                      setCEstado(e.target.value);
+                      clearCreateErrorsOnChange("estado");
+                    }}
+                    aria-invalid={createFieldErrors.estado?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.estado?.length ? "create-estado-error" : undefined}
                   >
                     <option value="activo">activo</option>
                     <option value="bloqueado">bloqueado</option>
                   </select>
+                  {createFieldErrors.estado?.length ? (
+                    <div id="create-estado-error" className="text-xs text-rose-700">
+                      {createFieldErrors.estado[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Sede principal</div>
+                  <div className="text-xs text-gray-500">Sede principal *</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("sede_principal")}
+                    className={`w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.sede_principal?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_sede}
-                    onChange={(e) => setCSede(e.target.value)}
+                    onChange={(e) => {
+                      setCSede(e.target.value);
+                      clearCreateErrorsOnChange("sede_principal");
+                    }}
+                    disabled={isScopedAdmin}
+                    aria-invalid={createFieldErrors.sede_principal?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.sede_principal?.length ? "create-sede-error" : undefined}
                   >
-                    <option value="">(sin sede)</option>
-                    {SEDES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {isScopedAdmin ? (
+                      <option value={actorSede ?? ""}>{actorSede ?? "Sin sede"}</option>
+                    ) : (
+                      <>
+                        <option value="">(sin sede)</option>
+                        {SEDES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
+                  {createFieldErrors.sede_principal?.length ? (
+                    <div id="create-sede-error" className="text-xs text-rose-700">
+                      {createFieldErrors.sede_principal[0]}
+                    </div>
+                  ) : null}
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Programa</div>
+                  <div className="text-xs text-gray-500">Programa {c_rol === "aprendiz" ? "*" : ""}</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    ref={setCreateInputRef("programa_formacion")}
+                    className={`w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 ${
+                      createFieldErrors.programa_formacion?.length ? "border-rose-300 bg-rose-50/40" : ""
+                    }`}
                     value={c_programa}
-                    onChange={(e) => setCPrograma(e.target.value)}
+                    onChange={(e) => {
+                      setCPrograma(e.target.value);
+                      clearCreateErrorsOnChange("programa_formacion");
+                    }}
                     placeholder="COCINA / ADSO..."
+                    aria-invalid={createFieldErrors.programa_formacion?.length ? "true" : "false"}
+                    aria-describedby={createFieldErrors.programa_formacion?.length ? "create-programa-error" : undefined}
                   />
+                  {createFieldErrors.programa_formacion?.length ? (
+                    <div id="create-programa-error" className="text-xs text-rose-700">
+                      {createFieldErrors.programa_formacion[0]}
+                    </div>
+                  ) : null}
                 </label>
               </div>
 
@@ -1119,7 +1487,7 @@ export default function AdminUsuariosPage() {
           >
             <div className="space-y-4">
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-                Esta acción eliminará el usuario de forma permanente.
+                Esta accion eliminara el usuario de forma permanente.
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                 <div><span className="font-semibold">Usuario:</span> {deleteTarget.username}</div>
@@ -1155,7 +1523,7 @@ export default function AdminUsuariosPage() {
         >
           <div className="space-y-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importación.
+              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importacion.
             </div>
 
             <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
@@ -1177,7 +1545,7 @@ export default function AdminUsuariosPage() {
                 disabled={!importId || confirmandoImport || validandoImport}
                 className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {confirmandoImport ? "Confirmando..." : "Confirmar importación"}
+                {confirmandoImport ? "Confirmando..." : "Confirmar importacion"}
               </button>
             </div>
 
@@ -1188,7 +1556,7 @@ export default function AdminUsuariosPage() {
                   <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="text-xs text-emerald-700">Válidos</div>
+                  <div className="text-xs text-emerald-700">Validos</div>
                   <div className="text-xl font-semibold text-emerald-800">{importResumen.validos}</div>
                 </div>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
@@ -1201,14 +1569,14 @@ export default function AdminUsuariosPage() {
             {importErrores.length > 0 && (
               <div className="overflow-hidden rounded-2xl border border-rose-200">
                 <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800">
-                  Errores de validación
+                  Errores de validacion
                 </div>
                 <div className="max-h-64 overflow-auto bg-white">
                   <table className="min-w-full text-sm">
                     <thead className="bg-slate-50 text-left text-slate-600">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
-                        <th className="px-3 py-2">Código</th>
+                        <th className="px-3 py-2">Codigo</th>
                         <th className="px-3 py-2">Mensaje</th>
                       </tr>
                     </thead>
@@ -1235,3 +1603,5 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
+
+

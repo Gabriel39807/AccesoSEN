@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 type Acceso = {
   id: number;
@@ -17,15 +18,6 @@ type Equipo = {
   serial: string;
   marca: string;
   modelo: string;
-};
-
-type ApiErrorShape = {
-  response?: {
-    data?: {
-      detail?: string;
-      message?: string;
-    };
-  };
 };
 
 function fmtFecha(iso: string) {
@@ -88,8 +80,7 @@ export default function AprendizHistorialPage() {
       const data = Array.isArray(accesosRes.data) ? accesosRes.data : accesosRes.data?.results ?? [];
       setAccesos(data);
     } catch (e: unknown) {
-      const err = e as ApiErrorShape;
-      setError(err.response?.data?.detail ?? err.response?.data?.message ?? "No se pudo cargar el historial.");
+      setError(toErrorMessage(e, "No se pudo cargar el historial."));
     } finally {
       setLoading(false);
     }

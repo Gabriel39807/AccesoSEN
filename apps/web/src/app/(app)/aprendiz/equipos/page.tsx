@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 
 type Equipo = {
   id: number;
@@ -20,15 +21,6 @@ type Acceso = {
   tipo: "ingreso" | "salida" | string;
   fecha: string;
   equipos?: number[];
-};
-
-type ApiErrorShape = {
-  response?: {
-    data?: {
-      detail?: string;
-      message?: string;
-    };
-  };
 };
 
 function badgeEstado(estado: string) {
@@ -76,8 +68,7 @@ export default function AprendizEquiposPage() {
       const accesosData = Array.isArray(accesosRes.data) ? accesosRes.data : accesosRes.data?.results ?? [];
       setAccesos(accesosData);
     } catch (e: unknown) {
-      const err = e as ApiErrorShape;
-      setError(err.response?.data?.detail ?? err.response?.data?.message ?? "No se pudieron cargar tus equipos.");
+      setError(toErrorMessage(e, "No se pudieron cargar tus equipos."));
     } finally {
       setLoading(false);
     }

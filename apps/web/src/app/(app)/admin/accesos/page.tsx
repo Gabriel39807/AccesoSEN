@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { toErrorMessage } from "@/lib/errors";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { useMe } from "@/hooks/useMe";
 
 type Usuario = {
   id: number;
@@ -20,7 +22,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MAÑANA" | "TARDE" | "NOCHE";
+  jornada: "MAÃƒâ€˜ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -69,15 +71,15 @@ function Badge({ variant, label }: { variant: "green" | "red" | "blue" | "amber"
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "—";
+  if (!u) return "Ã¢â‚¬â€";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "Ã¢â‚¬â€";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "Ã¢â‚¬â€";
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
@@ -87,15 +89,6 @@ function formatFecha(iso?: string | null) {
   }).format(d);
 }
 
-function safeErrorMessage(e: any) {
-  return (
-    e?.response?.data?.motivo ??
-    e?.response?.data?.detail ??
-    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
-    e?.message ??
-    "Ocurrió un error."
-  );
-}
 
 function useDebounced<T>(value: T, delay = 450) {
   const [debounced, setDebounced] = useState(value);
@@ -125,6 +118,10 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 }
 
 export default function AdminAccesosPage() {
+  const { me } = useMe();
+  const actorRol = me?.rol ?? null;
+  const actorSede = me?.sede_principal ?? null;
+  const isScopedAdmin = actorRol === "admin_sede";
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   // tabla paginada
@@ -146,7 +143,7 @@ export default function AdminAccesosPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // búsqueda selects
+  // bÃƒÂºsqueda selects
   const [aprendizSearch, setAprendizSearch] = useState("");
   const [guardaSearch, setGuardaSearch] = useState("");
 
@@ -213,19 +210,23 @@ export default function AdminAccesosPage() {
     try {
       const params: any = {
         page: p,
-        page_size: pageSize, // DRF lo acepta si habilitas PageNumberPagination (por defecto sí)
+        page_size: pageSize, // DRF lo acepta si habilitas PageNumberPagination (por defecto sÃƒÂ­)
       };
       if (dq.trim()) params.q = dq.trim();
       if (tipo) params.tipo = tipo;
-      if (sede) params.sede = sede;
-      if (aprendizId !== "") params.usuario = aprendizId;
-      if (guardaId !== "") params.registrado_por = guardaId;
+      if (isScopedAdmin) {
+        if (actorSede) params.sede_id = actorSede;
+      } else if (sede) {
+        params.sede_id = sede;
+      }
+      if (aprendizId !== "") params.aprendiz_id = aprendizId;
+      if (guardaId !== "") params.guardia_id = guardaId;
       if (dDateFrom) params.date_from = dDateFrom;
       if (dDateTo) params.date_to = dDateTo;
 
       const r = await api.get<Paginated<Acceso> | Acceso[]>("/api/accesos/", { params });
 
-      // si todavía no tienes paginación, soporta array
+      // si todavÃƒÂ­a no tienes paginaciÃƒÂ³n, soporta array
       const payload: any = r.data;
       const results = Array.isArray(payload) ? payload : payload.results ?? [];
       const c = Array.isArray(payload) ? results.length : payload.count ?? results.length;
@@ -236,7 +237,7 @@ export default function AdminAccesosPage() {
       setCount(c);
     } catch (e: any) {
       if (rid !== requestIdRef.current) return;
-      setError(safeErrorMessage(e));
+      setError(toErrorMessage(e, "No se pudieron cargar los accesos."));
     } finally {
       if (rid === requestIdRef.current) setLoadingTable(false);
     }
@@ -251,7 +252,7 @@ export default function AdminAccesosPage() {
       await cargarAccesos(1);
       setPage(1);
     } catch (e: any) {
-      setError(safeErrorMessage(e));
+      setError(toErrorMessage(e, "No se pudieron cargar los accesos."));
     } finally {
       setLoading(false);
       setLoadingTable(false);
@@ -261,7 +262,8 @@ export default function AdminAccesosPage() {
   function resetFiltros() {
     setQ("");
     setTipo("");
-    setSede("");
+    if (isScopedAdmin && actorSede) setSede(actorSede as NonNullable<Acceso["sede"]>);
+    else setSede("");
     setAprendizId("");
     setGuardaId("");
     setDateFrom("");
@@ -301,13 +303,19 @@ export default function AdminAccesosPage() {
     }
   }
 
-  // ✅ Cargar inicial
+  // Ã¢Å“â€¦ Cargar inicial
   useEffect(() => {
     cargarBase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Auto-refetch con debounce cuando cambian filtros “de request”
+  useEffect(() => {
+    if (!isScopedAdmin) return;
+    if (!actorSede) return;
+    setSede(actorSede as NonNullable<Acceso["sede"]>);
+  }, [isScopedAdmin, actorSede]);
+
+  // Ã¢Å“â€¦ Auto-refetch con debounce cuando cambian filtros Ã¢â‚¬Å“de requestÃ¢â‚¬Â
   useEffect(() => {
     // cuando cambian filtros, vuelvo a page=1
     setPage(1);
@@ -315,7 +323,7 @@ export default function AdminAccesosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dq, tipo, sede, aprendizId, guardaId, dDateFrom, dDateTo, pageSize]);
 
-  // ✅ refetch cuando cambie page
+  // Ã¢Å“â€¦ refetch cuando cambie page
   useEffect(() => {
     cargarAccesos(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -343,7 +351,7 @@ export default function AdminAccesosPage() {
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/página
+                  {n}/pÃƒÂ¡gina
                 </option>
               ))}
             </select>
@@ -373,15 +381,15 @@ export default function AdminAccesosPage() {
                 <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
               </div>
               <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Ingresos</div>
+                <div className="text-sm text-gray-500">En esta pÃƒÂ¡gina: Ingresos</div>
                 <div className="text-2xl font-bold text-emerald-700">{stats.ingresos}</div>
               </div>
               <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Salidas</div>
+                <div className="text-sm text-gray-500">En esta pÃƒÂ¡gina: Salidas</div>
                 <div className="text-2xl font-bold text-rose-700">{stats.salidas}</div>
               </div>
               <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Con equipos</div>
+                <div className="text-sm text-gray-500">En esta pÃƒÂ¡gina: Con equipos</div>
                 <div className="text-2xl font-bold text-gray-900">{stats.conEquipos}</div>
               </div>
             </>
@@ -393,7 +401,7 @@ export default function AdminAccesosPage() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <input
               className="md:col-span-4 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por documento o username…"
+              placeholder="Buscar por documento o usernameÃ¢â‚¬Â¦"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -408,23 +416,29 @@ export default function AdminAccesosPage() {
               <option value="salida">Salida</option>
             </select>
 
-            <select
-              className="md:col-span-2 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={sede}
-              onChange={(e) => setSede(e.target.value as any)}
-            >
-              <option value="">Sede</option>
-              {SEDES.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace("_", " ")}
-                </option>
-              ))}
-            </select>
+            {isScopedAdmin ? (
+              <div className="md:col-span-2 w-full rounded-xl border px-3 py-2 text-sm bg-slate-50 text-slate-700">
+                Sede fija: {String(actorSede || sede || "Sin sede")}
+              </div>
+            ) : (
+              <select
+                className="md:col-span-2 w-full rounded-xl border px-3 py-2 text-sm bg-white"
+                value={sede}
+                onChange={(e) => setSede(e.target.value as any)}
+              >
+                <option value="">Sede: Todas</option>
+                {SEDES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <div className="md:col-span-2 space-y-1">
               <input
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                placeholder="Buscar aprendiz…"
+                placeholder="Buscar aprendizÃ¢â‚¬Â¦"
                 value={aprendizSearch}
                 onChange={(e) => setAprendizSearch(e.target.value)}
               />
@@ -445,7 +459,7 @@ export default function AdminAccesosPage() {
             <div className="md:col-span-2 space-y-1">
               <input
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                placeholder="Buscar guarda…"
+                placeholder="Buscar guardaÃ¢â‚¬Â¦"
                 value={guardaSearch}
                 onChange={(e) => setGuardaSearch(e.target.value)}
               />
@@ -550,11 +564,11 @@ export default function AdminAccesosPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-semibold text-gray-900">{nombreUsuario(aprendiz)}</div>
-                          <div className="text-xs text-gray-500">{aprendiz?.documento ?? "—"}</div>
+                          <div className="text-xs text-gray-500">{aprendiz?.documento ?? "Ã¢â‚¬â€"}</div>
                         </td>
-                        <td className="px-4 py-3 text-gray-800">{registrado ? nombreUsuario(registrado) : "—"}</td>
+                        <td className="px-4 py-3 text-gray-800">{registrado ? nombreUsuario(registrado) : "Ã¢â‚¬â€"}</td>
                         <td className="px-4 py-3">
-                          {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "—"}
+                          {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "Ã¢â‚¬â€"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -618,7 +632,7 @@ export default function AdminAccesosPage() {
 
                 <div className="rounded-xl border p-3">
                   <div className="text-xs text-gray-500">Turno</div>
-                  <div className="font-semibold">{selected.turno ? `#${selected.turno}` : "—"}</div>
+                  <div className="font-semibold">{selected.turno ? `#${selected.turno}` : "Ã¢â‚¬â€"}</div>
                 </div>
               </div>
 
@@ -632,7 +646,7 @@ export default function AdminAccesosPage() {
                   <div>
                     <span className="text-gray-500">Registrado por:</span>{" "}
                     <span className="font-medium">
-                      {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "—"}
+                      {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "Ã¢â‚¬â€"}
                     </span>
                   </div>
                 </div>
@@ -641,7 +655,7 @@ export default function AdminAccesosPage() {
               <div className="rounded-2xl border p-4">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-bold text-gray-900">Equipos</div>
-                  {loadingDetalle ? <div className="text-xs text-gray-500">Cargando…</div> : null}
+                  {loadingDetalle ? <div className="text-xs text-gray-500">CargandoÃ¢â‚¬Â¦</div> : null}
                 </div>
 
                 <div className="mt-2">
@@ -654,7 +668,7 @@ export default function AdminAccesosPage() {
                           <div>
                             <div className="font-semibold text-gray-900">{e.serial}</div>
                             <div className="text-xs text-gray-500">
-                              {e.marca} {e.modelo} • propietario #{e.propietario}
+                              {e.marca} {e.modelo} Ã¢â‚¬Â¢ propietario #{e.propietario}
                             </div>
                           </div>
 
