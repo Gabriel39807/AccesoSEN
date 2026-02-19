@@ -46,6 +46,20 @@ class BaseApiTest(APITestCase):
         return r
 
 
+class HealthEndpointsTests(BaseApiTest):
+    def test_health_endpoint_is_available(self):
+        r = self.client.get("/health/")
+        body = r.json()
+        self.assertEqual(r.status_code, status.HTTP_200_OK, body)
+        self.assertEqual(body.get("status"), "ok")
+
+    def test_ready_endpoint_is_available(self):
+        r = self.client.get("/ready/")
+        body = r.json()
+        self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_503_SERVICE_UNAVAILABLE], body)
+        self.assertIn("checks", body)
+
+
 class LoginAndLockTests(BaseApiTest):
     def setUp(self):
         super().setUp()
