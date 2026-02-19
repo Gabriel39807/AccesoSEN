@@ -8,9 +8,12 @@ from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from rest_framework.test import APIRequestFactory
 from rest_framework.test import APITestCase
 
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, WebAuthnCredential
+from .exceptions import ui_exception_handler
+from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Turno, WebAuthnCredential
 from .otp_services import hash_code
 
 
@@ -92,6 +95,22 @@ class LoginAndLockTests(BaseApiTest):
         )
         self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED, r.data)
         self.assertEqual(r.data["code"], "INVALID_CREDENTIALS")
+
+    def test_aprendiz_can_login_with_documento_when_username_is_text(self):
+        mixed_user = self.create_user(
+            username="aprendiz_test_1",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1112223334",
+            email="aprendiz.documento@sadi.test",
+        )
+        r = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": mixed_user.documento, "password": "Passw0rd!", "expected_role": "aprendiz"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertIn("access", r.data)
 
 
 class PasswordResetOtpTests(BaseApiTest):
@@ -511,6 +530,133 @@ class RolePermissionScopeTests(BaseApiTest):
         self.assertEqual(r2.status_code, status.HTTP_404_NOT_FOUND, r2.data)
 
 
+class FilterAndScopeEnforcementTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="filters_superadmin",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="filters.superadmin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.admin_sede = self.create_user(
+            username="filters_admin_sede",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="filters.admin.sede@sadi.test",
+            sede_principal="CEGAFE",
+        )
+        self.aprendiz_cegafe = self.create_user(
+            username="1111111111",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1111111111",
+            email="aprendiz.cegafe@sadi.test",
+            sede_principal="CEGAFE",
+        )
+        self.aprendiz_santa = self.create_user(
+            username="2222222222",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="2222222222",
+            email="aprendiz.santa@sadi.test",
+            sede_principal="SANTA_CLARA",
+        )
+        self.guarda_cegafe = self.create_user(
+            username="3333333333",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="3333333333",
+            email="guarda.cegafe@sadi.test",
+            sede_principal="CEGAFE",
+        )
+
+    def _auth_superadmin(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+
+    def _auth_admin_sede(self):
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+
+    def test_superadmin_can_filter_usuarios_by_machine_sede_id(self):
+        self._auth_superadmin()
+        r = self.client.get("/api/usuarios/?sede_id=SANTA_CLARA")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertTrue(all(item.get("sede_principal") == "SANTA_CLARA" for item in rows))
+
+    def test_admin_sede_queryset_forces_own_sede_even_with_cross_sede_param(self):
+        self._auth_admin_sede()
+        r = self.client.get("/api/usuarios/?sede_id=SANTA_CLARA")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertTrue(all(item.get("sede_principal") == "CEGAFE" for item in rows))
+        self.assertFalse(any(item.get("id") == self.aprendiz_santa.id for item in rows))
+
+    def test_filter_rejects_human_label_for_usuario_estado(self):
+        self._auth_superadmin()
+        r = self.client.get("/api/usuarios/?estado=Activo")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertEqual(r.data.get("code"), "VALIDATION_ERROR")
+        self.assertIn("estado", r.data.get("detail", {}))
+
+    def test_filter_rejects_human_label_for_turno_jornada(self):
+        Turno.objects.create(
+            guarda=self.guarda_cegafe,
+            sede=Turno.Sede.CEGAFE,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+        )
+        self._auth_superadmin()
+        r = self.client.get("/api/turnos/?jornada=Tarde")
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertEqual(r.data.get("code"), "VALIDATION_ERROR")
+        self.assertIn("jornada", r.data.get("detail", {}))
+
+    def test_admin_sede_acceso_list_forces_own_sede_even_if_querying_other(self):
+        Acceso.objects.create(
+            usuario=self.aprendiz_cegafe,
+            tipo=Acceso.Tipo.INGRESO,
+            sede=Turno.Sede.CEGAFE,
+            registrado_por=self.admin_sede,
+        )
+        Acceso.objects.create(
+            usuario=self.aprendiz_santa,
+            tipo=Acceso.Tipo.INGRESO,
+            sede=Turno.Sede.SANTA_CLARA,
+            registrado_por=self.superadmin,
+        )
+        self._auth_admin_sede()
+        r = self.client.get("/api/accesos/?sede_id=SANTA_CLARA")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertTrue(all(item.get("sede") == "CEGAFE" for item in rows))
+
+    def test_admin_sede_cannot_create_acceso_for_aprendiz_other_sede(self):
+        self._auth_admin_sede()
+        r = self.client.post(
+            "/api/accesos/",
+            {"usuario": self.aprendiz_santa.id, "tipo": "ingreso"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+        self.assertEqual(r.data.get("code"), "PERMISSION_DENIED")
+
+    def test_guarda_cannot_start_turno_in_other_sede(self):
+        self.auth(self.guarda_cegafe.username, "Passw0rd!", expected_role="guarda")
+        r = self.client.post(
+            "/api/turnos/iniciar/",
+            {"sede": "SANTA_CLARA", "jornada": Turno.Jornada.TARDE},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+        self.assertEqual(r.data.get("code"), "PERMISSION_DENIED")
+
+
 class EmailChangeOtpTests(BaseApiTest):
     def setUp(self):
         super().setUp()
@@ -586,6 +732,39 @@ class NumericFieldValidationTests(BaseApiTest):
         )
         self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
         self.assertIn("documento", r.data.get("detail", {}))
+        self.assertEqual(r.data.get("field"), "documento")
+
+    def test_usuario_create_accepts_non_numeric_username(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        payload = {
+            "username": "gabriel_pico_8",
+            "password": "Passw0rd!",
+            "rol": "aprendiz",
+            "estado": "activo",
+            "documento": "1234567890",
+            "sede_principal": "CEGAFE",
+        }
+        r = self.client.post("/api/usuarios/", payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+        self.assertEqual(r.data["username"], payload["username"])
+
+    def test_usuario_create_rejects_username_with_spaces(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "nombre invalido",
+                "password": "Passw0rd!",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "documento": "1234567891",
+                "sede_principal": "CEGAFE",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertEqual(r.data.get("field"), "username")
+        self.assertIn("nombre de usuario", (r.data.get("message") or "").lower())
 
     def test_aprendiz_profile_phone_normalizes_to_digits(self):
         self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
@@ -696,3 +875,22 @@ class FrontendContractSmokeTests(BaseApiTest):
         self.assertIn("expected_role", login)
         self.assertIn("/api/auth/passkeys/auth/options/", login)
         self.assertIn("/api/auth/passkeys/auth/verify/", login)
+
+
+class ExceptionHandlerSafetyTests(BaseApiTest):
+    def test_unhandled_api_exception_returns_safe_json_payload(self):
+        request = APIRequestFactory().post("/api/usuarios/", {}, format="json")
+        response = ui_exception_handler(RuntimeError("boom PATH=C:\\Windows"), {"request": request})
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.data.get("code"), "SERVER_ERROR")
+        self.assertIn("error interno", str(response.data.get("message", "")).lower())
+        self.assertIsNone(response.data.get("detail"))
+
+    def test_validation_message_is_human_friendly(self):
+        request = APIRequestFactory().post("/api/usuarios/", {}, format="json")
+        response = ui_exception_handler(ValidationError({"username": ["This field is required."]}), {"request": request})
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("nombre de usuario", str(response.data.get("message", "")).lower())
+        self.assertIn("obligatorio", str(response.data.get("message", "")).lower())

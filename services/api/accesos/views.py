@@ -5,6 +5,7 @@ import io
 import re
 import secrets
 import time
+from datetime import date
 from urllib.parse import unquote
 from uuid import uuid4
 
@@ -81,6 +82,7 @@ from .serializers import (
 PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
 PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
 MAX_ADMINS_PER_SEDE = 4
+FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
 
 
 def _webauthn_register_cache_key(user_id: int, request_id: str) -> str:
@@ -132,6 +134,130 @@ def _enforce_admin_sede_limit(target_sede: str | None, exclude_user_id: int | No
         qs = qs.exclude(id=exclude_user_id)
     current = qs.count()
     return current >= MAX_ADMINS_PER_SEDE, current
+
+
+def _pick_query_param(request, names: list[str]) -> tuple[str | None, str | None]:
+    for name in names:
+        value = request.query_params.get(name, None)
+        if value is None:
+            continue
+        clean = str(value).strip()
+        if not clean:
+            continue
+        return clean, name
+    return None, None
+
+
+def _choice_codes_and_labels(choices) -> tuple[list[str], set[str]]:
+    codes: list[str] = []
+    labels: set[str] = set()
+    for code, label in list(choices):
+        codes.append(str(code))
+        labels.add(str(label).strip().lower())
+    return codes, labels
+
+
+def _parse_choice_query_param(
+    request,
+    *,
+    names: list[str],
+    choices,
+    field: str,
+    allow_all: bool = False,
+):
+    raw, _ = _pick_query_param(request, names)
+    if raw is None:
+        return None
+
+    lower = raw.lower()
+    if lower in FILTER_ALL_VALUES:
+        if allow_all:
+            return None
+        raise ValidationError({field: "El valor 'Todas' no es valido para este filtro."})
+
+    valid_codes, label_values = _choice_codes_and_labels(choices)
+    if raw in valid_codes:
+        return raw
+
+    if lower in label_values:
+        raise ValidationError(
+            {
+                field: (
+                    f"Valor invalido para {field}. Debes enviar el codigo tecnico, "
+                    f"no la etiqueta visible. Valores permitidos: {', '.join(valid_codes)}."
+                )
+            }
+        )
+
+    raise ValidationError({field: f"Valor invalido. Valores permitidos: {', '.join(valid_codes)}."})
+
+
+def _parse_int_query_param(request, *, names: list[str], field: str):
+    raw, _ = _pick_query_param(request, names)
+    if raw is None:
+        return None
+
+    lower = raw.lower()
+    if lower in FILTER_ALL_VALUES:
+        return None
+    if not raw.isdigit():
+        raise ValidationError({field: "Debe ser un numero entero positivo."})
+    return int(raw)
+
+
+def _parse_bool_query_param(request, *, names: list[str], field: str):
+    raw, _ = _pick_query_param(request, names)
+    if raw is None:
+        return None
+    lower = raw.lower()
+    if lower in FILTER_ALL_VALUES:
+        return None
+    if lower not in {"true", "false"}:
+        raise ValidationError({field: "Valor invalido. Usa true o false."})
+    return lower == "true"
+
+
+def _parse_date_query_param(request, *, names: list[str], field: str):
+    raw, _ = _pick_query_param(request, names)
+    if raw is None:
+        return None
+    lower = raw.lower()
+    if lower in FILTER_ALL_VALUES:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        raise ValidationError({field: "Formato de fecha invalido. Usa YYYY-MM-DD."})
+
+
+def _parse_sede_query_param(request, user: Usuario, *, names: list[str], field: str = "sede_id"):
+    actor_sede = _scope_sede(user)
+    raw, _ = _pick_query_param(request, names)
+
+    if is_admin_sede(user):
+        return actor_sede
+
+    if raw is None:
+        return None
+    lower = raw.lower()
+    if lower in FILTER_ALL_VALUES:
+        if is_superadmin(user):
+            return None
+        return actor_sede
+
+    valid_codes, label_values = _choice_codes_and_labels(Turno.Sede.choices)
+    if raw in valid_codes:
+        return raw
+    if lower in label_values:
+        raise ValidationError(
+            {
+                field: (
+                    "Valor invalido para sede. Debes enviar el codigo tecnico (por ejemplo CEGAFE o SANTA_CLARA), "
+                    "no el label visible."
+                )
+            }
+        )
+    raise ValidationError({field: f"Sede invalida. Valores permitidos: {', '.join(valid_codes)}."})
 
 
 def _uniform_response_delay(start_ts: float, min_ms: int = 220):
@@ -505,23 +631,18 @@ class LegacyPasswordResetRequestView(APIView):
         s.is_valid(raise_exception=True)
 
         email = s.validated_data.get("email", "")
-        telefono = s.validated_data.get("telefono", "")
-        channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
         ip = get_client_ip(request)
 
-        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
+        user = _find_user_for_password_reset(email=email)
         if user:
-            k_user = [str(user.id), channel]
-            k_ip = [ip, channel]
+            k_user = [str(user.id), PasswordResetOTP.Channel.EMAIL]
+            k_ip = [ip, PasswordResetOTP.Channel.EMAIL]
             if is_locked("otp-request-user", k_user) or is_locked("otp-request-ip", k_ip):
                 return error_response(
                     code=ErrorCode.ACCOUNT_LOCKED_15MIN,
                     message="Demasiadas solicitudes. Intenta más tarde.",
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
-
-            if channel == PasswordResetOTP.Channel.WHATSAPP and not user.telefono:
-                return ok_response({"mensaje": "Si el usuario existe, enviamos un código OTP."})
 
             limit_user = bump_with_lock("otp-request-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
             limit_ip = bump_with_lock("otp-request-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
@@ -532,9 +653,9 @@ class LegacyPasswordResetRequestView(APIView):
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
-            otp_obj, code = create_otp_for_user(user, channel)
+            otp_obj, code = create_otp_for_user(user)
             try:
-                send_otp(channel, user, code)
+                send_password_reset_email(user.email, code)
             except Exception:
                 otp_obj.delete()
                 return error_response(
@@ -554,11 +675,9 @@ class LegacyPasswordResetVerifyView(APIView):
         s.is_valid(raise_exception=True)
 
         email = s.validated_data.get("email", "")
-        telefono = s.validated_data.get("telefono", "")
         otp = s.validated_data["otp"]
-        channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
 
-        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
+        user = _find_user_for_password_reset(email=email)
         if not user:
             return error_response(
                 code=ErrorCode.OTP_INVALID,
@@ -567,7 +686,7 @@ class LegacyPasswordResetVerifyView(APIView):
             )
 
         otp_obj = (
-            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=channel)
+            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=PasswordResetOTP.Channel.EMAIL)
             .order_by("-created_at")
             .first()
         )
@@ -612,12 +731,10 @@ class LegacyPasswordResetConfirmView(APIView):
         s.is_valid(raise_exception=True)
 
         email = s.validated_data.get("email", "")
-        telefono = s.validated_data.get("telefono", "")
         otp = s.validated_data["otp"]
         new_password = s.validated_data["new_password"]
-        channel = s.validated_data.get("channel", PasswordResetOTP.Channel.EMAIL)
 
-        user = _find_user_for_password_reset(channel=channel, email=email, telefono=telefono)
+        user = _find_user_for_password_reset(email=email)
         if not user:
             return error_response(
                 code=ErrorCode.OTP_INVALID,
@@ -626,7 +743,7 @@ class LegacyPasswordResetConfirmView(APIView):
             )
 
         otp_obj = (
-            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=channel)
+            PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=PasswordResetOTP.Channel.EMAIL)
             .order_by("-created_at")
             .first()
         )
@@ -665,7 +782,7 @@ class LegacyPasswordResetConfirmView(APIView):
 
         otp_obj.used_at = timezone.now()
         otp_obj.save(update_fields=["used_at"])
-        PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=channel).exclude(id=otp_obj.id).update(
+        PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=PasswordResetOTP.Channel.EMAIL).exclude(id=otp_obj.id).update(
             used_at=timezone.now()
         )
 
@@ -682,9 +799,24 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         qs = _admin_sede_qs(qs, self.request.user, "sede_principal")
 
         q = (self.request.query_params.get("q") or "").strip()
-        rol = (self.request.query_params.get("rol") or "").strip()
-        estado = (self.request.query_params.get("estado") or "").strip()
-        sede_principal = (self.request.query_params.get("sede_principal") or "").strip()
+        rol = _parse_choice_query_param(
+            self.request,
+            names=["rol"],
+            choices=Usuario.Rol.choices,
+            field="rol",
+        )
+        estado = _parse_choice_query_param(
+            self.request,
+            names=["estado"],
+            choices=Usuario.Estado.choices,
+            field="estado",
+        )
+        sede_principal = _parse_sede_query_param(
+            self.request,
+            self.request.user,
+            names=["sede_id", "sede_principal", "sede"],
+            field="sede_id",
+        )
 
         if q:
             qs = qs.filter(
@@ -1051,9 +1183,31 @@ class EquipoViewSet(viewsets.ModelViewSet):
         else:
             qs = Equipo.objects.none()
 
-        estado = (self.request.query_params.get("estado") or "").strip()
+        estado = _parse_choice_query_param(
+            self.request,
+            names=["estado"],
+            choices=Equipo.Estado.choices,
+            field="estado",
+        )
         if estado:
             qs = qs.filter(estado=estado)
+
+        sede_code = _parse_sede_query_param(
+            self.request,
+            user,
+            names=["sede_id", "sede", "sede_principal"],
+            field="sede_id",
+        )
+        if sede_code:
+            qs = qs.filter(propietario__sede_principal=sede_code)
+
+        aprendiz_id = _parse_int_query_param(
+            self.request,
+            names=["aprendiz_id", "propietario_id", "propietario"],
+            field="aprendiz_id",
+        )
+        if aprendiz_id is not None:
+            qs = qs.filter(propietario_id=aprendiz_id)
 
         q = (self.request.query_params.get("q") or "").strip()
         if q:
@@ -1088,6 +1242,51 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
         return [IsAuthenticated()]
 
+    def _ensure_admin_sede_equipo_payload_scope(self, payload: dict, equipo: Equipo):
+        actor = self.request.user
+        if not is_admin_sede(actor):
+            return None
+
+        actor_sede = _scope_sede(actor)
+        if not actor_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if _scope_sede(equipo.propietario) != actor_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo puedes gestionar equipos de tu sede.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if "propietario" in payload:
+            owner_raw = str(payload.get("propietario") or "").strip()
+            if not owner_raw.isdigit():
+                return error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="El campo propietario debe ser un id numerico.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    field="propietario",
+                )
+            propietario = Usuario.objects.filter(id=int(owner_raw)).first()
+            if not propietario:
+                return error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="El propietario indicado no existe.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    field="propietario",
+                )
+            if _scope_sede(propietario) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No puedes mover equipos a propietarios de otra sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+        return None
+
     def _update_as_aprendiz(self, request, partial: bool):
         user = request.user
         equipo = self.get_object()
@@ -1118,11 +1317,19 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         if is_admin_role(request.user):
+            equipo = self.get_object()
+            scope_error = self._ensure_admin_sede_equipo_payload_scope(request.data.copy(), equipo)
+            if scope_error:
+                return scope_error
             return super().update(request, *args, **kwargs)
         return self._update_as_aprendiz(request, partial=False)
 
     def partial_update(self, request, *args, **kwargs):
         if is_admin_role(request.user):
+            equipo = self.get_object()
+            scope_error = self._ensure_admin_sede_equipo_payload_scope(request.data.copy(), equipo)
+            if scope_error:
+                return scope_error
             return super().partial_update(request, *args, **kwargs)
         return self._update_as_aprendiz(request, partial=True)
 
@@ -1203,6 +1410,14 @@ class EquipoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["patch"], url_path="revisar")
     def revisar(self, request, pk=None):
         equipo = self.get_object()
+        if is_admin_sede(request.user):
+            actor_sede = _scope_sede(request.user)
+            if not actor_sede or _scope_sede(equipo.propietario) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes revisar equipos de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
         s = EquipoRevisionSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
@@ -1241,17 +1456,55 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             qs = Turno.objects.filter(guarda=user).order_by("-inicio")
 
-        sede = (self.request.query_params.get("sede") or "").strip()
+        sede = _parse_sede_query_param(
+            self.request,
+            user,
+            names=["sede_id", "sede"],
+            field="sede_id",
+        )
         if sede:
             qs = qs.filter(sede=sede)
 
-        jornada = (self.request.query_params.get("jornada") or "").strip()
+        jornada = _parse_choice_query_param(
+            self.request,
+            names=["jornada"],
+            choices=Turno.Jornada.choices,
+            field="jornada",
+        )
         if jornada:
             qs = qs.filter(jornada=jornada)
 
-        activo = (self.request.query_params.get("activo") or "").strip().lower()
-        if activo in ["true", "false"]:
-            qs = qs.filter(activo=(activo == "true"))
+        activo = _parse_bool_query_param(
+            self.request,
+            names=["activo"],
+            field="activo",
+        )
+        if activo is not None:
+            qs = qs.filter(activo=activo)
+
+        guardia_id = _parse_int_query_param(
+            self.request,
+            names=["guardia_id", "guarda_id", "guarda"],
+            field="guardia_id",
+        )
+        if guardia_id is not None:
+            qs = qs.filter(guarda_id=guardia_id)
+
+        date_from = _parse_date_query_param(
+            self.request,
+            names=["date_from"],
+            field="date_from",
+        )
+        if date_from is not None:
+            qs = qs.filter(inicio__date__gte=date_from)
+
+        date_to = _parse_date_query_param(
+            self.request,
+            names=["date_to"],
+            field="date_to",
+        )
+        if date_to is not None:
+            qs = qs.filter(inicio__date__lte=date_to)
 
         return qs
 
@@ -1259,6 +1512,14 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     def iniciar(self, request):
         s = TurnoIniciarSerializer(data=request.data)
         s.is_valid(raise_exception=True)
+
+        guarda_sede = _scope_sede(request.user)
+        if guarda_sede and s.validated_data["sede"] != guarda_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo puedes iniciar turno en tu sede asignada.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
         turno_activo = obtener_turno_activo(request.user)
         if turno_activo:
@@ -1403,28 +1664,62 @@ class AccesoViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.none()
 
-        tipo = (self.request.query_params.get("tipo") or "").strip()
+        tipo = _parse_choice_query_param(
+            self.request,
+            names=["tipo"],
+            choices=Acceso.Tipo.choices,
+            field="tipo",
+        )
         if tipo:
             qs = qs.filter(tipo=tipo)
 
-        sede = (self.request.query_params.get("sede") or "").strip()
+        sede = _parse_sede_query_param(
+            self.request,
+            user,
+            names=["sede_id", "sede"],
+            field="sede_id",
+        )
         if sede:
             qs = qs.filter(sede=sede)
 
-        usuario_id = (self.request.query_params.get("usuario") or "").strip()
-        if usuario_id.isdigit():
-            qs = qs.filter(usuario_id=int(usuario_id))
+        aprendiz_id = _parse_int_query_param(
+            self.request,
+            names=["aprendiz_id", "usuario_id", "usuario"],
+            field="aprendiz_id",
+        )
+        if aprendiz_id is not None:
+            qs = qs.filter(usuario_id=aprendiz_id)
 
-        reg_id = (self.request.query_params.get("registrado_por") or "").strip()
-        if reg_id.isdigit():
-            qs = qs.filter(registrado_por_id=int(reg_id))
+        guardia_id = _parse_int_query_param(
+            self.request,
+            names=["guardia_id", "guarda_id"],
+            field="guardia_id",
+        )
+        if guardia_id is not None:
+            qs = qs.filter(turno__guarda_id=guardia_id)
 
-        date_from = (self.request.query_params.get("date_from") or "").strip()
-        if date_from:
+        registrado_por_id = _parse_int_query_param(
+            self.request,
+            names=["registrado_por_id", "registrado_por"],
+            field="registrado_por_id",
+        )
+        if registrado_por_id is not None:
+            qs = qs.filter(registrado_por_id=registrado_por_id)
+
+        date_from = _parse_date_query_param(
+            self.request,
+            names=["date_from"],
+            field="date_from",
+        )
+        if date_from is not None:
             qs = qs.filter(fecha__date__gte=date_from)
 
-        date_to = (self.request.query_params.get("date_to") or "").strip()
-        if date_to:
+        date_to = _parse_date_query_param(
+            self.request,
+            names=["date_to"],
+            field="date_to",
+        )
+        if date_to is not None:
             qs = qs.filter(fecha__date__lte=date_to)
 
         q = (self.request.query_params.get("q") or "").strip()
@@ -1440,6 +1735,43 @@ class AccesoViewSet(viewsets.ModelViewSet):
             ).distinct()
 
         return qs
+
+    def _ensure_admin_sede_acceso_payload_scope(self, payload: dict):
+        actor = self.request.user
+        if not is_admin_sede(actor):
+            return None
+        actor_sede = _scope_sede(actor)
+        if not actor_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if "usuario" in payload:
+            raw = str(payload.get("usuario") or "").strip()
+            if not raw.isdigit():
+                return error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="El campo aprendiz_id debe ser un id numerico.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    field="aprendiz_id",
+                )
+            aprendiz = Usuario.objects.filter(id=int(raw)).first()
+            if not aprendiz:
+                return error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="El aprendiz indicado no existe.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    field="aprendiz_id",
+                )
+            if _scope_sede(aprendiz) != actor_sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes asociar accesos a aprendices de tu sede.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+        return None
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
@@ -1570,6 +1902,18 @@ class AccesoViewSet(viewsets.ModelViewSet):
             acceso.equipos.set(list(equipos_enviados))
 
         return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        scope_error = self._ensure_admin_sede_acceso_payload_scope(request.data.copy())
+        if scope_error:
+            return scope_error
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        scope_error = self._ensure_admin_sede_acceso_payload_scope(request.data.copy())
+        if scope_error:
+            return scope_error
+        return super().partial_update(request, *args, **kwargs)
 
     @action(detail=False, methods=["post"], url_path="validar_documento")
     def validar_documento(self, request):
@@ -2235,3 +2579,5 @@ class PasskeyAuthVerifyView(APIView):
         cache.delete(key)
         tokens = issue_tokens_for_user(user, rotate_guard_session=True)
         return Response(tokens, status=status.HTTP_200_OK)
+
+

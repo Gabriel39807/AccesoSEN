@@ -72,7 +72,13 @@ def _find_user_by_login_identifier(User, identifier: str):
     user = User.objects.filter(username__iexact=login_value).first()
     if user:
         return user
-    return User.objects.filter(Q(email__iexact=login_value)).first()
+    user = User.objects.filter(Q(email__iexact=login_value)).first()
+    if user:
+        return user
+    # Permite login por numero de documento en modulos donde se usa credencial numerica.
+    if login_value.isdigit():
+        return User.objects.filter(documento=login_value).first()
+    return None
 
 
 def issue_tokens_for_user(user, rotate_guard_session: bool = True) -> dict[str, str]:

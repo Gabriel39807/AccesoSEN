@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 from .models import Usuario, Acceso, Equipo, Turno
 from .models import Notificacion
@@ -37,6 +39,7 @@ def is_signed_scan_token(value: str) -> bool:
 # =========================
 class UsuarioSerializer(serializers.ModelSerializer):
     # ✅ para crear/editar desde Admin (no se devuelve nunca)
+    username = serializers.CharField(required=True, allow_blank=False, max_length=150)
     password = serializers.CharField(write_only=True, required=False, allow_blank=False, min_length=4)
 
     class Meta:
@@ -63,6 +66,18 @@ class UsuarioSerializer(serializers.ModelSerializer):
         value = (value or "").strip().lower()
         if value and Usuario.objects.filter(email__iexact=value).exclude(id=getattr(self.instance, "id", None)).exists():
             raise serializers.ValidationError("El correo ya esta registrado.")
+        return value
+
+    def validate_username(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Debes escribir un nombre de usuario.")
+        if not re.match(r"^[A-Za-z0-9_@.+-]+$", value):
+            raise serializers.ValidationError(
+                "El nombre de usuario solo permite letras, numeros y los simbolos _ @ . + -"
+            )
+        if Usuario.objects.filter(username__iexact=value).exclude(id=getattr(self.instance, "id", None)).exists():
+            raise serializers.ValidationError("Este nombre de usuario ya esta en uso.")
         return value
 
     def validate_documento(self, value):
