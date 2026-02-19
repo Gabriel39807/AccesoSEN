@@ -1,0 +1,11 @@
+# Global owners
+* @gabrielpico @juanmora
+
+# Backend
+services/api/** @gabrielpico @juanmora
+
+# Frontend web
+apps/web/** @gabrielpico @juanmora
+
+# Mobile
+apps/mobile-rn/** @gabrielpico @juanmora

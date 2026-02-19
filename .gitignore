@@ -1,36 +1,68 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
-.env
-.venv
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+venv/
+.venv/
 env/
+ENV/
+services/api/venv/
+services/api/.venv/
 
 # Django
 db.sqlite3
 media/
 staticfiles/
 
-# Node / React
+# Node / JS / TS
 node_modules/
+.npm/
+.pnpm-store/
+.yarn/
 dist/
 build/
+coverage/
+.next/
+apps/web/.next/
+apps/web/out/
+apps/mobile-rn/.expo/
+apps/mobile-rn/.expo-shared/
+
+# Artifacts / archives
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
 
 # Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Django secrets
-services/api/.env
-.env
-
-# IA y Agentes
+# Local docs/helpers not for source control
 Agents.md
