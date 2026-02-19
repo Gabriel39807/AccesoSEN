@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from uuid import uuid4
 
@@ -22,6 +23,7 @@ LOGIN_LOCK_SEC = 15 * 60
 
 REPEATED_LOCKOUT_THRESHOLD = 3
 REPEATED_LOCKOUT_WINDOW = timedelta(hours=24)
+logger = logging.getLogger(__name__)
 
 
 def _register_lockout_event(user):
@@ -37,6 +39,7 @@ def _register_lockout_event(user):
 
     if user.failed_lockouts_count >= REPEATED_LOCKOUT_THRESHOLD:
         user.force_password_reset = True
+        logger.warning("force_password_reset_enabled user_id=%s", getattr(user, "id", None))
 
     user.save(update_fields=["first_lockout_at", "failed_lockouts_count", "force_password_reset"])
 
@@ -112,6 +115,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         if expected_role in {"guarda", "aprendiz"} and (
             not login_identifier.isdigit() or len(login_identifier) < 6 or len(login_identifier) > 10
         ):
+            logger.info("login_rejected_invalid_document expected_role=%s ip=%s", expected_role, ip)
             raise AuthenticationFailed(
                 {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."}
             )
@@ -137,6 +141,12 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         remaining_ip = get_lock_remaining("login-ip", [ip])
         remaining_lock = max(remaining_user, remaining_ip)
         if remaining_lock > 0:
+            logger.warning(
+                "login_locked login=%s ip=%s remaining=%s",
+                canonical_login,
+                ip,
+                remaining_lock,
+            )
             raise AuthenticationFailed(
                 {
                     "code": ErrorCode.ACCOUNT_LOCKED_15MIN,
@@ -163,6 +173,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
 
             if user and lock_user.get("just_locked"):
                 _register_lockout_event(user)
+                logger.warning("login_just_locked user_id=%s ip=%s", getattr(user, "id", None), ip)
 
             if user and getattr(user, "force_password_reset", False):
                 raise AuthenticationFailed(
@@ -198,6 +209,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         reset_counter("login-ip", [ip])
 
         _clear_lockout_state(self.user)
+        logger.info("login_success user_id=%s role=%s ip=%s", getattr(self.user, "id", None), role, ip)
 
         data.update(issue_tokens_for_user(self.user, rotate_guard_session=True))
         return data

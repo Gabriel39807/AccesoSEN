@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 from datetime import timedelta
 
@@ -16,6 +17,17 @@ OTP_MAX_ATTEMPTS = 5
 OTP_MAX_REQUESTS = 3
 OTP_REQUEST_WINDOW_SEC = 5 * 60
 OTP_REQUEST_LOCK_SEC = 15 * 60
+logger = logging.getLogger(__name__)
+
+
+def _mask_email(value: str) -> str:
+    text = (value or "").strip()
+    if "@" not in text:
+        return "***"
+    local, domain = text.split("@", 1)
+    if len(local) <= 2:
+        return f"***@{domain}"
+    return f"{local[0]}***{local[-1]}@{domain}"
 
 
 def hash_code(salt: str, code: str) -> str:
@@ -36,6 +48,7 @@ def create_otp_for_user(user: Usuario) -> tuple[PasswordResetOTP, str]:
         expires_at=timezone.now() + timedelta(minutes=OTP_TTL_MINUTES),
         channel=PasswordResetOTP.Channel.EMAIL,
     )
+    logger.info("otp_created user_id=%s channel=%s", getattr(user, "id", None), PasswordResetOTP.Channel.EMAIL)
     return otp, code
 
 
@@ -64,4 +77,4 @@ def send_password_reset_email(to_email: str, code: str):
     if html_body:
         msg.attach_alternative(html_body, "text/html")
     msg.send(fail_silently=False)
-
+    logger.info("otp_email_sent recipient=%s", _mask_email(to_email))

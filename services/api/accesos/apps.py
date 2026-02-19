@@ -14,6 +14,9 @@ def ensure_superadmin_exists(sender, **kwargs):
     from django.contrib.auth import get_user_model
     from django.conf import settings
 
+    if not getattr(settings, "DEFAULT_SUPERADMIN_AUTO_CREATE", True):
+        return
+
     User = get_user_model()
     if User.objects.filter(rol="superadmin").exists():
         return
