@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import * as Auth from "../../src/api/auth";
+import { toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type PasswordRule = {
@@ -44,7 +45,7 @@ export default function AprendizPerfil() {
       setPerfil(p);
       setTelefono(p.telefono || "");
     } catch (e: any) {
-      setMsg(e?.message || "No se pudo cargar el perfil.");
+      setMsg(toUiErrorMessage(e, "No se pudo cargar el perfil."));
     } finally {
       setLoadingPerfil(false);
     }
@@ -63,7 +64,7 @@ export default function AprendizPerfil() {
       setTelefono(r.perfil.telefono || "");
       setMsg(r.mensaje || "Perfil actualizado.");
     } catch (e: any) {
-      setMsg(e?.message || "No se pudo actualizar el telefono.");
+      setMsg(toUiErrorMessage(e, "No se pudo actualizar el telefono."));
     } finally {
       setSaving(false);
     }
@@ -76,7 +77,7 @@ export default function AprendizPerfil() {
       const r = await Auth.requestAprendizEmailChange(newEmail);
       setMsg(r.mensaje || "Enviamos OTP al nuevo correo.");
     } catch (e: any) {
-      setMsg(e?.message || "No se pudo solicitar el cambio de correo.");
+      setMsg(toUiErrorMessage(e, "No se pudo solicitar el cambio de correo."));
     } finally {
       setSaving(false);
     }
@@ -92,7 +93,7 @@ export default function AprendizPerfil() {
       setEmailOtp("");
       setMsg(r.mensaje || "Correo actualizado.");
     } catch (e: any) {
-      setMsg(e?.message || "No se pudo confirmar el cambio de correo.");
+      setMsg(toUiErrorMessage(e, "No se pudo confirmar el cambio de correo."));
     } finally {
       setSaving(false);
     }
@@ -114,7 +115,7 @@ export default function AprendizPerfil() {
       setMsg("Contrasena actualizada correctamente.");
       await loadPerfil();
     } catch (e: any) {
-      setMsg(e?.message || "No se pudo actualizar la contrasena.");
+      setMsg(toUiErrorMessage(e, "No se pudo actualizar la contrasena."));
     } finally {
       setSaving(false);
     }

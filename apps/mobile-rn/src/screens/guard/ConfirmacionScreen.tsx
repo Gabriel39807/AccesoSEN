@@ -3,6 +3,7 @@ import { View, Text, Pressable, FlatList, Alert } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { GuardStackParamList } from "../../navigation/GuardStack";
 import * as Accesos from "../../api/accesos";
+import { toUiErrorMessage } from "../../api/client";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "Confirmacion">;
 
@@ -33,7 +34,7 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
       Alert.alert("Listo", `Se registró ${tipo} correctamente.`);
       navigation.popToTop(); // vuelve al panel
     } catch (e: any) {
-      const motivo = e?.response?.data?.motivo || e?.response?.data?.detail || "No se pudo registrar.";
+      const motivo = toUiErrorMessage(e, "No se pudo registrar el acceso.");
       Alert.alert("No permitido", motivo);
     } finally {
       setLoading(false);

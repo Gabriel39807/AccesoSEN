@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 
-import { api } from "../../src/api/client";
+import { api, toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type EquipoItem = {
@@ -56,7 +56,7 @@ export default function AprendizEquipos() {
       setMsg("Equipo registrado correctamente.");
       await cargar();
     } catch (e: any) {
-      setMsg(e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo registrar el equipo.");
+      setMsg(toUiErrorMessage(e, "No se pudo registrar el equipo."));
     } finally {
       setSaving(false);
     }

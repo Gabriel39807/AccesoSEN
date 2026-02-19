@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 
 import * as Accesos from "../../src/api/accesos";
+import { toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
@@ -40,7 +41,7 @@ export default function ScanScreen() {
       if (status === 404) {
         router.push({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
       } else {
-        const motivo = e?.response?.data?.motivo || e?.response?.data?.detail || "Acceso denegado.";
+        const motivo = toUiErrorMessage(e, "Acceso denegado.");
         router.push({ pathname: "/guard/confirmacion", params: { status: "denied", documento: clean, motivo } } as any);
       }
     } finally {

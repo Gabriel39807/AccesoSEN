@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Text, View } from "react-native";
 
-import { api } from "../../src/api/client";
+import { api, toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type QrResponse = {
@@ -26,7 +26,7 @@ export default function MiQrScreen() {
       setData(r.data);
     } catch (e: any) {
       setData(null);
-      setMsg(e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo cargar tu QR.");
+      setMsg(toUiErrorMessage(e, "No se pudo cargar tu QR."));
     } finally {
       setLoading(false);
     }

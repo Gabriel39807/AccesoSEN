@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-nativ
 import { Picker } from "@react-native-picker/picker";
 
 import { useSessionStore } from "../../store/session";
+import { toUiErrorMessage } from "../../api/client";
 import { Jornada, Sede } from "../../api/turnos";
 
 export function GuardLoginScreen() {
@@ -40,7 +41,7 @@ export function GuardLoginScreen() {
     try {
       await signInGuarda({ username: username.trim(), password, sede, jornada });
     } catch (e: any) {
-      setError(e?.message || "No se pudo iniciar sesion.");
+      setError(toUiErrorMessage(e, "No se pudo iniciar sesion."));
     } finally {
       setLoading(false);
     }

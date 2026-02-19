@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
 import * as Accesos from "../../src/api/accesos";
+import { toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 export default function ConfirmacionScreen() {
@@ -32,7 +33,7 @@ export default function ConfirmacionScreen() {
       Alert.alert("Listo", `Se registro ${tipo} correctamente.`);
       router.replace("/guard/home");
     } catch (e: any) {
-      const motivo = e?.response?.data?.motivo || e?.response?.data?.detail || "No se pudo registrar.";
+      const motivo = toUiErrorMessage(e, "No se pudo registrar el acceso.");
       Alert.alert("No permitido", motivo);
     } finally {
       setLoading(false);

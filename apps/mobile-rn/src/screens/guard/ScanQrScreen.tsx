@@ -4,6 +4,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { GuardStackParamList } from "../../navigation/GuardStack";
 import * as Accesos from "../../api/accesos";
+import { toUiErrorMessage } from "../../api/client";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ScanQr">;
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
@@ -39,7 +40,7 @@ export function ScanQrScreen({ navigation }: Props) {
       if (status === 404) {
         navigation.navigate("Confirmacion", { status: "notfound", documento: doc });
       } else {
-        const motivo = e?.response?.data?.motivo || e?.response?.data?.detail || "Acceso denegado.";
+        const motivo = toUiErrorMessage(e, "Acceso denegado.");
         navigation.navigate("Confirmacion", { status: "denied", documento: doc, motivo });
       }
     } finally {

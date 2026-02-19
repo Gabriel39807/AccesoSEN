@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { clearTokens, getAccessToken } from "../storage/tokens";
 import * as Auth from "../api/auth";
+import { toUiErrorMessage } from "../api/client";
 import * as Turnos from "../api/turnos";
 
 type SessionState = {
@@ -99,7 +100,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           set({ user: me.usuario, turno: data.turno });
           return;
         }
-        throw new Error(data?.message || data?.motivo || "No se pudo iniciar el turno.");
+        throw new Error(toUiErrorMessage(e, "No se pudo iniciar el turno."));
       }
     }
 

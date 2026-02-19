@@ -4,6 +4,7 @@ import { Picker } from "@react-native-picker/picker";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { useSessionStore } from "../../src/store/session";
+import { toUiErrorMessage } from "../../src/api/client";
 import type { Jornada, Sede } from "../../src/api/turnos";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
@@ -71,7 +72,7 @@ export default function LoginScreen() {
         router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
       }
     } catch (e: any) {
-      setError(e?.message || "No se pudo iniciar sesion.");
+      setError(toUiErrorMessage(e, "No se pudo iniciar sesion."));
       const code = e?.code as string | undefined;
       const secondsRemaining = Number(e?.detail?.seconds_remaining || 0);
       if (code === "ACCOUNT_LOCKED_15MIN") {

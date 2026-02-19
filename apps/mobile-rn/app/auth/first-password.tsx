@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { router } from "expo-router";
 
 import * as Auth from "../../src/api/auth";
+import { toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type PasswordRule = {
@@ -44,7 +45,7 @@ export default function FirstPasswordScreen() {
       if (!r.permitido) throw new Error(r.motivo || "No se pudo actualizar.");
       router.replace("/aprendiz/home" as any);
     } catch (e: any) {
-      setMsg(e?.response?.data?.message || e?.response?.data?.motivo || e?.message || "No se pudo actualizar.");
+      setMsg(toUiErrorMessage(e, "No se pudo actualizar."));
     } finally {
       setLoading(false);
     }

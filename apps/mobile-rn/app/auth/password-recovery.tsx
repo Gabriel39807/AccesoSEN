@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { router } from "expo-router";
 import * as Auth from "../../src/api/auth";
+import { toUiErrorMessage } from "../../src/api/client";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type Step = "email" | "otp" | "newpass" | "done";
@@ -46,7 +47,7 @@ export default function PasswordRecovery() {
       setStep("otp");
       setMsg("Si el usuario existe, enviamos un codigo OTP por correo.");
     } catch (e: any) {
-      setMsg(e?.message || e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo enviar el codigo.");
+      setMsg(toUiErrorMessage(e, "No se pudo enviar el codigo."));
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ export default function PasswordRecovery() {
       if (!r.permitido) throw new Error(r.motivo || "OTP invalido.");
       setStep("newpass");
     } catch (e: any) {
-      setMsg(e?.message || e?.response?.data?.message || e?.response?.data?.motivo || "OTP invalido.");
+      setMsg(toUiErrorMessage(e, "OTP invalido o expirado."));
     } finally {
       setLoading(false);
     }
@@ -78,7 +79,7 @@ export default function PasswordRecovery() {
       if (!r.permitido) throw new Error(r.motivo || "No se pudo cambiar la contrasena.");
       setStep("done");
     } catch (e: any) {
-      setMsg(e?.message || e?.response?.data?.message || e?.response?.data?.motivo || "No se pudo cambiar la contrasena.");
+      setMsg(toUiErrorMessage(e, "No se pudo cambiar la contrasena."));
     } finally {
       setLoading(false);
     }

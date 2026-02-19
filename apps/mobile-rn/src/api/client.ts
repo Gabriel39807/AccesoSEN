@@ -22,6 +22,8 @@ export const api = axios.create({
 
 let refreshing: Promise<string | null> | null = null;
 
+type FieldErrors = Record<string, string>;
+
 function mapCodeToMessage(code?: string, fallback?: string) {
   const map: Record<string, string> = {
     INVALID_CREDENTIALS: "Usuario o contrasena invalidos.",
@@ -38,8 +40,124 @@ function mapCodeToMessage(code?: string, fallback?: string) {
     MAX_ADMINS_PER_SEDE: "La sede ya alcanzo el limite de administradores.",
     PASSKEY_INVALID: "No se pudo validar la passkey.",
     NETWORK_ERROR: "No se pudo conectar al servidor.",
+    VALIDATION_ERROR: "Revisa los datos ingresados.",
   };
   return (code && map[code]) || fallback || "Ocurrio un error. Intenta nuevamente.";
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  username: "nombre de usuario",
+  password: "contrasena",
+  email: "correo",
+  new_email: "nuevo correo",
+  documento: "documento",
+  telefono: "telefono",
+  rol: "rol",
+  estado: "estado",
+  sede_principal: "sede principal",
+  programa_formacion: "programa de formacion",
+  jornada: "jornada",
+  otp: "codigo OTP",
+  new_password: "nueva contrasena",
+  current_password: "contrasena actual",
+  serial: "serial",
+  marca: "marca",
+  modelo: "modelo",
+  equipos: "equipos",
+  propietario: "propietario",
+  usuario: "usuario",
+};
+
+function firstText(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstText(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      const found = firstText(nested);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function sanitizeMessage(text: string, fallback: string): string {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (!clean) return fallback;
+
+  const looksTechnical = /<!doctype|<html|traceback|wsgirequest|server_name|remote_addr|python\d|\/usr\/|c:\\|environment variables|^path=/i.test(
+    clean
+  );
+  if (looksTechnical) return fallback;
+
+  if (clean.length > 280) return `${clean.slice(0, 280)}...`;
+  return clean;
+}
+
+function pickDetail(input: unknown): unknown {
+  const responseData =
+    typeof input === "object" && input !== null && "response" in input
+      ? (input as { response?: { data?: unknown } }).response?.data
+      : undefined;
+
+  const primary = responseData ?? input;
+  if (primary && typeof primary === "object" && "detail" in primary) {
+    const nested = (primary as { detail?: unknown }).detail;
+    if (nested !== undefined) return nested;
+  }
+  if (input && typeof input === "object" && "detail" in input) {
+    return (input as { detail?: unknown }).detail;
+  }
+  return primary;
+}
+
+export function formatUiFieldLabel(field: string): string {
+  return FIELD_LABELS[field] || field.replaceAll("_", " ");
+}
+
+export function toUiFieldErrors(input: unknown): FieldErrors {
+  const detail = pickDetail(input);
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return {};
+
+  const out: FieldErrors = {};
+  for (const [field, value] of Object.entries(detail)) {
+    if (field === "code" || field === "message" || field === "detail" || field === "motivo" || field === "permitido") continue;
+    const message = firstText(value);
+    if (!message) continue;
+    out[field] = message;
+  }
+  return out;
+}
+
+export function toUiErrorMessage(input: unknown, fallback = "Ocurrio un error. Intenta nuevamente."): string {
+  const responseData =
+    typeof input === "object" && input !== null && "response" in input
+      ? (input as { response?: { data?: unknown } }).response?.data
+      : undefined;
+  const data = responseData ?? input;
+  const dataObj = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+
+  if (typeof dataObj?.message === "string" && dataObj.message.trim()) return sanitizeMessage(dataObj.message, fallback);
+  if (typeof dataObj?.motivo === "string" && dataObj.motivo.trim()) return sanitizeMessage(dataObj.motivo, fallback);
+  if (typeof dataObj?.detail === "string" && dataObj.detail.trim()) return sanitizeMessage(dataObj.detail, fallback);
+
+  const fieldErrors = toUiFieldErrors(input);
+  const firstField = Object.keys(fieldErrors)[0];
+  if (firstField) return `Revisa el campo ${formatUiFieldLabel(firstField)}: ${fieldErrors[firstField]}`;
+
+  if (typeof data === "string" && data.trim()) return sanitizeMessage(data, fallback);
+  const inputObj = input && typeof input === "object" ? (input as Record<string, unknown>) : null;
+  if (typeof inputObj?.message === "string" && inputObj.message.trim()) return sanitizeMessage(inputObj.message, fallback);
+  if (data && typeof data === "object") {
+    const nested = firstText(data);
+    if (nested) return sanitizeMessage(nested, fallback);
+  }
+  return fallback;
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -88,7 +206,7 @@ api.interceptors.response.use(
       if (error.code === "ECONNABORTED") {
         throw new UiError("El servidor esta tardando demasiado. Intenta de nuevo.", "NETWORK_ERROR");
       }
-      throw new UiError(mapCodeToMessage("NETWORK_ERROR"), "NETWORK_ERROR");
+      throw new UiError(toUiErrorMessage(error, mapCodeToMessage("NETWORK_ERROR")), "NETWORK_ERROR");
     }
 
     const status = error.response.status;
@@ -96,14 +214,16 @@ api.interceptors.response.use(
     const code = data.code as string | undefined;
     const message = (data.message as string | undefined) || (data.motivo as string | undefined);
     const detail = data.detail;
+    const mappedFallback = mapCodeToMessage(code, message);
+    const uiMessage = toUiErrorMessage({ response: { data } }, mappedFallback);
 
     if (status === 401 || status === 423) {
       await clearTokens();
-      throw new UiError(mapCodeToMessage(code, message), code || "INVALID_CREDENTIALS", detail, status);
+      throw new UiError(uiMessage, code || "INVALID_CREDENTIALS", detail, status);
     }
-    if (status === 403) throw new UiError(mapCodeToMessage(code, message), code || "FORBIDDEN", detail, status);
-    if (status === 404) throw new UiError(mapCodeToMessage(code, message), code || "NOT_FOUND", detail, status);
-    if (status >= 500) throw new UiError("Error del servidor. Intenta mas tarde.", "SERVER_ERROR", detail, status);
-    throw new UiError(mapCodeToMessage(code, message), code || "VALIDATION_ERROR", detail, status);
+    if (status === 403) throw new UiError(uiMessage, code || "FORBIDDEN", detail, status);
+    if (status === 404) throw new UiError(uiMessage, code || "NOT_FOUND", detail, status);
+    if (status >= 500) throw new UiError(toUiErrorMessage({ response: { data } }, "Error del servidor. Intenta mas tarde."), "SERVER_ERROR", detail, status);
+    throw new UiError(uiMessage, code || "VALIDATION_ERROR", detail, status);
   }
 );
