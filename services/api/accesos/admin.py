@@ -1,6 +1,13 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Turno, Usuario, WebAuthnCredential
+from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Sede, Turno, Usuario, WebAuthnCredential
+
+
+@admin.register(Sede)
+class SedeAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("code", "name")
 
 
 @admin.register(Usuario)
@@ -49,7 +56,7 @@ class UsuarioAdmin(UserAdmin):
 @admin.register(Acceso)
 class AccesoAdmin(admin.ModelAdmin):
     list_display = ("id", "usuario", "usuario_documento", "tipo", "sede", "fecha", "registrado_por", "turno")
-    list_filter = ("tipo", "sede", "fecha")
+    list_filter = ("tipo", "sede__code", "fecha")
     search_fields = ("usuario__username", "usuario__documento", "registrado_por__username")
     autocomplete_fields = ("usuario", "registrado_por", "turno")
     filter_horizontal = ("equipos",)
@@ -70,7 +77,7 @@ class EquipoAdmin(admin.ModelAdmin):
 @admin.register(Turno)
 class TurnoAdmin(admin.ModelAdmin):
     list_display = ("guarda", "sede", "jornada", "inicio", "fin", "activo")
-    list_filter = ("sede", "jornada", "activo")
+    list_filter = ("sede__code", "jornada", "activo")
     search_fields = ("guarda__username", "guarda__documento")
     autocomplete_fields = ("guarda",)
 

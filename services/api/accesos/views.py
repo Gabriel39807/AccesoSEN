@@ -37,6 +37,7 @@ from .models import (
     Equipo,
     Notificacion,
     PasswordResetOTP,
+    Sede,
     Turno,
     Usuario,
     WebAuthnCredential,
@@ -73,6 +74,7 @@ from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
     RegistrarAccesoDocumentoSerializer,
+    SedeSerializer,
     TurnoIniciarSerializer,
     TurnoSerializer,
     UsuarioSerializer,
@@ -93,10 +95,23 @@ def _webauthn_auth_cache_key(request_id: str) -> str:
     return f"sadi:webauthn:auth:{request_id}"
 
 
-def _scope_sede(user: Usuario) -> str | None:
+def _scope_sede_id(user: Usuario) -> int | None:
     if not user:
         return None
-    return (getattr(user, "sede_principal", None) or "").strip() or None
+    return getattr(user, "sede_principal_id", None)
+
+
+def _scope_sede_code(user: Usuario) -> str | None:
+    if not user:
+        return None
+    sede = getattr(user, "sede_principal", None)
+    code = getattr(sede, "code", None)
+    return (code or "").strip() or None
+
+
+def _scope_sede(user: Usuario) -> str | None:
+    # Compat helper: mantiene semantica previa (devuelve codigo)
+    return _scope_sede_code(user)
 
 
 def _is_admin_full_access(user: Usuario) -> bool:
@@ -110,7 +125,7 @@ def _same_sede_or_superadmin(actor: Usuario, target_sede: str | None) -> bool:
         return True
     if not is_admin_sede(actor):
         return False
-    actor_sede = _scope_sede(actor)
+    actor_sede = _scope_sede_code(actor)
     if not actor_sede:
         return False
     return (target_sede or "").strip() == actor_sede
@@ -119,17 +134,16 @@ def _same_sede_or_superadmin(actor: Usuario, target_sede: str | None) -> bool:
 def _admin_sede_qs(qs, user: Usuario, field_name: str):
     if not is_admin_sede(user):
         return qs
-    sede = _scope_sede(user)
-    if not sede:
+    sede_id = _scope_sede_id(user)
+    if not sede_id:
         return qs.none()
-    return qs.filter(**{field_name: sede})
+    return qs.filter(**{field_name: sede_id})
 
 
-def _enforce_admin_sede_limit(target_sede: str | None, exclude_user_id: int | None = None) -> tuple[bool, int]:
-    sede = (target_sede or "").strip()
-    if not sede:
+def _enforce_admin_sede_limit(target_sede_id: int | None, exclude_user_id: int | None = None) -> tuple[bool, int]:
+    if not target_sede_id:
         return False, 0
-    qs = Usuario.objects.filter(rol=Usuario.Rol.ADMIN_SEDE, sede_principal=sede)
+    qs = Usuario.objects.filter(rol=Usuario.Rol.ADMIN_SEDE, sede_principal_id=target_sede_id)
     if exclude_user_id:
         qs = qs.exclude(id=exclude_user_id)
     current = qs.count()
@@ -230,8 +244,29 @@ def _parse_date_query_param(request, *, names: list[str], field: str):
         raise ValidationError({field: "Formato de fecha invalido. Usa YYYY-MM-DD."})
 
 
+def _resolve_sede_code(raw: str, *, field: str = "sede_id") -> str | None:
+    clean = str(raw or "").strip()
+    if not clean:
+        return None
+    if clean.isdigit():
+        sede = Sede.objects.filter(id=int(clean), is_active=True).first()
+        return sede.code if sede else None
+    sede = Sede.objects.filter(code__iexact=clean, is_active=True).first()
+    if sede:
+        return sede.code
+    if Sede.objects.filter(name__iexact=clean, is_active=True).exists():
+        raise ValidationError(
+            {
+                field: (
+                    "Valor invalido para sede. Debes enviar el codigo tecnico o id, no la etiqueta visible."
+                )
+            }
+        )
+    return None
+
+
 def _parse_sede_query_param(request, user: Usuario, *, names: list[str], field: str = "sede_id"):
-    actor_sede = _scope_sede(user)
+    actor_sede = _scope_sede_code(user)
     raw, _ = _pick_query_param(request, names)
 
     if is_admin_sede(user):
@@ -245,18 +280,10 @@ def _parse_sede_query_param(request, user: Usuario, *, names: list[str], field: 
             return None
         return actor_sede
 
-    valid_codes, label_values = _choice_codes_and_labels(Turno.Sede.choices)
-    if raw in valid_codes:
-        return raw
-    if lower in label_values:
-        raise ValidationError(
-            {
-                field: (
-                    "Valor invalido para sede. Debes enviar el codigo tecnico (por ejemplo CEGAFE o SANTA_CLARA), "
-                    "no el label visible."
-                )
-            }
-        )
+    resolved = _resolve_sede_code(raw, field=field)
+    if resolved:
+        return resolved
+    valid_codes = list(Sede.objects.filter(is_active=True).order_by("code").values_list("code", flat=True))
     raise ValidationError({field: f"Sede invalida. Valores permitidos: {', '.join(valid_codes)}."})
 
 
@@ -789,6 +816,25 @@ class LegacyPasswordResetConfirmView(APIView):
         return ok_response()
 
 
+class SedeViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = SedeSerializer
+    queryset = Sede.objects.all().order_by("name")
+    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [AllowAny()]
+        return [IsAuthenticated(), IsAdmin()]
+
+    def get_queryset(self):
+        qs = Sede.objects.all().order_by("name")
+        raw = str(self.request.query_params.get("include_inactive", "") or "").strip().lower()
+        include_inactive = raw in {"1", "true", "yes", "on"}
+        if include_inactive and is_admin_role(getattr(self.request, "user", None)):
+            return qs
+        return qs.filter(is_active=True)
+
+
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all().order_by("id")
     serializer_class = UsuarioSerializer
@@ -796,7 +842,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset().order_by("id")
-        qs = _admin_sede_qs(qs, self.request.user, "sede_principal")
+        qs = _admin_sede_qs(qs, self.request.user, "sede_principal_id")
 
         q = (self.request.query_params.get("q") or "").strip()
         rol = _parse_choice_query_param(
@@ -834,7 +880,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             qs = qs.filter(estado=estado)
 
         if sede_principal:
-            qs = qs.filter(sede_principal=sede_principal)
+            qs = qs.filter(sede_principal__code=sede_principal)
 
         return qs
 
@@ -888,7 +934,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             )
 
         if not instance:
-            requested_sede = (payload.get("sede_principal") or "").strip()
+            requested_sede = str(payload.get("sede_principal") or "").strip()
             if requested_sede and requested_sede != actor_sede:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
@@ -896,7 +942,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
             payload["sede_principal"] = actor_sede
-        elif "sede_principal" in payload and (payload.get("sede_principal") or actor_sede) != actor_sede:
+        elif "sede_principal" in payload and str(payload.get("sede_principal") or actor_sede).strip() != actor_sede:
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="No puedes mover usuarios fuera de tu sede.",
@@ -906,16 +952,29 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
     def _enforce_admin_role_capacity(self, payload: dict, instance: Usuario | None = None):
         target_role = payload.get("rol", getattr(instance, "rol", None))
-        target_sede = payload.get("sede_principal", getattr(instance, "sede_principal", None))
+        target_sede = payload.get("sede_principal", None)
+        if target_sede is None and instance:
+            target_sede_id = getattr(instance, "sede_principal_id", None)
+            target_sede_code = _scope_sede_code(instance)
+        else:
+            if isinstance(target_sede, Sede):
+                target_sede_id = target_sede.id
+                target_sede_code = target_sede.code
+            else:
+                target_sede_code = str(target_sede or "").strip() or None
+                target_sede_id = None
+                if target_sede_code:
+                    sede_obj = Sede.objects.filter(code__iexact=target_sede_code).first()
+                    target_sede_id = getattr(sede_obj, "id", None)
         if target_role != Usuario.Rol.ADMIN_SEDE:
             return None
-        blocked, current = _enforce_admin_sede_limit(target_sede, exclude_user_id=getattr(instance, "id", None))
+        blocked, current = _enforce_admin_sede_limit(target_sede_id, exclude_user_id=getattr(instance, "id", None))
         if blocked:
             return error_response(
                 code=ErrorCode.MAX_ADMINS_PER_SEDE,
                 message=f"La sede ya tiene {MAX_ADMINS_PER_SEDE} administradores.",
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"sede": target_sede, "limit": MAX_ADMINS_PER_SEDE, "current": current},
+                detail={"sede": target_sede_code, "limit": MAX_ADMINS_PER_SEDE, "current": current},
             )
         return None
 
@@ -1057,14 +1116,26 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 )
 
         with transaction.atomic():
+            sedes_by_code = {
+                s.code: s
+                for s in Sede.objects.filter(code__in=[str(r.get("sede_principal", "")).strip() for r in rows])
+            }
             for row in rows:
+                sede_obj = sedes_by_code.get(str(row.get("sede_principal", "")).strip())
+                if not sede_obj:
+                    return error_response(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message="Una o mas filas del archivo tienen sede invalida.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        field="sede_principal",
+                    )
                 user = Usuario.objects.filter(documento=row["documento"]).first()
                 if user:
                     user.first_name = row["first_name"]
                     user.last_name = row["last_name"]
                     user.email = row["email"]
                     user.telefono = row["telefono"]
-                    user.sede_principal = row["sede_principal"]
+                    user.sede_principal = sede_obj
                     user.jornada = row["jornada"]
                     user.programa_formacion = row["programa_formacion"]
                     user.rol = Usuario.Rol.APRENDIZ
@@ -1089,7 +1160,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                         email=row["email"],
                         telefono=row["telefono"],
                         documento=row["documento"],
-                        sede_principal=row["sede_principal"],
+                        sede_principal=sede_obj,
                         jornada=row["jornada"],
                         programa_formacion=row["programa_formacion"],
                         rol=Usuario.Rol.APRENDIZ,
@@ -1134,7 +1205,7 @@ class NotificacionViewSet(viewsets.ModelViewSet):
             sede = _scope_sede(user)
             if not sede:
                 return Notificacion.objects.none()
-            qs = qs.filter(Q(user__isnull=True) | Q(user__sede_principal=sede) | Q(user=user))
+            qs = qs.filter(Q(user__isnull=True) | Q(user__sede_principal__code=sede) | Q(user=user))
         return qs
 
     def get_permissions(self):
@@ -1177,7 +1248,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if is_admin_role(user):
             qs = Equipo.objects.all().order_by("-creado_en")
-            qs = _admin_sede_qs(qs, user, "propietario__sede_principal")
+            qs = _admin_sede_qs(qs, user, "propietario__sede_principal_id")
         elif getattr(user, "rol", None) == Usuario.Rol.APRENDIZ:
             qs = Equipo.objects.filter(propietario=user).order_by("-creado_en")
         else:
@@ -1199,7 +1270,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
             field="sede_id",
         )
         if sede_code:
-            qs = qs.filter(propietario__sede_principal=sede_code)
+            qs = qs.filter(propietario__sede_principal__code=sede_code)
 
         aprendiz_id = _parse_int_query_param(
             self.request,
@@ -1451,10 +1522,10 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if is_admin_role(user):
-            qs = Turno.objects.all().order_by("-inicio")
-            qs = _admin_sede_qs(qs, user, "sede")
+            qs = Turno.objects.select_related("sede", "guarda").all().order_by("-inicio")
+            qs = _admin_sede_qs(qs, user, "sede_id")
         else:
-            qs = Turno.objects.filter(guarda=user).order_by("-inicio")
+            qs = Turno.objects.select_related("sede", "guarda").filter(guarda=user).order_by("-inicio")
 
         sede = _parse_sede_query_param(
             self.request,
@@ -1463,7 +1534,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
             field="sede_id",
         )
         if sede:
-            qs = qs.filter(sede=sede)
+            qs = qs.filter(sede__code=sede)
 
         jornada = _parse_choice_query_param(
             self.request,
@@ -1514,7 +1585,8 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         s.is_valid(raise_exception=True)
 
         guarda_sede = _scope_sede(request.user)
-        if guarda_sede and s.validated_data["sede"] != guarda_sede:
+        selected_sede: Sede = s.validated_data["sede"]
+        if guarda_sede and selected_sede.code != guarda_sede:
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="Solo puedes iniciar turno en tu sede asignada.",
@@ -1532,7 +1604,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
 
         turno = Turno.objects.create(
             guarda=request.user,
-            sede=s.validated_data["sede"],
+            sede=selected_sede,
             jornada=s.validated_data["jornada"],
             inicio=timezone.now(),
             activo=True,
@@ -1584,7 +1656,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         turno = self.get_object()
         if is_admin_sede(request.user):
             actor_sede = _scope_sede(request.user)
-            if not actor_sede or turno.sede != actor_sede:
+            if not actor_sede or getattr(turno.sede, "code", None) != actor_sede:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
                     message="Solo puedes cerrar turnos de tu sede.",
@@ -1620,7 +1692,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
             )
         if is_admin_sede(user):
             actor_sede = _scope_sede(user)
-            if not actor_sede or turno.sede != actor_sede:
+            if not actor_sede or getattr(turno.sede, "code", None) != actor_sede:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
                     message="Solo puedes ver turnos de tu sede.",
@@ -1650,13 +1722,13 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         qs = (
             Acceso.objects.all()
-            .select_related("turno", "turno__guarda", "usuario", "registrado_por")
+            .select_related("turno", "turno__guarda", "turno__sede", "usuario", "registrado_por", "sede")
             .prefetch_related("equipos")
             .order_by("-fecha")
         )
 
         if is_admin_role(user):
-            qs = _admin_sede_qs(qs, user, "sede")
+            qs = _admin_sede_qs(qs, user, "sede_id")
         elif rol == "guarda":
             qs = qs.filter(turno__guarda=user)
         elif rol == "aprendiz":
@@ -1680,7 +1752,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
             field="sede_id",
         )
         if sede:
-            qs = qs.filter(sede=sede)
+            qs = qs.filter(sede__code=sede)
 
         aprendiz_id = _parse_int_query_param(
             self.request,
@@ -1836,7 +1908,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 )
             sede = turno.sede
         elif is_admin_sede(request_user):
-            sede = _scope_sede(request_user)
+            sede = getattr(request_user, "sede_principal", None)
             if not sede:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
@@ -1889,7 +1961,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
             turno = ultimo.turno
             if is_admin_sede(request_user):
                 actor_sede = _scope_sede(request_user)
-                if ultimo.sede != actor_sede:
+                if getattr(ultimo.sede, "code", None) != actor_sede:
                     return error_response(
                         code=ErrorCode.PERMISSION_DENIED,
                         message="Solo puedes registrar salidas de tu sede.",

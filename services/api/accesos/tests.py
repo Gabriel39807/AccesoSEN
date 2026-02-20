@@ -13,7 +13,7 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.test import APITestCase
 
 from .exceptions import ui_exception_handler
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Turno, WebAuthnCredential
+from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Sede, Turno, WebAuthnCredential
 from .otp_services import hash_code
 
 
@@ -22,8 +22,30 @@ class BaseApiTest(APITestCase):
         super().setUp()
         cache.clear()
         self.User = get_user_model()
+        self.seed_sedes()
+
+    def seed_sedes(self):
+        rows = [
+            ("sede-1", "Sede 1"),
+            ("sede-2", "Sede 2"),
+            ("sede-3", "Sede 3"),
+            ("sede-4", "Sede 4"),
+        ]
+        for code, name in rows:
+            Sede.objects.get_or_create(code=code, defaults={"name": name, "is_active": True})
+
+    def sede(self, code: str) -> Sede:
+        sede, _ = Sede.objects.get_or_create(code=code, defaults={"name": code.upper(), "is_active": True})
+        return sede
 
     def create_user(self, **kwargs):
+        sede_value = kwargs.pop("sede_principal", "sede-1")
+        if isinstance(sede_value, Sede):
+            sede = sede_value
+        elif sede_value:
+            sede = self.sede(str(sede_value))
+        else:
+            sede = None
         defaults = {
             "username": kwargs.pop("username", f"user_{timezone.now().timestamp()}"),
             "password": kwargs.pop("password", "Passw0rd!"),
@@ -31,7 +53,7 @@ class BaseApiTest(APITestCase):
             "estado": kwargs.pop("estado", "activo"),
             "email": kwargs.pop("email", None),
             "documento": kwargs.pop("documento", None),
-            "sede_principal": kwargs.pop("sede_principal", "CEGAFE"),
+            "sede_principal": sede,
         }
         user = self.User.objects.create_user(**defaults, **kwargs)
         return user
@@ -306,7 +328,7 @@ class AdminSedeRulesTests(BaseApiTest):
             "first_name": "Admin",
             "last_name": "Sede",
             "rol": "admin_sede",
-            "sede_principal": "CEGAFE",
+            "sede_principal": "sede-1",
             "password": "Passw0rd!",
         }
 
@@ -348,7 +370,7 @@ class RolePermissionScopeTests(BaseApiTest):
             password="Passw0rd!",
             rol="admin_sede",
             email="admin.sede.scope@sadi.test",
-            sede_principal="CEGAFE",
+            sede_principal="sede-1",
         )
 
     def _auth_superadmin(self):
@@ -369,7 +391,7 @@ class RolePermissionScopeTests(BaseApiTest):
                 "email": "new.admin@sadi.test",
                 "rol": "admin_sede",
                 "estado": "activo",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -387,7 +409,7 @@ class RolePermissionScopeTests(BaseApiTest):
                 "email": "legacy.admin@sadi.test",
                 "rol": "admin",
                 "estado": "activo",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -406,7 +428,7 @@ class RolePermissionScopeTests(BaseApiTest):
                 "email": "blocked.admin@sadi.test",
                 "rol": "admin_sede",
                 "estado": "activo",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -426,7 +448,7 @@ class RolePermissionScopeTests(BaseApiTest):
                 "documento": "7070707070",
                 "rol": "aprendiz",
                 "estado": "activo",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -441,7 +463,7 @@ class RolePermissionScopeTests(BaseApiTest):
                 "documento": "8080808080",
                 "rol": "guarda",
                 "estado": "activo",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -461,7 +483,7 @@ class RolePermissionScopeTests(BaseApiTest):
                 "documento": "9090909090",
                 "rol": "aprendiz",
                 "estado": "activo",
-                "sede_principal": "SANTA_CLARA",
+                "sede_principal": "sede-2",
             },
             format="json",
         )
@@ -481,12 +503,12 @@ class RolePermissionScopeTests(BaseApiTest):
                 "documento": "9191919191",
                 "rol": "aprendiz",
                 "estado": "activo",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
-        self.assertEqual(r.data.get("sede_principal"), "CEGAFE")
+        self.assertEqual(r.data.get("sede_principal"), "sede-1")
 
     def test_admin_sede_cannot_edit_or_delete_administrative_account(self):
         self._auth_admin_sede()
@@ -506,7 +528,7 @@ class RolePermissionScopeTests(BaseApiTest):
             username="del_target",
             password="Passw0rd!",
             rol="admin_sede",
-            sede_principal="SANTA_CLARA",
+            sede_principal="sede-2",
             email="del.target@sadi.test",
         )
         self._auth_superadmin()
@@ -519,7 +541,7 @@ class RolePermissionScopeTests(BaseApiTest):
             password="Passw0rd!",
             rol="guarda",
             documento="9393939393",
-            sede_principal="CEGAFE",
+            sede_principal="sede-1",
             email="guarda.own.sede@sadi.test",
         )
         aprendiz = self.create_user(
@@ -527,7 +549,7 @@ class RolePermissionScopeTests(BaseApiTest):
             password="Passw0rd!",
             rol="aprendiz",
             documento="9494949494",
-            sede_principal="CEGAFE",
+            sede_principal="sede-1",
             email="aprendiz.own.sede@sadi.test",
         )
         self._auth_admin_sede()
@@ -542,7 +564,7 @@ class RolePermissionScopeTests(BaseApiTest):
             password="Passw0rd!",
             rol="guarda",
             documento="9595959595",
-            sede_principal="SANTA_CLARA",
+            sede_principal="sede-2",
             email="guarda.other.sede@sadi.test",
         )
         aprendiz_other = self.create_user(
@@ -550,7 +572,7 @@ class RolePermissionScopeTests(BaseApiTest):
             password="Passw0rd!",
             rol="aprendiz",
             documento="9696969696",
-            sede_principal="SANTA_CLARA",
+            sede_principal="sede-2",
             email="aprendiz.other.sede@sadi.test",
         )
         self._auth_admin_sede()
@@ -576,15 +598,15 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
             password="Passw0rd!",
             rol="admin_sede",
             email="filters.admin.sede@sadi.test",
-            sede_principal="CEGAFE",
+            sede_principal="sede-1",
         )
-        self.aprendiz_cegafe = self.create_user(
+        self.aprendiz_sede1 = self.create_user(
             username="1111111111",
             password="Passw0rd!",
             rol="aprendiz",
             documento="1111111111",
-            email="aprendiz.cegafe@sadi.test",
-            sede_principal="CEGAFE",
+            email="aprendiz.sede1@sadi.test",
+            sede_principal="sede-1",
         )
         self.aprendiz_santa = self.create_user(
             username="2222222222",
@@ -592,15 +614,15 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
             rol="aprendiz",
             documento="2222222222",
             email="aprendiz.santa@sadi.test",
-            sede_principal="SANTA_CLARA",
+            sede_principal="sede-2",
         )
-        self.guarda_cegafe = self.create_user(
+        self.guarda_sede1 = self.create_user(
             username="3333333333",
             password="Passw0rd!",
             rol="guarda",
             documento="3333333333",
-            email="guarda.cegafe@sadi.test",
-            sede_principal="CEGAFE",
+            email="guarda.sede1@sadi.test",
+            sede_principal="sede-1",
         )
 
     def _auth_superadmin(self):
@@ -611,19 +633,19 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
 
     def test_superadmin_can_filter_usuarios_by_machine_sede_id(self):
         self._auth_superadmin()
-        r = self.client.get("/api/usuarios/?sede_id=SANTA_CLARA")
+        r = self.client.get("/api/usuarios/?sede_id=sede-2")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         rows = r.data.get("results", r.data)
         self.assertGreaterEqual(len(rows), 1)
-        self.assertTrue(all(item.get("sede_principal") == "SANTA_CLARA" for item in rows))
+        self.assertTrue(all(item.get("sede_principal") == "sede-2" for item in rows))
 
     def test_admin_sede_queryset_forces_own_sede_even_with_cross_sede_param(self):
         self._auth_admin_sede()
-        r = self.client.get("/api/usuarios/?sede_id=SANTA_CLARA")
+        r = self.client.get("/api/usuarios/?sede_id=sede-2")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         rows = r.data.get("results", r.data)
         self.assertGreaterEqual(len(rows), 1)
-        self.assertTrue(all(item.get("sede_principal") == "CEGAFE" for item in rows))
+        self.assertTrue(all(item.get("sede_principal") == "sede-1" for item in rows))
         self.assertFalse(any(item.get("id") == self.aprendiz_santa.id for item in rows))
 
     def test_filter_rejects_human_label_for_usuario_estado(self):
@@ -635,8 +657,8 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
 
     def test_filter_rejects_human_label_for_turno_jornada(self):
         Turno.objects.create(
-            guarda=self.guarda_cegafe,
-            sede=Turno.Sede.CEGAFE,
+            guarda=self.guarda_sede1,
+            sede=self.sede("sede-1"),
             jornada=Turno.Jornada.TARDE,
             activo=True,
         )
@@ -648,23 +670,23 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
 
     def test_admin_sede_acceso_list_forces_own_sede_even_if_querying_other(self):
         Acceso.objects.create(
-            usuario=self.aprendiz_cegafe,
+            usuario=self.aprendiz_sede1,
             tipo=Acceso.Tipo.INGRESO,
-            sede=Turno.Sede.CEGAFE,
+            sede=self.sede("sede-1"),
             registrado_por=self.admin_sede,
         )
         Acceso.objects.create(
             usuario=self.aprendiz_santa,
             tipo=Acceso.Tipo.INGRESO,
-            sede=Turno.Sede.SANTA_CLARA,
+            sede=self.sede("sede-2"),
             registrado_por=self.superadmin,
         )
         self._auth_admin_sede()
-        r = self.client.get("/api/accesos/?sede_id=SANTA_CLARA")
+        r = self.client.get("/api/accesos/?sede_id=sede-2")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         rows = r.data.get("results", r.data)
         self.assertGreaterEqual(len(rows), 1)
-        self.assertTrue(all(item.get("sede") == "CEGAFE" for item in rows))
+        self.assertTrue(all(item.get("sede") == "sede-1" for item in rows))
 
     def test_admin_sede_cannot_create_acceso_for_aprendiz_other_sede(self):
         self._auth_admin_sede()
@@ -677,10 +699,10 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
         self.assertEqual(r.data.get("code"), "PERMISSION_DENIED")
 
     def test_guarda_cannot_start_turno_in_other_sede(self):
-        self.auth(self.guarda_cegafe.username, "Passw0rd!", expected_role="guarda")
+        self.auth(self.guarda_sede1.username, "Passw0rd!", expected_role="guarda")
         r = self.client.post(
             "/api/turnos/iniciar/",
-            {"sede": "SANTA_CLARA", "jornada": Turno.Jornada.TARDE},
+            {"sede": "sede-2", "jornada": Turno.Jornada.TARDE},
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
@@ -756,7 +778,7 @@ class NumericFieldValidationTests(BaseApiTest):
                 "rol": "aprendiz",
                 "estado": "activo",
                 "documento": "ABC123",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -775,7 +797,7 @@ class NumericFieldValidationTests(BaseApiTest):
                 "rol": "aprendiz",
                 "estado": "activo",
                 "documento": "12345",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -792,7 +814,7 @@ class NumericFieldValidationTests(BaseApiTest):
                 "rol": "aprendiz",
                 "estado": "activo",
                 "documento": "12345678901",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -807,7 +829,7 @@ class NumericFieldValidationTests(BaseApiTest):
             "rol": "aprendiz",
             "estado": "activo",
             "documento": "1234567890",
-            "sede_principal": "CEGAFE",
+            "sede_principal": "sede-1",
         }
         r = self.client.post("/api/usuarios/", payload, format="json")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
@@ -823,7 +845,7 @@ class NumericFieldValidationTests(BaseApiTest):
                 "rol": "aprendiz",
                 "estado": "activo",
                 "documento": "1234567891",
-                "sede_principal": "CEGAFE",
+                "sede_principal": "sede-1",
             },
             format="json",
         )
@@ -965,3 +987,76 @@ class ExceptionHandlerSafetyTests(BaseApiTest):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("nombre de usuario", str(response.data.get("message", "")).lower())
         self.assertIn("obligatorio", str(response.data.get("message", "")).lower())
+
+
+class InstitutionalDecouplingTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.dynamic_sede = self.sede("north-campus")
+        self.dynamic_sede.name = "North Campus"
+        self.dynamic_sede.save(update_fields=["name"])
+
+        self.superadmin = self.create_user(
+            username="superadmin_dynamic",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="superadmin.dynamic@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+        self.admin_sede = self.create_user(
+            username="admin_dynamic",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="admin.dynamic@sadi.test",
+            sede_principal=self.dynamic_sede,
+        )
+        self.aprendiz_same = self.create_user(
+            username="apr_dynamic_1",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="9191919191",
+            email="apr.dynamic.1@sadi.test",
+            sede_principal=self.dynamic_sede,
+        )
+        self.aprendiz_other = self.create_user(
+            username="apr_dynamic_2",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="9292929292",
+            email="apr.dynamic.2@sadi.test",
+            sede_principal=self.sede("south-campus"),
+        )
+
+    def test_sedes_endpoint_lists_dynamic_sedes(self):
+        r = self.client.get("/api/sedes/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        codes = {item.get("code") for item in rows}
+        self.assertIn("north-campus", codes)
+
+    def test_admin_sede_queryset_is_scoped_with_dynamic_sede(self):
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+        r = self.client.get("/api/usuarios/?sede_id=south-campus")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertGreaterEqual(len(rows), 1)
+        self.assertTrue(all(item.get("sede_principal") == "north-campus" for item in rows))
+
+    def test_admin_sede_cannot_create_turno_for_other_sede(self):
+        guarda = self.create_user(
+            username="9393939393",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="9393939393",
+            email="guarda.dynamic@sadi.test",
+            sede_principal=self.dynamic_sede,
+        )
+        self.auth(guarda.username, "Passw0rd!", expected_role="guarda")
+        r = self.client.post(
+            "/api/turnos/iniciar/",
+            {"sede": "south-campus", "jornada": Turno.Jornada.TARDE},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)

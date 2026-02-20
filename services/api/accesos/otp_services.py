@@ -11,6 +11,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from .models import PasswordResetOTP, Usuario
+from core.institution_settings import INSTITUTION_NAME
 
 OTP_TTL_MINUTES = 5
 OTP_MAX_ATTEMPTS = 5
@@ -53,11 +54,11 @@ def create_otp_for_user(user: Usuario) -> tuple[PasswordResetOTP, str]:
 
 
 def send_password_reset_email(to_email: str, code: str):
-    subject = "SADI - Codigo de recuperacion"
-    context = {"otp": code, "ttl_minutes": OTP_TTL_MINUTES, "email": to_email}
+    subject = f"{INSTITUTION_NAME} - Codigo de recuperacion"
+    context = {"otp": code, "ttl_minutes": OTP_TTL_MINUTES, "email": to_email, "institution_name": INSTITUTION_NAME}
 
     text_body = (
-        f"Tu codigo de recuperacion SADI es: {code}\n\n"
+        f"Tu codigo de recuperacion de {INSTITUTION_NAME} es: {code}\n\n"
         f"Este codigo vence en {OTP_TTL_MINUTES} minutos.\n"
         "Si no solicitaste este cambio, ignora este mensaje."
     )

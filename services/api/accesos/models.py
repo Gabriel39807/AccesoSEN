@@ -3,7 +3,20 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q, F
-from uuid import uuid4
+
+
+class Sede(models.Model):
+    code = models.SlugField(max_length=40, unique=True)
+    name = models.CharField(max_length=120)
+    is_active = models.BooleanField(default=True)
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
 
 
 class Usuario(AbstractUser):
@@ -14,19 +27,12 @@ class Usuario(AbstractUser):
         APRENDIZ = "aprendiz", "Aprendiz"
 
     rol = models.CharField(max_length=20, choices=Rol.choices, default=Rol.APRENDIZ)
-
-    SEDE_CHOICES = [
-        ("CEGAFE", "CEGAFE"),
-        ("SANTA_CLARA", "SANTA CLARA"),
-        ("ITEDRIS", "ITEDRIS"),
-        ("GASTRONOMIA", "GASTRONOMIA"),
-    ]
-
-    sede_principal = models.CharField(
-        max_length=20,
-        choices=SEDE_CHOICES,
+    sede_principal = models.ForeignKey(
+        Sede,
+        on_delete=models.SET_NULL,
+        related_name="usuarios",
         null=True,
-        blank=True
+        blank=True,
     )
 
     programa_formacion = models.CharField(max_length=100, null=True, blank=True)
@@ -80,19 +86,13 @@ class Equipo(models.Model):
 
 
 class Turno(models.Model):
-    class Sede(models.TextChoices):
-        CEGAFE = "CEGAFE", "CEGAFE"
-        SANTA_CLARA = "SANTA_CLARA", "SANTA CLARA"
-        ITEDRIS = "ITEDRIS", "ITEDRIS"
-        GASTRONOMIA = "GASTRONOMIA", "GASTRONOMIA"
-
     class Jornada(models.TextChoices):
         MAÑANA = "MAÑANA", "Mañana"
         TARDE = "TARDE", "Tarde"
         NOCHE = "NOCHE", "Noche"
 
     guarda = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="turnos")
-    sede = models.CharField(max_length=30, choices=Sede.choices)
+    sede = models.ForeignKey(Sede, on_delete=models.PROTECT, related_name="turnos")
     jornada = models.CharField(max_length=20, choices=Jornada.choices)
 
     # ✅ más controlable que auto_now_add
@@ -115,7 +115,8 @@ class Turno(models.Model):
 
         
     def __str__(self):
-        return f"Turno {self.guarda.username} - {self.sede} - {self.jornada} ({'activo' if self.activo else 'finalizado'})"
+        sede_label = self.sede.name if self.sede_id else "Sin sede"
+        return f"Turno {self.guarda.username} - {sede_label} - {self.jornada} ({'activo' if self.activo else 'finalizado'})"
 
 
 class Acceso(models.Model):
@@ -132,7 +133,7 @@ class Acceso(models.Model):
         Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name="accesos_registrados"
     )
     turno = models.ForeignKey(Turno, on_delete=models.SET_NULL, null=True, blank=True, related_name="accesos")
-    sede = models.CharField(max_length=30, choices=Turno.Sede.choices, null=True, blank=True)
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name="accesos")
 
     equipos = models.ManyToManyField(Equipo, blank=True, related_name="accesos")
 

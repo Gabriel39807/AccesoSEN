@@ -4,7 +4,11 @@ import re
 from dataclasses import dataclass
 
 from django.core.cache import cache
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from openpyxl import load_workbook
+
+from .models import Sede
 
 EXPECTED_COLUMNS = [
     "Nombres",
@@ -20,8 +24,16 @@ EXPECTED_COLUMNS = [
 PHONE_10_RE = re.compile(r"^\d{10}$")
 DOCUMENT_6_TO_10_RE = re.compile(r"^\d{6,10}$")
 
-VALID_JORNADAS = {"MAÑANA", "TARDE", "NOCHE"}
-VALID_SEDES = {"CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"}
+MORNING_CODE = "MAÃ‘ANA"
+VALID_JORNADAS = {MORNING_CODE, "TARDE", "NOCHE"}
+JORNADA_ALIASES = {
+    "MAÑANA": MORNING_CODE,
+    "MANANA": MORNING_CODE,
+    "MANAÑA": MORNING_CODE,
+    MORNING_CODE: MORNING_CODE,
+    "TARDE": "TARDE",
+    "NOCHE": "NOCHE",
+}
 
 
 @dataclass
@@ -36,13 +48,34 @@ def _normalize_cell(value) -> str:
     return str(value).strip()
 
 
-def _is_institutional_email(email: str) -> bool:
-    email = email.lower().strip()
-    return bool(re.match(r"^[^@\s]+@(([a-z0-9-]+\.)*sena\.edu\.co|gmail\.com)$", email))
+def _is_valid_email(email: str) -> bool:
+    clean = email.lower().strip()
+    try:
+        validate_email(clean)
+    except DjangoValidationError:
+        return False
+    return True
 
 
 def _normalize_phone(phone: str) -> str:
     return str(phone or "").strip()
+
+
+def _normalize_sede_token(value: str) -> str:
+    return str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
+
+
+def _build_sede_lookup() -> dict[str, str]:
+    out: dict[str, str] = {}
+    for sede in Sede.objects.filter(is_active=True).only("code", "name"):
+        out[_normalize_sede_token(sede.code)] = sede.code
+        out[_normalize_sede_token(sede.name)] = sede.code
+    return out
+
+
+def _normalize_jornada(value: str) -> str:
+    raw = _normalize_cell(value).upper()
+    return JORNADA_ALIASES.get(raw, raw)
 
 
 def validate_excel(content) -> ImportValidationResult:
@@ -64,6 +97,20 @@ def validate_excel(content) -> ImportValidationResult:
             ],
         )
 
+    sedes_lookup = _build_sede_lookup()
+    if not sedes_lookup:
+        return ImportValidationResult(
+            rows=[],
+            errors=[
+                {
+                    "row": 1,
+                    "code": "NO_ACTIVE_SEDES",
+                    "message": "No hay sedes activas configuradas en el sistema.",
+                    "field": "Sede",
+                }
+            ],
+        )
+
     rows: list[dict] = []
     errors: list[dict] = []
     seen_docs: set[str] = set()
@@ -72,7 +119,7 @@ def validate_excel(content) -> ImportValidationResult:
         data = {EXPECTED_COLUMNS[i]: _normalize_cell(row[i] if i < len(row) else "") for i in range(len(EXPECTED_COLUMNS))}
         missing = [k for k, v in data.items() if not v]
         if missing:
-            errors.append({"row": idx, "code": "MISSING_REQUIRED", "message": "Hay campos obligatorios vacíos.", "fields": missing})
+            errors.append({"row": idx, "code": "MISSING_REQUIRED", "message": "Hay campos obligatorios vacios.", "fields": missing})
             continue
 
         doc = str(data["Documento"] or "").strip()
@@ -104,37 +151,37 @@ def validate_excel(content) -> ImportValidationResult:
             )
             continue
 
-        email = data["Correo"].lower()
-        if not _is_institutional_email(email):
+        email = data["Correo"].lower().strip()
+        if not _is_valid_email(email):
             errors.append(
                 {
                     "row": idx,
-                    "code": "INVALID_INSTITUTIONAL_EMAIL",
-                    "message": "El correo debe ser institucional (sena.edu.co) o gmail.com.",
+                    "code": "INVALID_EMAIL",
+                    "message": "El correo no tiene un formato valido.",
                     "field": "Correo",
                 }
             )
             continue
 
-        jornada = data["Jornada"].upper()
+        jornada = _normalize_jornada(data["Jornada"])
         if jornada not in VALID_JORNADAS:
             errors.append(
                 {
                     "row": idx,
                     "code": "INVALID_JORNADA",
-                    "message": "Jornada invalida. Valores permitidos: MAÑANA, TARDE, NOCHE.",
+                    "message": "Jornada invalida. Valores permitidos: MANANA, TARDE, NOCHE.",
                     "field": "Jornada",
                 }
             )
             continue
 
-        sede = data["Sede"].upper().replace(" ", "_")
-        if sede not in VALID_SEDES:
+        sede = sedes_lookup.get(_normalize_sede_token(data["Sede"]))
+        if not sede:
             errors.append(
                 {
                     "row": idx,
                     "code": "INVALID_SEDE",
-                    "message": "Sede invalida. Debe coincidir con las sedes configuradas.",
+                    "message": "Sede invalida. Debe coincidir con una sede activa del sistema.",
                     "field": "Sede",
                 }
             )

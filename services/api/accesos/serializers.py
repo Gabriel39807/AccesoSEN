@@ -1,7 +1,7 @@
 import re
 
 from rest_framework import serializers
-from .models import Usuario, Acceso, Equipo, Turno
+from .models import Sede, Usuario, Acceso, Equipo, Turno
 from .models import Notificacion
 
 
@@ -67,10 +67,23 @@ def is_signed_scan_token(value: str) -> bool:
 # =========================
 # USUARIOS
 # =========================
+class SedeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Sede
+        fields = ["id", "code", "name", "is_active", "metadata", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class UsuarioSerializer(serializers.ModelSerializer):
     # ✅ para crear/editar desde Admin (no se devuelve nunca)
     username = serializers.CharField(required=True, allow_blank=False, max_length=150)
     password = serializers.CharField(write_only=True, required=False, allow_blank=False, min_length=4)
+    sede_principal = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=Sede.objects.all(),
+        allow_null=True,
+        required=False,
+    )
 
     class Meta:
         model = Usuario
@@ -152,6 +165,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
 
 class AprendizPerfilSerializer(serializers.ModelSerializer):
+    sede_principal = serializers.SlugRelatedField(slug_field="code", read_only=True)
+
     class Meta:
         model = Usuario
         fields = [
@@ -261,14 +276,17 @@ class EquipoRevisionSerializer(serializers.Serializer):
 # TURNOS
 # =========================
 class TurnoSerializer(serializers.ModelSerializer):
+    sede = serializers.SlugRelatedField(slug_field="code", queryset=Sede.objects.filter(is_active=True))
+    sede_name = serializers.CharField(source="sede.name", read_only=True)
+
     class Meta:
         model = Turno
-        fields = ["id", "guarda", "sede", "jornada", "inicio", "fin", "activo"]
+        fields = ["id", "guarda", "sede", "sede_name", "jornada", "inicio", "fin", "activo"]
         read_only_fields = ["guarda", "inicio", "fin", "activo"]
 
 
 class TurnoIniciarSerializer(serializers.Serializer):
-    sede = serializers.ChoiceField(choices=Turno.Sede.choices)
+    sede = serializers.SlugRelatedField(slug_field="code", queryset=Sede.objects.filter(is_active=True))
     jornada = serializers.ChoiceField(choices=Turno.Jornada.choices)
 
 
@@ -277,10 +295,12 @@ class TurnoIniciarSerializer(serializers.Serializer):
 # =========================
 class AccesoSerializer(serializers.ModelSerializer):
     equipos = serializers.PrimaryKeyRelatedField(queryset=Equipo.objects.all(), many=True, required=False)
+    sede = serializers.SlugRelatedField(slug_field="code", read_only=True)
+    sede_name = serializers.CharField(source="sede.name", read_only=True)
 
     class Meta:
         model = Acceso
-        fields = ["id", "usuario", "fecha", "tipo", "sede", "registrado_por", "turno", "equipos"]
+        fields = ["id", "usuario", "fecha", "tipo", "sede", "sede_name", "registrado_por", "turno", "equipos"]
         read_only_fields = ["fecha", "sede", "registrado_por", "turno"]
 
     def validate(self, data):
