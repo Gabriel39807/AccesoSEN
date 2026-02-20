@@ -21,9 +21,9 @@ export default function AprendizAyuda() {
 
       <FadeInCard delay={120}>
         <ModernButton
-          label="Correo soporte@sena.edu.co"
+          label="Correo soporte@institucion.local"
           tone="dark"
-          onPress={() => Linking.openURL("mailto:soporte@sena.edu.co")}
+          onPress={() => Linking.openURL("mailto:soporte@institucion.local")}
         />
       </FadeInCard>
     </ModernScreen>

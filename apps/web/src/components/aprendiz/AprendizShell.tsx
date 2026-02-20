@@ -104,8 +104,8 @@ export default function AprendizShell({
       <div className="mx-auto flex w-full max-w-7xl gap-4 px-4 py-5 sm:px-6 lg:gap-5">
         <aside className="sticky top-5 hidden h-[calc(100vh-2.5rem)] w-64 shrink-0 rounded-3xl border border-white/65 bg-white/65 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.08)] backdrop-blur-xl lg:flex lg:flex-col xl:w-[17rem]">
           <div className="mb-6">
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">SENA</div>
-            <div className="text-lg font-extrabold tracking-tight text-zinc-900">AccesoSEN</div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Institucional</div>
+            <div className="text-lg font-extrabold tracking-tight text-zinc-900">AccesoID</div>
             <div className="mt-1 text-xs text-zinc-500">Sistema de Control de Acceso</div>
           </div>
 
@@ -135,7 +135,7 @@ export default function AprendizShell({
               <IconLogout className="h-4 w-4" />
               Cerrar sesion
             </button>
-            <div className="mt-4 text-xs text-zinc-400">SENA Tunja - 2025</div>
+            <div className="mt-4 text-xs text-zinc-400">Plataforma institucional - 2025</div>
           </div>
         </aside>
 

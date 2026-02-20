@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 
 import { useSessionStore } from "../../store/session";
 import { toUiErrorMessage } from "../../api/client";
 import { Jornada, Sede } from "../../api/turnos";
+import { listSedes, type SedeItem } from "../../api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../lib/validators";
 
 export function GuardLoginScreen() {
@@ -13,11 +14,30 @@ export function GuardLoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const [sede, setSede] = useState<Sede>("CEGAFE");
+  const [sede, setSede] = useState<Sede>("");
+  const [sedes, setSedes] = useState<SedeItem[]>([]);
   const [jornada, setJornada] = useState<Jornada>("TARDE");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const items = await listSedes();
+        if (!mounted) return;
+        setSedes(items);
+        if (items.length > 0) setSede(items[0].code);
+      } catch {
+        if (!mounted) return;
+        setSedes([]);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   function onUsernameChange(value: string) {
     setUsername(sanitizeDigits(value).slice(0, 10));
@@ -35,7 +55,11 @@ export function GuardLoginScreen() {
       return;
     }
     if (!password || password.length > 20) {
-      setError("La contraseña debe tener maximo 20 caracteres.");
+      setError("La contrasena debe tener maximo 20 caracteres.");
+      return;
+    }
+    if (!sede) {
+      setError("Selecciona una sede.");
       return;
     }
 
@@ -51,8 +75,8 @@ export function GuardLoginScreen() {
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12, justifyContent: "center" }}>
-      <Text style={{ fontSize: 24, fontWeight: "800", textAlign: "center" }}>Personal de Seguridad</Text>
-      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu documento y contraseña</Text>
+      <Text style={{ fontSize: 24, fontWeight: "800", textAlign: "center" }}>Personal de seguridad</Text>
+      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu documento y contrasena</Text>
 
       <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#eee" }}>
         <Text style={{ fontWeight: "700", marginBottom: 6 }}>Documento</Text>
@@ -66,11 +90,11 @@ export function GuardLoginScreen() {
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 
-        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>contraseña</Text>
+        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Contrasena</Text>
         <TextInput
           value={password}
           onChangeText={onPasswordChange}
-          placeholder="Ingresa tu contraseña"
+          placeholder="Ingresa tu contrasena"
           secureTextEntry
           style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
@@ -78,10 +102,9 @@ export function GuardLoginScreen() {
         <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Sede</Text>
         <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12 }}>
           <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
-            <Picker.Item label="CEGAFE" value="CEGAFE" />
-            <Picker.Item label="SANTA CLARA" value="SANTA_CLARA" />
-            <Picker.Item label="ITEDRIS" value="ITEDRIS" />
-            <Picker.Item label="GASTRONOMIA" value="GASTRONOMIA" />
+            {sedes.map((item) => (
+              <Picker.Item key={item.id} label={item.name} value={item.code} />
+            ))}
           </Picker>
         </View>
 
@@ -96,7 +119,7 @@ export function GuardLoginScreen() {
         {error ? <Text style={{ color: "red", marginTop: 10 }}>{error}</Text> : null}
 
         <Pressable
-          disabled={loading}
+          disabled={loading || !sede}
           onPress={onSubmit}
           style={{
             marginTop: 14,
@@ -106,7 +129,7 @@ export function GuardLoginScreen() {
             alignItems: "center",
           }}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800" }}>Iniciar Turno</Text>}
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800" }}>Iniciar turno</Text>}
         </Pressable>
       </View>
     </View>

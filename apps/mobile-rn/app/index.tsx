@@ -18,7 +18,7 @@ export default function RoleSelection() {
   return (
     <ModernScreen contentStyle={{ justifyContent: "center" }}>
       <FadeInCard delay={0}>
-        <Pill text="ACCESO SENA TUNJA" />
+        <Pill text="ACCESO INSTITUCIONAL" />
         <View style={{ marginTop: 10 }}>
           <TitleBlock title="SADI Movil" subtitle="Selecciona tu rol para continuar en una experiencia segura y moderna." />
         </View>

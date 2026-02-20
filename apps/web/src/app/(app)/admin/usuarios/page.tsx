@@ -7,6 +7,7 @@ import { sanitizeDigits, validateDocument6to10 } from "@/lib/validators";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { useMe } from "@/hooks/useMe";
+import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -40,7 +41,6 @@ type NoticeTone = "success" | "error" | "info";
 
 const ROLES = ["superadmin", "admin_sede", "guarda", "aprendiz"] as const;
 const ROLES_NON_SUPERADMIN = ["guarda", "aprendiz"] as const;
-const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
 function isAdministrativeRole(rol?: string | null) {
   return ["superadmin", "admin_sede"].includes(String(rol || ""));
@@ -70,9 +70,9 @@ function isValidUsername(username: string) {
   return /^[A-Za-z0-9_@.+-]+$/.test(username);
 }
 
-function isInstitutionalEmail(email: string) {
+function isValidEmail(email: string) {
   const value = email.trim().toLowerCase();
-  return /@(sena\.edu\.co|soy\.sena\.edu\.co)$/.test(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function hasPasswordPolicyErrors(password: string): string[] {
@@ -221,6 +221,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
 export default function AdminUsuariosPage() {
   const { me } = useMe();
+  const { sedes } = useSedes();
   const canManageAdminRoles = me?.rol === "superadmin";
   const roleOptionsForActor = canManageAdminRoles ? ROLES : ROLES_NON_SUPERADMIN;
   const actorRol = me?.rol ?? null;
@@ -242,13 +243,14 @@ export default function AdminUsuariosPage() {
   const [q, setQ] = useState("");
   const [rolFilter, setRolFilter] = useState<"todos" | "superadmin" | "admin_sede" | "guarda" | "aprendiz">("todos");
   const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
-  const [sedeFilter, setSedeFilter] = useState<"todos" | (typeof SEDES)[number]>("todos");
+  const [sedeFilter, setSedeFilter] = useState("todos");
 
   // debounce
   const dq = useDebounced(q, 450);
   const dRol = useDebounced(rolFilter, 350);
   const dEstado = useDebounced(estadoFilter, 350);
   const dSede = useDebounced(sedeFilter, 350);
+  const sedeCodes = useMemo(() => sedes.map((s) => s.code), [sedes]);
 
   // pagination
   const [page, setPage] = useState(1);
@@ -359,10 +361,8 @@ export default function AdminUsuariosPage() {
 
     if (!email) {
       addFieldError(fieldErrors, "email", "El campo correo es obligatorio.");
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    } else if (!isValidEmail(email)) {
       addFieldError(fieldErrors, "email", "El correo no tiene un formato valido.");
-    } else if (!isInstitutionalEmail(email)) {
-      addFieldError(fieldErrors, "email", "El email debe ser institucional @sena.edu.co o @soy.sena.edu.co.");
     }
 
     if (!documento) {
@@ -386,7 +386,7 @@ export default function AdminUsuariosPage() {
 
     if (!sede) {
       addFieldError(fieldErrors, "sede_principal", "El campo sede principal es obligatorio.");
-    } else if (!SEDES.includes(sede as any)) {
+    } else if (!sedeCodes.includes(sede)) {
       addFieldError(fieldErrors, "sede_principal", "La sede seleccionada no es valida.");
     }
 
@@ -476,7 +476,7 @@ export default function AdminUsuariosPage() {
   useEffect(() => {
     if (!isScopedAdmin) return;
     if (!actorSede) return;
-    setSedeFilter(actorSede as (typeof SEDES)[number]);
+    setSedeFilter(actorSede);
   }, [isScopedAdmin, actorSede]);
 
   // recargar al cambiar filtros debounced
@@ -545,7 +545,7 @@ export default function AdminUsuariosPage() {
     estado?: "todos" | "activo" | "bloqueado";
   }) {
     setQ("");
-    if (isScopedAdmin && actorSede) setSedeFilter(actorSede as (typeof SEDES)[number]);
+    if (isScopedAdmin && actorSede) setSedeFilter(actorSede);
     else setSedeFilter("todos");
     setRolFilter(next.rol ?? "todos");
     setEstadoFilter(next.estado ?? "todos");
@@ -945,13 +945,13 @@ export default function AdminUsuariosPage() {
           <select
             className="border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
             value={sedeFilter}
-            onChange={(e) => setSedeFilter(e.target.value as any)}
+            onChange={(e) => setSedeFilter(e.target.value)}
             disabled={isScopedAdmin}
           >
             {!isScopedAdmin ? <option value="todos">Sede: Todas</option> : null}
-            {SEDES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {sedes.map((s) => (
+              <option key={s.id} value={s.code}>
+                {s.name}
               </option>
             ))}
           </select>
@@ -1120,7 +1120,7 @@ export default function AdminUsuariosPage() {
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="usuario@sena.edu.co"
+                    placeholder="usuario@dominio.com"
                   />
                 </label>
 
@@ -1152,9 +1152,9 @@ export default function AdminUsuariosPage() {
                     ) : (
                       <>
                         <option value="">(sin sede)</option>
-                        {SEDES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
+                        {sedes.map((s) => (
+                          <option key={s.id} value={s.code}>
+                            {s.name}
                           </option>
                         ))}
                       </>
@@ -1325,7 +1325,7 @@ export default function AdminUsuariosPage() {
                       setCEmail(e.target.value);
                       clearCreateErrorsOnChange("email");
                     }}
-                    placeholder="usuario@sena.edu.co"
+                    placeholder="usuario@dominio.com"
                     aria-invalid={createFieldErrors.email?.length ? "true" : "false"}
                     aria-describedby={createFieldErrors.email?.length ? "create-email-error" : undefined}
                   />
@@ -1433,9 +1433,9 @@ export default function AdminUsuariosPage() {
                     ) : (
                       <>
                         <option value="">(sin sede)</option>
-                        {SEDES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
+                        {sedes.map((s) => (
+                          <option key={s.id} value={s.code}>
+                            {s.name}
                           </option>
                         ))}
                       </>

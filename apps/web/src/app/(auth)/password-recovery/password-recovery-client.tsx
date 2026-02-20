@@ -150,7 +150,7 @@ export default function PasswordRecoveryClient() {
               id="recovery-email"
               label="Correo"
               type="email"
-              placeholder="usuario@sena.edu.co"
+              placeholder="usuario@dominio.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"

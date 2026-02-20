@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSessionStore } from "../../src/store/session";
 import { toUiErrorMessage } from "../../src/api/client";
 import type { Jornada, Sede } from "../../src/api/turnos";
+import { listSedes, type SedeItem } from "../../src/api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
@@ -19,7 +20,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
 
-  const [sede, setSede] = useState<Sede>("CEGAFE");
+  const [sede, setSede] = useState<Sede>("");
+  const [sedes, setSedes] = useState<SedeItem[]>([]);
   const [jornada, setJornada] = useState<Jornada>("MAÑANA");
 
   const [loading, setLoading] = useState(false);
@@ -45,6 +47,24 @@ export default function LoginScreen() {
     return () => clearInterval(t);
   }, [lockRemainingSec]);
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const items = await listSedes();
+        if (!mounted) return;
+        setSedes(items);
+        if (!sede && items.length > 0) setSede(items[0].code);
+      } catch {
+        if (!mounted) return;
+        setSedes([]);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   async function onSubmit() {
     setError(null);
     if (bloqueado) return;
@@ -55,6 +75,10 @@ export default function LoginScreen() {
     }
     if (!password || password.length > 20) {
       setError("La contraseña debe tener maximo 20 caracteres.");
+      return;
+    }
+    if (rol === "guarda" && !sede) {
+      setError("Selecciona una sede.");
       return;
     }
 
@@ -125,10 +149,9 @@ export default function LoginScreen() {
               <Text style={{ fontWeight: "700", color: "#0f172a" }}>Sede</Text>
               <View style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 12, overflow: "hidden", backgroundColor: "#f8fafc" }}>
                 <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
-                  <Picker.Item label="CEGAFE" value="CEGAFE" />
-                  <Picker.Item label="SANTA CLARA" value="SANTA_CLARA" />
-                  <Picker.Item label="ITEDRIS" value="ITEDRIS" />
-                  <Picker.Item label="GASTRONOMIA" value="GASTRONOMIA" />
+                  {sedes.map((item) => (
+                    <Picker.Item key={item.id} label={item.name} value={item.code} />
+                  ))}
                 </Picker>
               </View>
 
@@ -153,7 +176,7 @@ export default function LoginScreen() {
 
           <ModernButton
             label={loading ? "Ingresando..." : "Continuar"}
-            disabled={loading || bloqueado}
+            disabled={loading || bloqueado || (rol === "guarda" && !sede)}
             onPress={onSubmit}
           />
 

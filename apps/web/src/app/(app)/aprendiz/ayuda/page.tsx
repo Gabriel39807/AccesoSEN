@@ -32,13 +32,14 @@ export default function AprendizAyudaPage() {
   const [asunto, setAsunto] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [motivo, setMotivo] = useState("Otro motivo");
+  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "soporte@institucion.local";
 
   const mailto = useMemo(() => {
-    const to = "soporte@sena.edu.co";
-    const subject = encodeURIComponent(`[AccesoSEN] ${motivo}: ${asunto}`.trim());
+    const to = supportEmail;
+    const subject = encodeURIComponent(`[Accesos] ${motivo}: ${asunto}`.trim());
     const body = encodeURIComponent(mensaje);
     return `mailto:${to}?subject=${subject}&body=${body}`;
-  }, [asunto, mensaje, motivo]);
+  }, [asunto, mensaje, motivo, supportEmail]);
 
   const canSend = asunto.trim().length > 0 && mensaje.trim().length > 0;
   const charsLeft = Math.max(0, 500 - mensaje.length);
@@ -149,7 +150,7 @@ export default function AprendizAyudaPage() {
                 <span className="font-semibold">Linea de atencion:</span> (000) 000 0000
               </div>
               <div>
-                <span className="font-semibold">Correo:</span> soporte@sena.edu.co
+                <span className="font-semibold">Correo:</span> {supportEmail}
               </div>
             </div>
           </div>

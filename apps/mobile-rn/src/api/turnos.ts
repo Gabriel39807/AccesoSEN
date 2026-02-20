@@ -1,6 +1,6 @@
 import { api } from "./client";
 
-export type Sede = "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
+export type Sede = string;
 export type Jornada = "MAÑANA" | "TARDE" | "NOCHE";
 
 export type Turno = {

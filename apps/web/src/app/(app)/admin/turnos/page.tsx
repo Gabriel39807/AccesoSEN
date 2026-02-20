@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { toErrorMessage } from "@/lib/errors";
 import { useMe } from "@/hooks/useMe";
+import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -16,14 +17,14 @@ type Usuario = {
 type Turno = {
   id: number;
   guarda: number; // en tu serializer viene como id del guarda
-  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
+  sede: string;
+  sede_name?: string;
   jornada: "MAÃƒâ€˜ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
 };
 
-const SEDES: Turno["sede"][] = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
 const JORNADAS: Turno["jornada"][] = ["MAÃƒâ€˜ANA", "TARDE", "NOCHE"];
 
 function badgeBase() {
@@ -90,6 +91,7 @@ function Modal({
 
 export default function AdminTurnosPage() {
   const { me } = useMe();
+  const { sedes } = useSedes();
   const actorRol = me?.rol ?? null;
   const actorSede = me?.sede_principal ?? null;
   const isScopedAdmin = actorRol === "admin_sede";
@@ -100,7 +102,7 @@ export default function AdminTurnosPage() {
   const [error, setError] = useState<string | null>(null);
 
   // filtros (API soporta sede/jornada/activo)
-  const [sede, setSede] = useState<"" | Turno["sede"]>("");
+  const [sede, setSede] = useState("");
   const [jornada, setJornada] = useState<"" | Turno["jornada"]>("");
   const [activo, setActivo] = useState<"" | "true" | "false">("");
 
@@ -180,7 +182,7 @@ export default function AdminTurnosPage() {
   }
 
   function resetFiltros() {
-    if (isScopedAdmin && actorSede) setSede(actorSede as Turno["sede"]);
+    if (isScopedAdmin && actorSede) setSede(actorSede);
     else setSede("");
     setJornada("");
     setActivo("");
@@ -223,7 +225,7 @@ export default function AdminTurnosPage() {
   useEffect(() => {
     if (!isScopedAdmin) return;
     if (!actorSede) return;
-    setSede(actorSede as Turno["sede"]);
+    setSede(actorSede);
   }, [isScopedAdmin, actorSede]);
 
   return (
@@ -280,12 +282,12 @@ export default function AdminTurnosPage() {
               <select
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                 value={sede}
-                onChange={(e) => setSede(e.target.value as any)}
+                onChange={(e) => setSede(e.target.value)}
               >
                 <option value="">Sede: Todas</option>
-                {SEDES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace("_", " ")}
+                {sedes.map((s) => (
+                  <option key={s.id} value={s.code}>
+                    {s.name}
                   </option>
                 ))}
               </select>
@@ -391,7 +393,7 @@ export default function AdminTurnosPage() {
                     <tr key={t.id} className="border-b hover:bg-emerald-50/30 transition">
                       <td className="px-4 py-3 font-semibold text-gray-900">#{t.id}</td>
                       <td className="px-4 py-3 text-gray-800">{nombreUsuario(u)}</td>
-                      <td className="px-4 py-3 text-gray-800">{t.sede.replace("_", " ")}</td>
+                      <td className="px-4 py-3 text-gray-800">{t.sede_name || t.sede}</td>
                       <td className="px-4 py-3">
                         <span className={badgeJornada(t.jornada)}>
                           {t.jornada === "MAÃƒâ€˜ANA" ? "MaÃƒÂ±ana" : t.jornada === "TARDE" ? "Tarde" : "Noche"}
@@ -443,7 +445,7 @@ export default function AdminTurnosPage() {
                 </div>
                 <div>
                   <span className="text-gray-500">Sede:</span>{" "}
-                  <span className="font-semibold">{turnoFinalizar.sede.replace("_", " ")}</span>
+                  <span className="font-semibold">{turnoFinalizar.sede_name || turnoFinalizar.sede}</span>
                 </div>
                 <div>
                   <span className="text-gray-500">Jornada:</span>{" "}
