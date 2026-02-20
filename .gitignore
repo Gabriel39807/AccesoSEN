@@ -66,5 +66,4 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Local docs/helpers not for source control
-Agents.md
+
