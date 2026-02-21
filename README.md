@@ -118,3 +118,34 @@ Prueba E2E recomendada:
 
 ## Seguridad
 Consulta `SECURITY.md` para politica de reporte.
+
+## RBAC y politicas dinamicas (BD)
+El backend ahora soporta autorizacion data-driven con estos modelos:
+- `Role`
+- `Permission`
+- `RolePermission` (scope: `GLOBAL | SEDE | OWN`)
+- `UserMembership` (usuario + rol + sede)
+- `SedePolicy` (max equipos, QR mode, turno activo, etc.)
+- `AllowedEmailDomain` (dominios permitidos por rol/sede)
+
+La migracion `0014_rbac_policies_and_domains` crea y siembra:
+- roles base (`superadmin`, `admin_sede`, `guarda`, `aprendiz`)
+- permisos base y matriz inicial de scopes
+- memberships primarias desde `Usuario.rol`
+- policy por sede (defaults)
+- dominios de correo permitidos por rol (incluye compatibilidad inicial)
+
+## OpenAPI / Swagger
+- JSON OpenAPI: `http://localhost:8000/api/openapi.json`
+- Swagger UI: `http://localhost:8000/api/docs/`
+- ReDoc: `http://localhost:8000/api/redoc/`
+
+## Seeds institucionales
+Puedes sembrar sedes por perfil sin tocar codigo:
+```bash
+cd services/api
+python manage.py seed_institution --profile generic
+```
+Perfiles disponibles:
+- `generic` -> `sede-1` ... `sede-4`
+- `sena` -> sedes institucionales historicas (solo si se requiere branding especifico)

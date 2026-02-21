@@ -30,6 +30,13 @@ Score global: **72/100**
 2. Falta politicas de retencion/anonimizacion de logs.
 3. Cobertura de backend inicial todavia baja para un sistema critico.
 
+## Actualizacion 2026-02-21 (RBAC y politicas dinamicas)
+- Se implemento RBAC data-driven con modelos: `Role`, `Permission`, `RolePermission`, `UserMembership`.
+- Se agregaron politicas por sede (`SedePolicy`) y dominios permitidos por rol/sede (`AllowedEmailDomain`).
+- Se reforzo scoping server-side en viewsets clave (`usuarios`, `equipos`, `turnos`, `accesos`, `notificaciones`) usando `AuthorizationService`.
+- Se centralizo parse/generacion de QR con `QRService` y modo por sede (`PLAIN|SIGNED|DUAL`).
+- Se documento la decision en `docs/decisions/ADR-004-data-driven-rbac-and-domain-policies.md`.
+
 ## Cambios implementados en esta iteracion
 ### Repo hygiene
 - `.gitignore` reforzado para monorepo.

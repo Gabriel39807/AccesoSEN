@@ -12,8 +12,22 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 from rest_framework.test import APITestCase
 
+from accesos.domain.services.qr_service import QRParseError, QRService
 from .exceptions import ui_exception_handler
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, RefreshSession, Sede, Turno, WebAuthnCredential
+from .models import (
+    Acceso,
+    AllowedEmailDomain,
+    EmailChangeOTP,
+    Equipo,
+    PasswordResetOTP,
+    RefreshSession,
+    Role,
+    Sede,
+    SedePolicy,
+    Turno,
+    UserMembership,
+    WebAuthnCredential,
+)
 from .otp_services import hash_code
 
 
@@ -461,7 +475,7 @@ class EquipoRulesTests(BaseApiTest):
         )
 
     def _auth_aprendiz(self):
-        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        self.auth(self.aprendiz.documento, "Passw0rd!", expected_role="aprendiz")
 
     def _auth_superadmin(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
@@ -931,6 +945,126 @@ class FilterAndScopeEnforcementTests(BaseApiTest):
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
         self.assertEqual(r.data.get("code"), "PERMISSION_DENIED")
+
+
+class DataDrivenRBACAndPolicyTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="rbac_superadmin",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="rbac.superadmin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.admin_sede = self.create_user(
+            username="rbac_admin_sede",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="rbac.admin@sadi.test",
+            sede_principal="sede-1",
+        )
+        self.aprendiz = self.create_user(
+            username="rbac_aprendiz",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="5544332211",
+            email="rbac.aprendiz@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def test_admin_scope_uses_membership_as_source_of_truth(self):
+        role_admin = Role.objects.get(code="admin_sede")
+        UserMembership.objects.filter(user=self.admin_sede).update(is_primary=False, is_active=False)
+        UserMembership.objects.create(
+            user=self.admin_sede,
+            role=role_admin,
+            sede=self.sede("sede-2"),
+            is_primary=True,
+            is_active=True,
+        )
+
+        self.create_user(
+            username="scope_aprendiz_sede1",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1234567890",
+            email="scope.sede1@sadi.test",
+            sede_principal="sede-1",
+        )
+        self.create_user(
+            username="scope_aprendiz_sede2",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1234567891",
+            email="scope.sede2@sadi.test",
+            sede_principal="sede-2",
+        )
+
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+        r = self.client.get("/api/usuarios/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertTrue(rows)
+        self.assertTrue(all(item.get("sede_principal") == "sede-2" for item in rows))
+
+    def test_policy_max_equipos_is_dynamic_per_sede(self):
+        policy, _ = SedePolicy.objects.get_or_create(sede=self.sede("sede-1"))
+        policy.max_equipos_aprendiz = 2
+        policy.save(update_fields=["max_equipos_aprendiz"])
+
+        self.auth(self.aprendiz.documento, "Passw0rd!", expected_role="aprendiz")
+        r1 = self.client.post("/api/equipos/", {"serial": "POL-1", "marca": "Dell", "modelo": "A"}, format="json")
+        r2 = self.client.post("/api/equipos/", {"serial": "POL-2", "marca": "Dell", "modelo": "B"}, format="json")
+        r3 = self.client.post("/api/equipos/", {"serial": "POL-3", "marca": "Dell", "modelo": "C"}, format="json")
+
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
+        self.assertEqual(r3.status_code, status.HTTP_400_BAD_REQUEST, r3.data)
+        self.assertEqual(r3.data.get("code"), "EQUIPO_LIMIT_REACHED")
+        self.assertIn("2", str(r3.data.get("message", "")))
+
+    def test_allowed_email_domain_rejects_invalid_domain_for_role_and_sede(self):
+        role_aprendiz = Role.objects.get(code="aprendiz")
+        sede_1 = self.sede("sede-1")
+        AllowedEmailDomain.objects.filter(role=role_aprendiz).delete()
+        AllowedEmailDomain.objects.create(role=role_aprendiz, sede=sede_1, domain="institucion.edu.co", is_active=True)
+
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        r = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "domain_user_1",
+                "password": "Passw0rd!",
+                "first_name": "Domain",
+                "last_name": "Blocked",
+                "email": "no.permitido@gmail.com",
+                "documento": "1234567892",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "sede_principal": "sede-1",
+            },
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_400_BAD_REQUEST, r.data)
+        self.assertIn("email", r.data.get("detail", {}))
+
+    def test_qr_mode_signed_rejects_plain_payload(self):
+        sede_1 = self.sede("sede-1")
+        policy, _ = SedePolicy.objects.get_or_create(sede=sede_1)
+        policy.qr_mode = "SIGNED"
+        policy.save(update_fields=["qr_mode"])
+
+        signed_value, mode = QRService.build_aprendiz_qr_value("1234567893", sede=sede_1)
+        self.assertEqual(mode, "SIGNED")
+
+        parsed = QRService.parse_document(signed_value, sede=sede_1)
+        self.assertEqual(parsed.documento, "1234567893")
+        self.assertEqual(parsed.mode_used, "SIGNED")
+
+        with self.assertRaises(QRParseError):
+            QRService.parse_document("1234567893", sede=sede_1)
 
 
 class EmailChangeOtpTests(BaseApiTest):
