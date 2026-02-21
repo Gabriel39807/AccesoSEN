@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q, F
+from uuid import uuid4
 
 
 class Sede(models.Model):
@@ -262,6 +263,44 @@ class WebAuthnCredential(models.Model):
 
     def __str__(self):
         return f"WebAuthnCredential(user={self.user_id}, credential_id={self.credential_id[:20]})"
+
+
+class RefreshSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="refresh_sessions",
+    )
+    device_id = models.CharField(max_length=128)
+    refresh_token_hash = models.CharField(max_length=128, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    replaced_by = models.OneToOneField(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replaces",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "device_id"]),
+            models.Index(fields=["user", "expires_at"]),
+            models.Index(fields=["device_id", "expires_at"]),
+            models.Index(fields=["revoked_at"]),
+        ]
+
+    @property
+    def is_active(self) -> bool:
+        return self.revoked_at is None and timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"RefreshSession(user={self.user_id}, device={self.device_id}, active={self.is_active})"
 
 
 class AprendizImportAudit(models.Model):

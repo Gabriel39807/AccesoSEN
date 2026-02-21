@@ -80,11 +80,42 @@ from .serializers import (
     UsuarioSerializer,
     ValidarDocumentoSerializer,
 )
+from core.institution_settings import DEFAULT_SEDES_PROFILE
 
 PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
 PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
 MAX_ADMINS_PER_SEDE = 4
 FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
+
+GENERIC_SEDES = [
+    {"code": "sede-1", "name": "Sede 1"},
+    {"code": "sede-2", "name": "Sede 2"},
+    {"code": "sede-3", "name": "Sede 3"},
+    {"code": "sede-4", "name": "Sede 4"},
+]
+
+SENA_SEDES = [
+    {"code": "cegafe", "name": "CEGAFE"},
+    {"code": "santa-clara", "name": "SANTA CLARA"},
+    {"code": "itedris", "name": "ITEDRIS"},
+    {"code": "gastronomia", "name": "GASTRONOMIA"},
+]
+
+
+def _default_sede_rows():
+    if str(DEFAULT_SEDES_PROFILE or "").strip().lower() == "sena":
+        return SENA_SEDES
+    return GENERIC_SEDES
+
+
+def _ensure_default_sedes_if_empty():
+    if Sede.objects.exists():
+        return
+    for row in _default_sede_rows():
+        Sede.objects.get_or_create(
+            code=row["code"],
+            defaults={"name": row["name"], "is_active": True},
+        )
 
 
 def _webauthn_register_cache_key(user_id: int, request_id: str) -> str:
@@ -827,6 +858,7 @@ class SedeViewSet(viewsets.ReadOnlyModelViewSet):
         return [IsAuthenticated(), IsAdmin()]
 
     def get_queryset(self):
+        _ensure_default_sedes_if_empty()
         qs = Sede.objects.all().order_by("name")
         raw = str(self.request.query_params.get("include_inactive", "") or "").strip().lower()
         include_inactive = raw in {"1", "true", "yes", "on"}
@@ -2649,7 +2681,7 @@ class PasskeyAuthVerifyView(APIView):
         credential.sign_count = int(credential.sign_count or 0) + 1
         credential.save(update_fields=["last_used_at", "sign_count"])
         cache.delete(key)
-        tokens = issue_tokens_for_user(user, rotate_guard_session=True)
+        tokens = issue_tokens_for_user(user, request=request, rotate_guard_session=True)
         return Response(tokens, status=status.HTTP_200_OK)
 
 

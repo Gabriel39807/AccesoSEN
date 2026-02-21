@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .jwt_views import SadiLogoutAllView, SadiLogoutView, SadiTokenObtainPairView, SadiTokenRefreshView
 from .views import (
     SedeViewSet,
     UsuarioViewSet,
@@ -34,6 +35,10 @@ router.register(r"turnos", TurnoViewSet, basename="turnos")
 router.register(r"notificaciones", NotificacionViewSet, basename="notificaciones")
 
 urlpatterns = [
+    path("auth/login/", SadiTokenObtainPairView.as_view(), name="auth-login"),
+    path("auth/refresh/", SadiTokenRefreshView.as_view(), name="auth-refresh"),
+    path("auth/logout/", SadiLogoutView.as_view(), name="auth-logout"),
+    path("auth/logout-all/", SadiLogoutAllView.as_view(), name="auth-logout-all"),
     path("me/", MeView.as_view(), name="me"),
     path("auth/change-initial-password/", ChangeInitialPasswordView.as_view(), name="change-initial-password"),
     path("aprendiz/perfil/", AprendizPerfilView.as_view(), name="aprendiz-perfil"),

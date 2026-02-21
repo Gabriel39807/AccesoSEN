@@ -13,7 +13,7 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.test import APITestCase
 
 from .exceptions import ui_exception_handler
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Sede, Turno, WebAuthnCredential
+from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, RefreshSession, Sede, Turno, WebAuthnCredential
 from .otp_services import hash_code
 
 
@@ -163,6 +163,230 @@ class LoginAndLockTests(BaseApiTest):
         )
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         self.assertIn("access", r.data)
+
+
+class RefreshSessionFlowTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.aprendiz = self.create_user(
+            username="7171717171",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="7171717171",
+            email="refresh.session@sadi.test",
+        )
+        self.guarda = self.create_user(
+            username="7272727272",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="7272727272",
+            email="refresh.guarda@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def _auth_login(self, *, user: str, password: str, role: str, device_id: str):
+        return self.client.post(
+            "/api/auth/login/",
+            {
+                "username": user,
+                "password": password,
+                "expected_role": role,
+                "device_id": device_id,
+            },
+            format="json",
+        )
+
+    def test_login_creates_refresh_session(self):
+        r = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-001",
+        )
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertIn("access", r.data)
+        self.assertIn("refresh", r.data)
+
+        session = RefreshSession.objects.filter(
+            user=self.aprendiz,
+            device_id="device-aprendiz-001",
+            revoked_at__isnull=True,
+        ).first()
+        self.assertIsNotNone(session)
+        self.assertNotEqual(session.refresh_token_hash, r.data["refresh"])
+
+    def test_refresh_rotates_token_and_old_token_fails(self):
+        login = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-002",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        first_refresh = login.data["refresh"]
+
+        rotate = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first_refresh, "device_id": "device-aprendiz-002"},
+            format="json",
+        )
+        self.assertEqual(rotate.status_code, status.HTTP_200_OK, rotate.data)
+        self.assertIn("access", rotate.data)
+        self.assertIn("refresh", rotate.data)
+        self.assertNotEqual(first_refresh, rotate.data["refresh"])
+
+        old_again = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first_refresh, "device_id": "device-aprendiz-002"},
+            format="json",
+        )
+        self.assertEqual(old_again.status_code, status.HTTP_401_UNAUTHORIZED, old_again.data)
+
+    def test_legacy_token_refresh_route_still_works(self):
+        login = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-legacy",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+
+        legacy_refresh = self.client.post(
+            "/api/token/refresh/",
+            {"refresh": login.data["refresh"], "device_id": "device-aprendiz-legacy"},
+            format="json",
+        )
+        self.assertEqual(legacy_refresh.status_code, status.HTTP_200_OK, legacy_refresh.data)
+        self.assertIn("access", legacy_refresh.data)
+        self.assertIn("refresh", legacy_refresh.data)
+
+    def test_refresh_without_device_id_keeps_legacy_compatibility(self):
+        login = self.client.post(
+            "/api/token/",
+            {
+                "username": self.aprendiz.username,
+                "password": "Passw0rd!",
+                "expected_role": "aprendiz",
+            },
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+
+        refresh = self.client.post(
+            "/api/token/refresh/",
+            {"refresh": login.data["refresh"]},
+            format="json",
+        )
+        self.assertEqual(refresh.status_code, status.HTTP_200_OK, refresh.data)
+        self.assertIn("access", refresh.data)
+
+    def test_refresh_expired_or_revoked_fails(self):
+        login = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-003",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        refresh = login.data["refresh"]
+        session = RefreshSession.objects.filter(user=self.aprendiz, device_id="device-aprendiz-003").first()
+        self.assertIsNotNone(session)
+
+        session.expires_at = timezone.now() - timedelta(minutes=1)
+        session.save(update_fields=["expires_at"])
+
+        r = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": refresh, "device_id": "device-aprendiz-003"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED, r.data)
+
+    def test_logout_revokes_session_and_refresh_fails(self):
+        login = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-004",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        access = login.data["access"]
+        refresh = login.data["refresh"]
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+        logout = self.client.post("/api/auth/logout/", {"device_id": "device-aprendiz-004"}, format="json")
+        self.assertEqual(logout.status_code, status.HTTP_200_OK, logout.data)
+        self.assertGreaterEqual(int(logout.data.get("revoked_sessions", 0)), 1)
+
+        self.client.credentials()
+        r = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": refresh, "device_id": "device-aprendiz-004"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED, r.data)
+
+    def test_logout_all_revokes_all_active_sessions(self):
+        first = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-a",
+        )
+        second = self._auth_login(
+            user=self.aprendiz.username,
+            password="Passw0rd!",
+            role="aprendiz",
+            device_id="device-aprendiz-b",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {second.data['access']}")
+        logout_all = self.client.post("/api/auth/logout-all/", format="json")
+        self.assertEqual(logout_all.status_code, status.HTTP_200_OK, logout_all.data)
+        self.assertGreaterEqual(int(logout_all.data.get("revoked_sessions", 0)), 2)
+
+        self.client.credentials()
+        old_1 = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first.data["refresh"], "device_id": "device-aprendiz-a"},
+            format="json",
+        )
+        old_2 = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": second.data["refresh"], "device_id": "device-aprendiz-b"},
+            format="json",
+        )
+        self.assertEqual(old_1.status_code, status.HTTP_401_UNAUTHORIZED, old_1.data)
+        self.assertEqual(old_2.status_code, status.HTTP_401_UNAUTHORIZED, old_2.data)
+
+    def test_guarda_new_device_revokes_previous_session(self):
+        first = self._auth_login(
+            user=self.guarda.username,
+            password="Passw0rd!",
+            role="guarda",
+            device_id="device-guarda-001",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+
+        second = self._auth_login(
+            user=self.guarda.username,
+            password="Passw0rd!",
+            role="guarda",
+            device_id="device-guarda-002",
+        )
+        self.assertEqual(second.status_code, status.HTTP_200_OK, second.data)
+
+        old_refresh = self.client.post(
+            "/api/auth/refresh/",
+            {"refresh": first.data["refresh"], "device_id": "device-guarda-001"},
+            format="json",
+        )
+        self.assertEqual(old_refresh.status_code, status.HTTP_401_UNAUTHORIZED, old_refresh.data)
+
+        active = RefreshSession.objects.filter(user=self.guarda, revoked_at__isnull=True).count()
+        self.assertEqual(active, 1)
 
 
 class PasswordResetOtpTests(BaseApiTest):
@@ -1060,3 +1284,14 @@ class InstitutionalDecouplingTests(BaseApiTest):
             format="json",
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+
+
+class SedeBootstrapTests(BaseApiTest):
+    def test_sedes_endpoint_bootstraps_defaults_when_table_is_empty(self):
+        Sede.objects.all().delete()
+        r = self.client.get("/api/sedes/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertGreaterEqual(len(rows), 4)
+        codes = {item.get("code") for item in rows}
+        self.assertTrue({"sede-1", "sede-2", "sede-3", "sede-4"}.issubset(codes))

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, Sede, Turno, Usuario, WebAuthnCredential
+from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, RefreshSession, Sede, Turno, Usuario, WebAuthnCredential
 
 
 @admin.register(Sede)
@@ -103,3 +103,11 @@ class WebAuthnCredentialAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "credential_id", "sign_count", "created_at", "last_used_at")
     search_fields = ("user__username", "credential_id")
     autocomplete_fields = ("user",)
+
+
+@admin.register(RefreshSession)
+class RefreshSessionAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "device_id", "created_at", "last_used_at", "expires_at", "revoked_at")
+    list_filter = ("revoked_at", "expires_at", "created_at")
+    search_fields = ("user__username", "user__email", "device_id")
+    autocomplete_fields = ("user", "replaced_by")

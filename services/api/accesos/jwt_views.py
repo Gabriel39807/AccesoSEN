@@ -1,20 +1,29 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
+import re
+import secrets
 from datetime import timedelta
-from uuid import uuid4
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers, status
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .api_responses import error_response
+from .api_responses import error_response, ok_response
 from .error_codes import ErrorCode
+from .models import RefreshSession, Usuario
 from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, reset_counter
 
 LOGIN_MAX_ATTEMPTS = 5
@@ -23,7 +32,91 @@ LOGIN_LOCK_SEC = 15 * 60
 
 REPEATED_LOCKOUT_THRESHOLD = 3
 REPEATED_LOCKOUT_WINDOW = timedelta(hours=24)
+
+REFRESH_MAX_ATTEMPTS_DEVICE = 12
+REFRESH_MAX_ATTEMPTS_IP = 24
+REFRESH_WINDOW_SEC = 10 * 60
+REFRESH_LOCK_SEC = 15 * 60
+
+DEVICE_ID_MAX_LEN = 128
+DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 logger = logging.getLogger(__name__)
+
+
+def _refresh_token_lifetime() -> timedelta:
+    conf = getattr(settings, "SIMPLE_JWT", {})
+    value = conf.get("REFRESH_TOKEN_LIFETIME")
+    if isinstance(value, timedelta):
+        return value
+    return timedelta(days=14)
+
+
+def _guard_single_active_session() -> bool:
+    return bool(getattr(settings, "GUARDA_SINGLE_ACTIVE_SESSION", True))
+
+
+def _refresh_pepper() -> str:
+    return str(getattr(settings, "REFRESH_TOKEN_PEPPER", "") or settings.SECRET_KEY)
+
+
+def _hash_refresh_token(token: str) -> str:
+    payload = f"{_refresh_pepper()}:{token}".encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _new_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def _build_access_token(user: Usuario, sid) -> str:
+    access = AccessToken.for_user(user)
+    access["rol"] = getattr(user, "rol", "")
+    access["sid"] = str(sid)
+    return str(access)
+
+
+def _normalize_device_id(raw: str | None) -> str | None:
+    value = str(raw or "").strip()
+    if not value:
+        return None
+    if len(value) > DEVICE_ID_MAX_LEN:
+        return None
+    if not DEVICE_ID_RE.fullmatch(value):
+        return None
+    return value
+
+
+def _legacy_device_id(request) -> str:
+    ip = get_client_ip(request) if request else "unknown"
+    ua = ""
+    if request:
+        ua = str(request.META.get("HTTP_USER_AGENT", "") or "")
+    digest = hashlib.sha256(f"{ip}|{ua}".encode("utf-8")).hexdigest()[:24]
+    return f"legacy-{digest}"
+
+
+def _resolve_device_id(request, explicit: str | None = None, *, require_explicit: bool = False) -> str:
+    if explicit is None and request is not None:
+        explicit = request.data.get("device_id") or request.headers.get("X-Device-Id")
+    clean = _normalize_device_id(explicit)
+    if clean:
+        return clean
+    if require_explicit:
+        raise ValidationError({"device_id": "Debes enviar un identificador de dispositivo valido."})
+    return _legacy_device_id(request)
+
+
+def _active_sessions_qs(user: Usuario, device_id: str | None = None):
+    now = timezone.now()
+    qs = RefreshSession.objects.filter(user=user, revoked_at__isnull=True, expires_at__gt=now)
+    if device_id:
+        qs = qs.filter(device_id=device_id)
+    return qs
+
+
+def _revoke_sessions(qs, *, when=None):
+    when = when or timezone.now()
+    return qs.update(revoked_at=when, last_used_at=when)
 
 
 def _register_lockout_event(user):
@@ -62,7 +155,7 @@ def _role_allowed_for_expected(actual_role: str | None, expected_role: str | Non
     if not expected_role:
         return True
     if expected_role == "admin":
-        return actual_role in {"superadmin", "admin_sede"}
+        return actual_role in {Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE}
     return actual_role == expected_role
 
 
@@ -71,33 +164,83 @@ def _find_user_by_login_identifier(User, identifier: str):
     if not login_value:
         return None
 
-    # Prioriza username para evitar ambiguedad si existieran colisiones raras.
     user = User.objects.filter(username__iexact=login_value).first()
     if user:
         return user
     user = User.objects.filter(Q(email__iexact=login_value)).first()
     if user:
         return user
-    # Permite login por numero de documento en modulos donde se usa credencial numerica.
     if login_value.isdigit():
         return User.objects.filter(documento=login_value).first()
     return None
 
 
-def issue_tokens_for_user(user, rotate_guard_session: bool = True) -> dict[str, str]:
-    if getattr(user, "rol", None) == "guarda" and rotate_guard_session:
-        user.active_session_id = uuid4()
-        user.last_guard_login_at = timezone.now()
-        user.save(update_fields=["active_session_id", "last_guard_login_at"])
+def _issue_session_tokens(
+    user: Usuario,
+    *,
+    device_id: str,
+    rotate_guard_session: bool = True,
+    previous_session: RefreshSession | None = None,
+) -> dict[str, str]:
+    now = timezone.now()
+    refresh_value = _new_refresh_token()
+    refresh_hash = _hash_refresh_token(refresh_value)
 
-    refresh = RefreshToken.for_user(user)
-    refresh["rol"] = getattr(user, "rol", "")
-    refresh["sid"] = str(getattr(user, "active_session_id", "") or "")
-    return {"refresh": str(refresh), "access": str(refresh.access_token)}
+    with transaction.atomic():
+        if rotate_guard_session and getattr(user, "rol", None) == Usuario.Rol.GUARDA and _guard_single_active_session():
+            qs = _active_sessions_qs(user=user)
+            if previous_session:
+                qs = qs.exclude(id=previous_session.id)
+            _revoke_sessions(qs, when=now)
+        else:
+            qs = _active_sessions_qs(user=user, device_id=device_id)
+            if previous_session:
+                qs = qs.exclude(id=previous_session.id)
+            _revoke_sessions(qs, when=now)
+
+        session = RefreshSession.objects.create(
+            user=user,
+            device_id=device_id,
+            refresh_token_hash=refresh_hash,
+            expires_at=now + _refresh_token_lifetime(),
+            last_used_at=now,
+        )
+
+        if previous_session:
+            previous_session.revoked_at = now
+            previous_session.last_used_at = now
+            previous_session.replaced_by = session
+            previous_session.save(update_fields=["revoked_at", "last_used_at", "replaced_by"])
+
+        if getattr(user, "rol", None) == Usuario.Rol.GUARDA and rotate_guard_session:
+            user.active_session_id = session.id
+            user.last_guard_login_at = now
+            user.save(update_fields=["active_session_id", "last_guard_login_at"])
+
+    return {
+        "refresh": refresh_value,
+        "access": _build_access_token(user, session.id),
+    }
+
+
+def issue_tokens_for_user(
+    user: Usuario,
+    *,
+    request=None,
+    device_id: str | None = None,
+    rotate_guard_session: bool = True,
+) -> dict[str, str]:
+    resolved_device = _resolve_device_id(request, explicit=device_id, require_explicit=False)
+    return _issue_session_tokens(
+        user,
+        device_id=resolved_device,
+        rotate_guard_session=rotate_guard_session,
+    )
 
 
 class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
     expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
+    device_id = serializers.CharField(required=False, allow_blank=True, max_length=DEVICE_ID_MAX_LEN)
 
     @classmethod
     def get_token(cls, user):
@@ -124,8 +267,6 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         user = _find_user_by_login_identifier(User, login_identifier) if login_identifier else None
         canonical_login = ((getattr(user, "username", "") or "").strip().lower() if user else login_identifier)
 
-        # SimpleJWT autentica con USERNAME_FIELD (username); si el cliente envio email
-        # y existe un usuario asociado, normalizamos antes de autenticar.
         if user and getattr(user, "username", None):
             attrs["username"] = user.username
 
@@ -141,12 +282,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         remaining_ip = get_lock_remaining("login-ip", [ip])
         remaining_lock = max(remaining_user, remaining_ip)
         if remaining_lock > 0:
-            logger.warning(
-                "login_locked login=%s ip=%s remaining=%s",
-                canonical_login,
-                ip,
-                remaining_lock,
-            )
+            logger.warning("login_locked login=%s ip=%s remaining=%s", canonical_login, ip, remaining_lock)
             raise AuthenticationFailed(
                 {
                     "code": ErrorCode.ACCOUNT_LOCKED_15MIN,
@@ -158,7 +294,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
                 }
             )
 
-        if user and getattr(user, "estado", None) == "bloqueado":
+        if user and getattr(user, "estado", None) == Usuario.Estado.BLOQUEADO:
             raise AuthenticationFailed(
                 {"code": ErrorCode.ACCOUNT_DISABLED_SECURITY, "message": "Tu cuenta esta deshabilitada por seguridad."}
             )
@@ -211,7 +347,15 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         _clear_lockout_state(self.user)
         logger.info("login_success user_id=%s role=%s ip=%s", getattr(self.user, "id", None), role, ip)
 
-        data.update(issue_tokens_for_user(self.user, rotate_guard_session=True))
+        resolved_device = _resolve_device_id(request, explicit=attrs.get("device_id"), require_explicit=False)
+        data.update(
+            issue_tokens_for_user(
+                self.user,
+                request=request,
+                device_id=resolved_device,
+                rotate_guard_session=True,
+            )
+        )
         return data
 
 
@@ -238,5 +382,169 @@ class SadiTokenObtainPairView(TokenObtainPairView):
             )
 
 
-class SadiTokenRefreshView(TokenRefreshView):
-    pass
+class SadiTokenRefreshView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request, *args, **kwargs):
+        refresh_raw = str(request.data.get("refresh", "") or "").strip()
+        if not refresh_raw:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Debes enviar el token de refresco.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="refresh",
+                detail={"refresh": ["Este campo es obligatorio."]},
+            )
+
+        ip = get_client_ip(request)
+        explicit_device_id = _normalize_device_id(request.data.get("device_id") or request.headers.get("X-Device-Id"))
+        device_key = explicit_device_id or _legacy_device_id(request)
+
+        remaining = max(
+            get_lock_remaining("refresh-ip", [ip]),
+            get_lock_remaining("refresh-device", [device_key]),
+        )
+        if remaining > 0:
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiados intentos de renovacion. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining},
+            )
+
+        token_hash = _hash_refresh_token(refresh_raw)
+        now = timezone.now()
+        with transaction.atomic():
+            session = (
+                RefreshSession.objects.select_for_update()
+                .select_related("user")
+                .filter(refresh_token_hash=token_hash)
+                .first()
+            )
+
+            if not session or not hmac.compare_digest(session.refresh_token_hash, token_hash):
+                limit_ip = bump_with_lock("refresh-ip", [ip], REFRESH_MAX_ATTEMPTS_IP, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC)
+                limit_device = bump_with_lock(
+                    "refresh-device", [device_key], REFRESH_MAX_ATTEMPTS_DEVICE, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC
+                )
+                if limit_ip["locked"] or limit_device["locked"]:
+                    lock_remaining = max(int(limit_ip.get("remaining_sec", 0)), int(limit_device.get("remaining_sec", 0)))
+                    return error_response(
+                        code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                        message="Demasiados intentos de renovacion. Intenta mas tarde.",
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail={"seconds_remaining": lock_remaining},
+                    )
+                return error_response(
+                    code=ErrorCode.NOT_AUTHENTICATED,
+                    message="Sesion invalida o expirada. Inicia sesion nuevamente.",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            if explicit_device_id and session.device_id != explicit_device_id:
+                bump_with_lock("refresh-ip", [ip], REFRESH_MAX_ATTEMPTS_IP, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC)
+                bump_with_lock("refresh-device", [device_key], REFRESH_MAX_ATTEMPTS_DEVICE, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC)
+                return error_response(
+                    code=ErrorCode.NOT_AUTHENTICATED,
+                    message="Sesion invalida o expirada. Inicia sesion nuevamente.",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            if session.revoked_at is not None or now >= session.expires_at:
+                return error_response(
+                    code=ErrorCode.NOT_AUTHENTICATED,
+                    message="Sesion invalida o expirada. Inicia sesion nuevamente.",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
+            user: Usuario = session.user
+            if getattr(user, "estado", None) == Usuario.Estado.BLOQUEADO:
+                return error_response(
+                    code=ErrorCode.ACCOUNT_DISABLED_SECURITY,
+                    message="Tu cuenta esta deshabilitada por seguridad.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            if getattr(user, "force_password_reset", False):
+                return error_response(
+                    code=ErrorCode.PASSWORD_RESET_REQUIRED,
+                    message="Debes recuperar la contrasena antes de volver a iniciar sesion.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+            tokens = _issue_session_tokens(
+                user,
+                device_id=session.device_id,
+                rotate_guard_session=True,
+                previous_session=session,
+            )
+
+        reset_counter("refresh-ip", [ip])
+        reset_counter("refresh-device", [device_key])
+        return Response(tokens, status=status.HTTP_200_OK)
+
+
+class SadiLogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user: Usuario = request.user
+        sid = str(getattr(request.auth, "get", lambda *_: None)("sid") or "").strip()
+        explicit_device_id = request.data.get("device_id") or request.headers.get("X-Device-Id")
+        device_id = _normalize_device_id(explicit_device_id)
+        now = timezone.now()
+
+        revoked = 0
+        with transaction.atomic():
+            if sid:
+                revoked += RefreshSession.objects.filter(
+                    id=sid,
+                    user=user,
+                    revoked_at__isnull=True,
+                    expires_at__gt=now,
+                ).update(revoked_at=now, last_used_at=now)
+
+            if device_id:
+                revoked += RefreshSession.objects.filter(
+                    user=user,
+                    device_id=device_id,
+                    revoked_at__isnull=True,
+                    expires_at__gt=now,
+                ).update(revoked_at=now, last_used_at=now)
+
+            if revoked == 0 and not sid and not device_id:
+                guessed = _resolve_device_id(request, explicit=None, require_explicit=False)
+                revoked += RefreshSession.objects.filter(
+                    user=user,
+                    device_id=guessed,
+                    revoked_at__isnull=True,
+                    expires_at__gt=now,
+                ).update(revoked_at=now, last_used_at=now)
+
+            if getattr(user, "rol", None) == Usuario.Rol.GUARDA:
+                still_active = _active_sessions_qs(user).exists()
+                if not still_active and user.active_session_id is not None:
+                    user.active_session_id = None
+                    user.save(update_fields=["active_session_id"])
+
+        return ok_response({"mensaje": "Sesion cerrada.", "revoked_sessions": revoked})
+
+
+class SadiLogoutAllView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        user: Usuario = request.user
+        now = timezone.now()
+        revoked = RefreshSession.objects.filter(
+            user=user,
+            revoked_at__isnull=True,
+            expires_at__gt=now,
+        ).update(revoked_at=now, last_used_at=now)
+
+        if getattr(user, "rol", None) == Usuario.Rol.GUARDA and user.active_session_id is not None:
+            user.active_session_id = None
+            user.save(update_fields=["active_session_id"])
+
+        return ok_response({"mensaje": "Todas las sesiones fueron revocadas.", "revoked_sessions": revoked})

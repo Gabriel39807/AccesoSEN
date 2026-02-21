@@ -1,13 +1,28 @@
 from __future__ import annotations
 
+from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from .models import RefreshSession
 
 
 class SadiJWTAuthentication(JWTAuthentication):
     def get_user(self, validated_token):
         user = super().get_user(validated_token)
-        sid = validated_token.get("sid")
+        sid = str(validated_token.get("sid") or "").strip()
+
+        # Compatibilidad con tokens antiguos sin sid.
+        if not sid:
+            return user
+
+        now = timezone.now()
+        session = RefreshSession.objects.filter(id=sid, user=user).first()
+        if session:
+            if session.revoked_at is not None or now >= session.expires_at:
+                raise AuthenticationFailed("Sesion invalida para este dispositivo.")
+        elif getattr(user, "rol", None) != "guarda":
+            raise AuthenticationFailed("Sesion invalida para este dispositivo.")
 
         if getattr(user, "rol", None) == "guarda":
             expected = str(user.active_session_id or "")
