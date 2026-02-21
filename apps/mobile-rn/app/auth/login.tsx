@@ -8,6 +8,8 @@ import { toUiErrorMessage } from "../../src/api/client";
 import type { Jornada, Sede } from "../../src/api/turnos";
 import { listSedes, type SedeItem } from "../../src/api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
+import { isBiometricAvailable } from "../../src/auth/biometric";
+import { hasRefreshToken, isBiometricEnabled } from "../../src/storage/tokens";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 export default function LoginScreen() {
@@ -15,6 +17,7 @@ export default function LoginScreen() {
   const rol = (params.rol ?? "guarda") as "guarda" | "aprendiz";
 
   const signIn = useSessionStore((s) => s.signIn);
+  const signInWithBiometric = useSessionStore((s) => s.signInWithBiometric);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,7 +28,12 @@ export default function LoginScreen() {
   const [jornada, setJornada] = useState<Jornada>("MAÑANA");
 
   const [loading, setLoading] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showBiometricButton, setShowBiometricButton] = useState(false);
+  const [biometricReady, setBiometricReady] = useState(false);
+  const [biometricHint, setBiometricHint] = useState<string | null>(null);
+  const [sedeLoadHint, setSedeLoadHint] = useState<string | null>(null);
 
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
 
@@ -54,10 +62,45 @@ export default function LoginScreen() {
         const items = await listSedes();
         if (!mounted) return;
         setSedes(items);
-        if (!sede && items.length > 0) setSede(items[0].code);
+        if (!sede && items.length > 0) {
+          setSede(items[0].code);
+          setSedeLoadHint(null);
+        }
+        if (items.length === 0) {
+          setSedeLoadHint("No hay sedes activas disponibles. Contacta al administrador.");
+        }
       } catch {
         if (!mounted) return;
         setSedes([]);
+        setSedeLoadHint("No se pudieron cargar las sedes. Revisa la conexion con el servidor.");
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [available, hasRefresh, enabled] = await Promise.all([
+          isBiometricAvailable(),
+          hasRefreshToken(),
+          isBiometricEnabled(),
+        ]);
+        if (!mounted) return;
+        setShowBiometricButton(Boolean(available));
+        setBiometricReady(Boolean(available && hasRefresh && enabled));
+        if (!available) setBiometricHint("Este dispositivo no tiene biometria disponible.");
+        else if (!hasRefresh) setBiometricHint("La huella se habilita despues de iniciar sesion al menos una vez.");
+        else if (!enabled) setBiometricHint("La huella esta desactivada para esta sesion.");
+        else setBiometricHint(null);
+      } catch {
+        if (!mounted) return;
+        setShowBiometricButton(false);
+        setBiometricReady(false);
+        setBiometricHint(null);
       }
     })();
     return () => {
@@ -106,6 +149,34 @@ export default function LoginScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onBiometricSubmit() {
+    setError(null);
+    if (bloqueado) return;
+    if (rol === "guarda" && !sede) {
+      setError("Selecciona una sede.");
+      return;
+    }
+
+    setBiometricLoading(true);
+    try {
+      await signInWithBiometric({
+        rol,
+        sede: rol === "guarda" ? sede : undefined,
+        jornada: rol === "guarda" ? jornada : undefined,
+      });
+      const mustChange = useSessionStore.getState().user?.must_change_password;
+      if (rol === "aprendiz" && mustChange) {
+        router.replace("/auth/first-password" as any);
+      } else {
+        router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
+      }
+    } catch (e: any) {
+      setError(toUiErrorMessage(e, "No se pudo validar la huella. Usa tu contrasena."));
+    } finally {
+      setBiometricLoading(false);
     }
   }
 
@@ -173,14 +244,37 @@ export default function LoginScreen() {
           ) : null}
 
           {error ? <Text style={{ color: "#b91c1c" }}>{error}</Text> : null}
+          {rol === "guarda" && sedeLoadHint ? <Text style={{ color: "#b91c1c" }}>{sedeLoadHint}</Text> : null}
 
           <ModernButton
             label={loading ? "Ingresando..." : "Continuar"}
-            disabled={loading || bloqueado || (rol === "guarda" && !sede)}
+            disabled={
+              loading ||
+              biometricLoading ||
+              bloqueado ||
+              (rol === "guarda" && (!sede || sedes.length === 0))
+            }
             onPress={onSubmit}
           />
 
-          {loading ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
+          {showBiometricButton ? (
+            <ModernButton
+              label={biometricLoading ? "Validando huella..." : "Entrar con huella"}
+              tone="light"
+              disabled={
+                loading ||
+                biometricLoading ||
+                bloqueado ||
+                !biometricReady ||
+                (rol === "guarda" && (!sede || sedes.length === 0))
+              }
+              onPress={onBiometricSubmit}
+            />
+          ) : null}
+
+          {biometricHint ? <Text style={{ color: "#475569" }}>{biometricHint}</Text> : null}
+
+          {loading || biometricLoading ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
 
           <ModernButton
             label="Olvide mi contraseña"

@@ -1,6 +1,14 @@
 import axios from "axios";
 import { API_URL } from "../config";
-import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "../storage/tokens";
+import { authenticateBiometric } from "../auth/biometric";
+import {
+  clearTokens,
+  getAccessToken,
+  getOrCreateDeviceId,
+  getRefreshToken,
+  isBiometricEnabled,
+  saveTokens,
+} from "../storage/tokens";
 
 export class UiError extends Error {
   code?: string;
@@ -41,6 +49,8 @@ function mapCodeToMessage(code?: string, fallback?: string) {
     PASSKEY_INVALID: "No se pudo validar la passkey.",
     NETWORK_ERROR: "No se pudo conectar al servidor.",
     VALIDATION_ERROR: "Revisa los datos ingresados.",
+    NOT_AUTHENTICATED: "Tu sesion expiro. Inicia sesion nuevamente.",
+    PERMISSION_DENIED: "No tienes permisos para esta accion.",
   };
   return (code && map[code]) || fallback || "Ocurrio un error. Intenta nuevamente.";
 }
@@ -160,12 +170,50 @@ export function toUiErrorMessage(input: unknown, fallback = "Ocurrio un error. I
   return fallback;
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+function isAuthRequest(url: string): boolean {
+  return (
+    url.includes("/api/token/") ||
+    url.includes("/api/auth/login/") ||
+    url.includes("/api/auth/refresh/") ||
+    url.includes("/api/auth/passkeys/")
+  );
+}
+
+async function requestRefresh(refresh: string, deviceId: string) {
+  try {
+    return await axios.post(`${API_URL}/api/auth/refresh/`, { refresh, device_id: deviceId }, { timeout: 15000 });
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return axios.post(`${API_URL}/api/token/refresh/`, { refresh, device_id: deviceId }, { timeout: 15000 });
+    }
+    throw error;
+  }
+}
+
+export async function refreshAccessToken(options?: { requireBiometric?: boolean }): Promise<string | null> {
+  const requireBiometric = Boolean(options?.requireBiometric);
+
   if (!refreshing) {
     refreshing = (async () => {
       const refresh = await getRefreshToken();
       if (!refresh) return null;
-      const r = await axios.post(`${API_URL}/api/token/refresh/`, { refresh });
+
+      if (requireBiometric) {
+        const ok = await authenticateBiometric("Confirma tu identidad para renovar la sesion");
+        if (!ok) throw new UiError("No se pudo validar la biometria. Usa tu contrasena.", "BIOMETRIC_AUTH_FAILED");
+      }
+
+      const deviceId = await getOrCreateDeviceId();
+      let r;
+      try {
+        r = await requestRefresh(refresh, deviceId);
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403 || status === 423) {
+          await clearTokens();
+        }
+        throw error;
+      }
       const nextAccess = r?.data?.access as string | undefined;
       const nextRefresh = (r?.data?.refresh as string | undefined) || refresh;
       if (!nextAccess) return null;
@@ -179,8 +227,9 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 api.interceptors.request.use(async (config) => {
-  const token = await getAccessToken();
+  const [token, deviceId] = await Promise.all([getAccessToken(), getOrCreateDeviceId()]);
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (deviceId) config.headers["X-Device-Id"] = deviceId;
   return config;
 });
 
@@ -188,17 +237,21 @@ api.interceptors.response.use(
   (r) => r,
   async (error) => {
     const original = error?.config || {};
-    if (error?.response?.status === 401 && !original._retry && !String(original?.url || "").includes("/api/token/")) {
+    const originalUrl = String(original?.url || "");
+    if (error?.response?.status === 401 && !original._retry && !isAuthRequest(originalUrl)) {
       original._retry = true;
       try {
-        const nextAccess = await refreshAccessToken();
-        if (nextAccess) {
-          original.headers = original.headers || {};
-          original.headers.Authorization = `Bearer ${nextAccess}`;
-          return api.request(original);
+        const useBiometric = await isBiometricEnabled();
+        if (useBiometric) {
+          const nextAccess = await refreshAccessToken({ requireBiometric: true });
+          if (nextAccess) {
+            original.headers = original.headers || {};
+            original.headers.Authorization = `Bearer ${nextAccess}`;
+            return api.request(original);
+          }
         }
       } catch {
-        // ignore
+        // handled below
       }
     }
 
@@ -217,13 +270,16 @@ api.interceptors.response.use(
     const mappedFallback = mapCodeToMessage(code, message);
     const uiMessage = toUiErrorMessage({ response: { data } }, mappedFallback);
 
-    if (status === 401 || status === 423) {
+    if ((status === 401 || status === 423) && !isAuthRequest(originalUrl)) {
       await clearTokens();
       throw new UiError(uiMessage, code || "INVALID_CREDENTIALS", detail, status);
     }
     if (status === 403) throw new UiError(uiMessage, code || "FORBIDDEN", detail, status);
     if (status === 404) throw new UiError(uiMessage, code || "NOT_FOUND", detail, status);
-    if (status >= 500) throw new UiError(toUiErrorMessage({ response: { data } }, "Error del servidor. Intenta mas tarde."), "SERVER_ERROR", detail, status);
+    if (status === 429) throw new UiError(uiMessage, code || "RATE_LIMIT", detail, status);
+    if (status >= 500) {
+      throw new UiError(toUiErrorMessage({ response: { data } }, "Error del servidor. Intenta mas tarde."), "SERVER_ERROR", detail, status);
+    }
     throw new UiError(uiMessage, code || "VALIDATION_ERROR", detail, status);
   }
 );

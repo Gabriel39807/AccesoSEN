@@ -1,5 +1,6 @@
-import { api } from "./client";
-import { saveTokens } from "../storage/tokens";
+import { isBiometricAvailable } from "../auth/biometric";
+import { getOrCreateDeviceId, saveTokens, setBiometricEnabled } from "../storage/tokens";
+import { api, refreshAccessToken } from "./client";
 
 export type Rol = "superadmin" | "admin_sede" | "aprendiz" | "guarda";
 
@@ -18,17 +19,60 @@ export type Usuario = {
   force_password_reset?: boolean;
 };
 
+async function loginRequest(payload: Record<string, unknown>) {
+  try {
+    return await api.post("/api/auth/login/", payload);
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return api.post("/api/token/", payload);
+    }
+    throw error;
+  }
+}
+
 export async function login(username: string, password: string, expected_role?: "admin" | "guarda" | "aprendiz") {
-  const payload: any = { username, password };
+  const deviceId = await getOrCreateDeviceId();
+  const payload: any = { username, password, device_id: deviceId };
   if (expected_role) payload.expected_role = expected_role;
-  const r = await api.post("/api/token/", payload);
+
+  const r = await loginRequest(payload);
   await saveTokens(r.data.access, r.data.refresh);
+
+  // Primer login exitoso: deja habilitado el flujo biometrico si existe hardware.
+  if (await isBiometricAvailable()) {
+    await setBiometricEnabled(true);
+  }
+
   return r.data as { access: string; refresh: string };
+}
+
+export async function loginWithBiometric() {
+  const access = await refreshAccessToken({ requireBiometric: true });
+  if (!access) {
+    throw new Error("No hay una sesion guardada para este dispositivo.");
+  }
+  return { access };
+}
+
+export async function logout(device_id?: string) {
+  const deviceId = device_id || (await getOrCreateDeviceId());
+  try {
+    await api.post("/api/auth/logout/", { device_id: deviceId });
+  } catch {
+    // El cierre local se hace igual, incluso si el servidor no responde.
+  }
+}
+
+export async function logoutAll() {
+  try {
+    await api.post("/api/auth/logout-all/");
+  } catch {
+    // noop
+  }
 }
 
 export async function me() {
   const r = await api.get("/api/me/");
-  // r.data = { permitido, motivo, usuario }
   return r.data as { permitido: boolean; motivo: string | null; usuario: Usuario };
 }
 

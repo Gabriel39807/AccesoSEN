@@ -24,6 +24,11 @@ type SessionState = {
     sede: Turnos.Sede;
     jornada: Turnos.Jornada;
   }) => Promise<void>;
+  signInWithBiometric: (p: {
+    rol: "guarda" | "aprendiz";
+    sede?: Turnos.Sede;
+    jornada?: Turnos.Jornada;
+  }) => Promise<void>;
 
   finalizarTurno: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -112,6 +117,44 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     await get().signIn({ username, password, rol: "guarda", sede, jornada });
   },
 
+  signInWithBiometric: async ({ rol, sede, jornada }) => {
+    await Auth.loginWithBiometric();
+    const me = await Auth.me();
+
+    if (rol === "guarda" && me.usuario.rol !== "guarda") {
+      await clearTokens();
+      throw new Error("Esta sesion guardada no corresponde al modulo de guardia.");
+    }
+    if (rol === "aprendiz" && me.usuario.rol !== "aprendiz") {
+      await clearTokens();
+      throw new Error("Esta sesion guardada no corresponde al modulo de aprendiz.");
+    }
+
+    if (rol === "guarda") {
+      const estado = await Turnos.estadoActualGuardia();
+      if (estado.turno_activo && estado.turno) {
+        set({ user: me.usuario, turno: estado.turno });
+        return;
+      }
+
+      if (!sede || !jornada) throw new Error("Selecciona sede y jornada.");
+      try {
+        const r = await Turnos.iniciarTurno(sede, jornada);
+        set({ user: me.usuario, turno: r.turno });
+        return;
+      } catch (e: any) {
+        const data = e?.response?.data;
+        if (data?.turno) {
+          set({ user: me.usuario, turno: data.turno });
+          return;
+        }
+        throw new Error(toUiErrorMessage(e, "No se pudo iniciar el turno."));
+      }
+    }
+
+    set({ user: me.usuario, turno: null });
+  },
+
   finalizarTurno: async () => {
     try {
       const r = await Turnos.finalizarTurno();
@@ -122,6 +165,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   signOut: async () => {
+    await Auth.logout();
     await clearTokens();
     set({ user: null, turno: null });
   },
