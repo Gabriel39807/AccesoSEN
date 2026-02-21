@@ -7,7 +7,7 @@ Sistema de control de accesos institucional con:
 
 ## Arquitectura resumida
 - `apps/web` y `apps/mobile-rn` consumen la API REST.
-- Autenticacion JWT con refresh token.
+- Access JWT corto + refresh token por dispositivo (hash en backend, rotacion y revocacion).
 - Flujos OTP por correo para recuperacion/cambio de correo.
 - Roles principales: `superadmin`, `admin_sede`, `guarda`, `aprendiz`.
 
@@ -76,6 +76,8 @@ Guia completa: `docs/deploy-production.md`
 - `CSRF_TRUSTED_ORIGINS`
 - `EMAIL_*`
 - `JWT_*`
+- `REFRESH_TOKEN_PEPPER`
+- `GUARDA_SINGLE_ACTIVE_SESSION`
 
 ### Web (`apps/web/.env`)
 - `NEXT_PUBLIC_API_URL`
@@ -97,8 +99,22 @@ bash ./check.sh
   - revisa `EXPO_PUBLIC_API_URL` con la IP real de tu maquina.
 - 401/423 en login:
   - valida bloqueo temporal/rate limits y expiracion JWT.
+- Sesion biometrica no disponible en mobile:
+  - verifica que el telefono tenga biometria configurada y que exista un login previo para ese dispositivo.
 - `ready` en 503:
   - revisar DB/cache y variables de entorno.
+
+## Flujo biometrico mobile
+- Login normal: `POST /api/auth/login/` (compatible con `/api/token/`) y guarda `refresh` en `SecureStore`.
+- Entrar con huella: valida biometria local, luego usa `POST /api/auth/refresh/` con `device_id`.
+- Logout por dispositivo: `POST /api/auth/logout/`.
+- Logout global: `POST /api/auth/logout-all/`.
+
+Prueba E2E recomendada:
+1. Inicia sesion normal en mobile (aprendiz o guarda) y cierra la app.
+2. Reabre la app y entra con "Entrar con huella".
+3. Verifica que puedes consumir endpoints protegidos.
+4. Ejecuta logout (o logout-all) y confirma que un refresh posterior devuelve 401.
 
 ## Seguridad
 Consulta `SECURITY.md` para politica de reporte.
