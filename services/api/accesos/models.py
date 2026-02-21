@@ -20,6 +20,56 @@ class Sede(models.Model):
         return f"{self.name} ({self.code})"
 
 
+class Role(models.Model):
+    code = models.SlugField(max_length=40, unique=True)
+    name = models.CharField(max_length=80)
+    is_system = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class Permission(models.Model):
+    code = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self):
+        return self.code
+
+
+class RolePermission(models.Model):
+    class Scope(models.TextChoices):
+        GLOBAL = "GLOBAL", "Global"
+        SEDE = "SEDE", "Sede"
+        OWN = "OWN", "Propio"
+
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_permissions")
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE, related_name="role_permissions")
+    scope = models.CharField(max_length=10, choices=Scope.choices, default=Scope.OWN)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["role__code", "permission__code", "scope"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["role", "permission", "scope"],
+                name="uniq_role_permission_scope",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.role.code}:{self.permission.code}:{self.scope}"
+
+
 class Usuario(AbstractUser):
     class Rol(models.TextChoices):
         SUPERADMIN = "superadmin", "Superadmin"
@@ -60,6 +110,87 @@ class Usuario(AbstractUser):
     failed_lockouts_count = models.PositiveIntegerField(default=0)
     first_lockout_at = models.DateTimeField(null=True, blank=True)
     force_password_reset = models.BooleanField(default=False)
+
+
+class UserMembership(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships")
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name="memberships", null=True, blank=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="memberships")
+    is_primary = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    can_switch_sede = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_primary", "role__code", "sede__code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "sede", "role"],
+                name="uniq_membership_user_sede_role",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "role"],
+                condition=Q(is_primary=True),
+                name="uniq_primary_membership_per_user_role",
+            ),
+        ]
+
+    def __str__(self):
+        sede_code = getattr(self.sede, "code", None) or "GLOBAL"
+        return f"{self.user_id}:{self.role.code}:{sede_code}"
+
+
+class SedePolicy(models.Model):
+    class QrMode(models.TextChoices):
+        PLAIN = "PLAIN", "Plain"
+        SIGNED = "SIGNED", "Signed"
+        DUAL = "DUAL", "Dual"
+
+    sede = models.OneToOneField(Sede, on_delete=models.CASCADE, related_name="policy")
+    max_equipos_aprendiz = models.PositiveIntegerField(default=4)
+    guards_can_switch_sede = models.BooleanField(default=False)
+    qr_mode = models.CharField(max_length=10, choices=QrMode.choices, default=QrMode.DUAL)
+    require_equipo_approval = models.BooleanField(default=True)
+    access_requires_active_turno = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sede__code"]
+
+    def __str__(self):
+        return f"Policy({self.sede.code})"
+
+
+class AllowedEmailDomain(models.Model):
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="allowed_email_domains")
+    sede = models.ForeignKey(
+        Sede,
+        on_delete=models.CASCADE,
+        related_name="allowed_email_domains",
+        null=True,
+        blank=True,
+    )
+    domain = models.CharField(max_length=120)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["role__code", "sede__code", "domain"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["role", "sede", "domain"],
+                name="uniq_allowed_domain_role_sede_domain",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.domain = (self.domain or "").strip().lower().replace("@", "")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        sede_code = getattr(self.sede, "code", None) or "GLOBAL"
+        return f"{self.role.code}:{sede_code}:{self.domain}"
 
 
 class Equipo(models.Model):

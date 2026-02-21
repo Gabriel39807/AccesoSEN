@@ -1,0 +1,36 @@
+from accesos.views import (
+    AprendizEmailChangeConfirmView,
+    AprendizEmailChangeRequestView,
+    AprendizMiQRDownloadView,
+    AprendizMiQRView,
+    AprendizPerfilView,
+    ChangeInitialPasswordView,
+    GuardiaEstadoActualView,
+    MeView,
+    PasskeyAuthOptionsView,
+    PasskeyAuthVerifyView,
+    PasskeyRegisterOptionsView,
+    PasskeyRegisterVerifyView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    PasswordResetVerifyView,
+)
+
+__all__ = [
+    "AprendizEmailChangeConfirmView",
+    "AprendizEmailChangeRequestView",
+    "AprendizMiQRDownloadView",
+    "AprendizMiQRView",
+    "AprendizPerfilView",
+    "ChangeInitialPasswordView",
+    "GuardiaEstadoActualView",
+    "MeView",
+    "PasskeyAuthOptionsView",
+    "PasskeyAuthVerifyView",
+    "PasskeyRegisterOptionsView",
+    "PasskeyRegisterVerifyView",
+    "PasswordResetConfirmView",
+    "PasswordResetRequestView",
+    "PasswordResetVerifyView",
+]
+
