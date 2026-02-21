@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from openpyxl import load_workbook
 
+from accesos.domain.services.email_domain_service import EmailDomainService
 from .models import Sede
 
 EXPECTED_COLUMNS = [
@@ -98,6 +99,7 @@ def validate_excel(content) -> ImportValidationResult:
         )
 
     sedes_lookup = _build_sede_lookup()
+    sedes_by_code = {s.code: s for s in Sede.objects.filter(is_active=True).only("id", "code", "name")}
     if not sedes_lookup:
         return ImportValidationResult(
             rows=[],
@@ -183,6 +185,22 @@ def validate_excel(content) -> ImportValidationResult:
                     "code": "INVALID_SEDE",
                     "message": "Sede invalida. Debe coincidir con una sede activa del sistema.",
                     "field": "Sede",
+                }
+            )
+            continue
+
+        domain_check = EmailDomainService.validate(
+            email=email,
+            role_code="aprendiz",
+            sede=sedes_by_code.get(sede),
+        )
+        if not domain_check.allowed:
+            errors.append(
+                {
+                    "row": idx,
+                    "code": "INVALID_EMAIL_DOMAIN",
+                    "message": domain_check.message or "El dominio del correo no esta permitido para esta sede.",
+                    "field": "Correo",
                 }
             )
             continue

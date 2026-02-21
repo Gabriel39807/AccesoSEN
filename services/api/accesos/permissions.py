@@ -2,20 +2,25 @@ from __future__ import annotations
 
 from rest_framework.permissions import BasePermission
 
+from accesos.domain.services.authorization import AuthorizationService
 
-ADMIN_ROLES = {"superadmin", "admin_sede"}
+ADMIN_ROLES = {"superadmin", "admin_sede", "admin"}
 
 
 def is_superadmin(user) -> bool:
-    return bool(user and getattr(user, "is_authenticated", False) and getattr(user, "rol", None) == "superadmin")
+    return bool(user and getattr(user, "is_authenticated", False) and AuthorizationService.is_superadmin(user))
 
 
 def is_admin_sede(user) -> bool:
-    return bool(user and getattr(user, "is_authenticated", False) and getattr(user, "rol", None) == "admin_sede")
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return "admin_sede" in AuthorizationService.role_codes(user)
 
 
 def is_admin_role(user) -> bool:
-    return bool(user and getattr(user, "is_authenticated", False) and getattr(user, "rol", None) in ADMIN_ROLES)
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return bool(AuthorizationService.role_codes(user).intersection(ADMIN_ROLES))
 
 
 class IsAdmin(BasePermission):
@@ -25,9 +30,11 @@ class IsAdmin(BasePermission):
 
 class IsGuarda(BasePermission):
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and getattr(request.user, "rol", None) == "guarda")
+        user = getattr(request, "user", None)
+        return bool(user and user.is_authenticated and "guarda" in AuthorizationService.role_codes(user))
 
 
 class IsAprendiz(BasePermission):
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and getattr(request.user, "rol", None) == "aprendiz")
+        user = getattr(request, "user", None)
+        return bool(user and user.is_authenticated and "aprendiz" in AuthorizationService.role_codes(user))

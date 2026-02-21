@@ -6,7 +6,6 @@ import re
 import secrets
 import time
 from datetime import date
-from urllib.parse import unquote
 from uuid import uuid4
 
 import qrcode
@@ -14,8 +13,6 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Q
-from django.core import signing
-from django.core.signing import BadSignature, SignatureExpired
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -27,6 +24,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .api_responses import error_response, ok_response
+from .domain.services.authorization import AuthorizationService
+from .domain.services.email_domain_service import EmailDomainService
+from .domain.services.policy_service import PolicyService
+from .domain.services.qr_service import QRParseError, QRService
 from .error_codes import ErrorCode
 from .import_services import cache_import_payload, get_cached_import_payload, validate_excel
 from .jwt_views import issue_tokens_for_user
@@ -37,8 +38,10 @@ from .models import (
     Equipo,
     Notificacion,
     PasswordResetOTP,
+    Role,
     Sede,
     Turno,
+    UserMembership,
     Usuario,
     WebAuthnCredential,
 )
@@ -171,6 +174,33 @@ def _admin_sede_qs(qs, user: Usuario, field_name: str):
     return qs.filter(**{field_name: sede_id})
 
 
+def _guard_can_use_sede(user: Usuario, sede: Sede | None) -> bool:
+    if not user or not sede:
+        return False
+    if AuthorizationService.is_superadmin(user):
+        return True
+
+    primary_sede_id = _scope_sede_id(user)
+    if primary_sede_id and int(primary_sede_id) == int(sede.id):
+        return True
+
+    membership = (
+        UserMembership.objects.filter(
+            user=user,
+            is_active=True,
+            role__code=Usuario.Rol.GUARDA,
+            sede=sede,
+        )
+        .select_related("sede", "role")
+        .first()
+    )
+    if not membership:
+        return False
+
+    policy = PolicyService.get_policy(sede)
+    return bool(membership.can_switch_sede or policy.guards_can_switch_sede)
+
+
 def _enforce_admin_sede_limit(target_sede_id: int | None, exclude_user_id: int | None = None) -> tuple[bool, int]:
     if not target_sede_id:
         return False, 0
@@ -299,9 +329,31 @@ def _resolve_sede_code(raw: str, *, field: str = "sede_id") -> str | None:
 def _parse_sede_query_param(request, user: Usuario, *, names: list[str], field: str = "sede_id"):
     actor_sede = _scope_sede_code(user)
     raw, _ = _pick_query_param(request, names)
+    allowed_sede_ids = AuthorizationService.allowed_sede_ids(user)
+    allowed_codes = set(Sede.objects.filter(id__in=allowed_sede_ids).values_list("code", flat=True))
 
     if is_admin_sede(user):
-        return actor_sede
+        # Admin de sede: backend decides scope. If there are multiple memberships,
+        # allow machine filter only inside allowed set.
+        if raw is None:
+            if len(allowed_codes) == 1:
+                return next(iter(allowed_codes))
+            return None
+        lower = raw.lower()
+        if lower in FILTER_ALL_VALUES:
+            if len(allowed_codes) == 1:
+                return next(iter(allowed_codes))
+            return None
+
+        resolved = _resolve_sede_code(raw, field=field)
+        if not resolved:
+            valid_codes = list(Sede.objects.filter(is_active=True).order_by("code").values_list("code", flat=True))
+            raise ValidationError({field: f"Sede invalida. Valores permitidos: {', '.join(valid_codes)}."})
+        if allowed_codes and resolved not in allowed_codes:
+            if len(allowed_codes) == 1:
+                return next(iter(allowed_codes))
+            return None
+        return resolved
 
     if raw is None:
         return None
@@ -347,65 +399,73 @@ def _initial_password_from_documento(documento: str, digits: int = 6) -> str:
         return doc[-digits:]
     if len(doc) >= 4:
         return doc[-4:]
-    return "1234"
+    return f"Sadi!{secrets.token_urlsafe(8)[:10]}"
 
 
-def _build_aprendiz_qr_value(user: Usuario) -> str:
-    # QR simple solicitado: solo numero de documento.
-    return str(user.documento or "").strip()
+def _build_aprendiz_qr_value(user: Usuario) -> tuple[str, str]:
+    qr_value, mode = QRService.build_aprendiz_qr_value(
+        str(user.documento or "").strip(),
+        sede=getattr(user, "sede_principal", None),
+    )
+    return qr_value, mode
 
 
-def _normalize_numeric_documento(documento: str) -> str:
-    normalized = str(documento or "").strip()
-    if not re.fullmatch(r"\d{6,10}", normalized):
-        raise ValidationError({"documento": "El documento debe tener entre 6 y 10 digitos."})
-    return normalized
 
 
-def _extract_documento_from_scan(raw_value: str) -> str:
-    raw = unquote((raw_value or "").strip())
-    if not raw:
-        return ""
-
-    # Normaliza variantes comunes de lectura de camara
-    normalized = raw.replace("：", ":").strip()
-    match = re.search(r"(?:^|\s)(SADI1\s*:\s*.+)$", normalized, flags=re.IGNORECASE)
-    signed_candidate = match.group(1).strip() if match else normalized
-
-    upper_candidate = signed_candidate.upper()
-
-    # v2 robusto: SADI1B64:<base64url(signed_doc)>
-    if upper_candidate.startswith("SADI1B64:"):
-        token = signed_candidate.split(":", 1)[1]
-        token = re.sub(r"\s+", "", token)
-        try:
-            padding = "=" * (-len(token) % 4)
-            signed_doc = base64.urlsafe_b64decode((token + padding).encode("ascii")).decode("utf-8")
-            doc = signing.TimestampSigner(salt="sadi.aprendiz.qr.doc").unsign(
-                signed_doc,
-                max_age=60 * 60 * 24 * 365,
-            )
-            return _normalize_numeric_documento(str(doc).strip())
-        except Exception:
-            raise ValidationError({"documento": "QR invalido."})
-
-    # v1 legacy: SADI1:<django-signing token>
-    if upper_candidate.startswith("SADI1:"):
-        token = signed_candidate.split(":", 1)[1]
-        token = re.sub(r"\s+", "", token)  # algunos lectores insertan saltos/espacios
-        data = signing.loads(token, salt="sadi.aprendiz.qr", max_age=60 * 60 * 24 * 365)
-        if not isinstance(data, dict) or data.get("typ") != "aprendiz_qr" or not data.get("doc"):
-            raise ValidationError({"documento": "QR invalido."})
-        return _normalize_numeric_documento(str(data["doc"]).strip())
-
-    digits_only = re.sub(r"[^\d]", "", raw)
-    return _normalize_numeric_documento(digits_only)
+def _extract_documento_from_scan(raw_value: str, *, sede: Sede | None = None) -> str:
+    return QRService.parse_document(raw_value, sede=sede).documento
 
 
 def _find_user_for_password_reset(email: str = "") -> Usuario | None:
     if not email:
         return None
     return Usuario.objects.filter(email__iexact=email).first()
+
+
+def _role_display_name(code: str) -> str:
+    mapping = {
+        Usuario.Rol.SUPERADMIN: "Superadmin",
+        Usuario.Rol.ADMIN_SEDE: "Admin de sede",
+        Usuario.Rol.GUARDA: "Guarda",
+        Usuario.Rol.APRENDIZ: "Aprendiz",
+    }
+    return mapping.get(code, code)
+
+
+def _sync_primary_membership_for_user(user: Usuario):
+    if not user:
+        return
+    role_code = str(getattr(user, "rol", "") or "").strip()
+    if not role_code:
+        return
+
+    role_obj, _ = Role.objects.get_or_create(
+        code=role_code,
+        defaults={"name": _role_display_name(role_code), "is_system": True},
+    )
+    target_sede = None if role_code == Usuario.Rol.SUPERADMIN else getattr(user, "sede_principal", None)
+
+    UserMembership.objects.filter(user=user, is_primary=True).update(is_primary=False)
+    membership, created = UserMembership.objects.get_or_create(
+        user=user,
+        role=role_obj,
+        sede=target_sede,
+        defaults={
+            "is_primary": True,
+            "is_active": True,
+            "can_switch_sede": False,
+        },
+    )
+    if not created:
+        updates: list[str] = []
+        if not membership.is_primary:
+            membership.is_primary = True
+            updates.append("is_primary")
+        if not membership.is_active:
+            membership.is_active = True
+            updates.append("is_active")
+        if updates:
+            membership.save(update_fields=updates)
 
 
 class MeView(APIView):
@@ -452,7 +512,7 @@ class AprendizEmailChangeRequestView(APIView):
     permission_classes = [IsAuthenticated, IsAprendiz]
 
     def post(self, request):
-        s = AprendizEmailChangeRequestSerializer(data=request.data)
+        s = AprendizEmailChangeRequestSerializer(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
 
         user: Usuario = request.user
@@ -572,6 +632,19 @@ class AprendizEmailChangeConfirmView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
+        domain_check = EmailDomainService.validate(
+            email=new_email,
+            role_code=getattr(user, "rol", Usuario.Rol.APRENDIZ),
+            sede=getattr(user, "sede_principal", None),
+        )
+        if not domain_check.allowed:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=domain_check.message or "Dominio de correo no permitido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="new_email",
+            )
+
         user.email = new_email
         user.save(update_fields=["email"])
 
@@ -633,7 +706,7 @@ class AprendizMiQRView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        qr_value = _build_aprendiz_qr_value(user)
+        qr_value, qr_mode = _build_aprendiz_qr_value(user)
         img = qrcode.make(qr_value)
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -642,7 +715,7 @@ class AprendizMiQRView(APIView):
             {
                 "qr_value": qr_value,
                 "documento": user.documento,
-                "algoritmo": "documento-plain",
+                "algoritmo": f"qr-{str(qr_mode).lower()}",
                 "qr_png_base64": png_b64,
             }
         )
@@ -660,7 +733,7 @@ class AprendizMiQRDownloadView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        qr_value = _build_aprendiz_qr_value(user)
+        qr_value, _ = _build_aprendiz_qr_value(user)
         img = qrcode.make(qr_value)
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -873,8 +946,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdmin]
 
     def get_queryset(self):
-        qs = super().get_queryset().order_by("id")
-        qs = _admin_sede_qs(qs, self.request.user, "sede_principal_id")
+        qs = AuthorizationService.scoped_queryset(
+            self.request.user,
+            super().get_queryset(),
+            resource="usuario",
+        ).order_by("id")
 
         q = (self.request.query_params.get("q") or "").strip()
         rol = _parse_choice_query_param(
@@ -1092,6 +1168,14 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 )
         return super().destroy(request, *args, **kwargs)
 
+    def perform_create(self, serializer):
+        user = serializer.save()
+        _sync_primary_membership_for_user(user)
+
+    def perform_update(self, serializer):
+        user = serializer.save()
+        _sync_primary_membership_for_user(user)
+
     @action(detail=False, methods=["post"], url_path="importar-aprendices/validar", parser_classes=[MultiPartParser])
     def importar_aprendices_validar(self, request):
         s = ImportAprendicesValidateSerializer(data=request.data)
@@ -1183,6 +1267,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                             "rol",
                         ]
                     )
+                    _sync_primary_membership_for_user(user)
                     updated_count += 1
                 else:
                     created = Usuario.objects.create(
@@ -1201,6 +1286,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                     )
                     created.set_password(_initial_password_from_documento(row["documento"], digits=6))
                     created.save(update_fields=["password"])
+                    _sync_primary_membership_for_user(created)
                     created_count += 1
 
             AprendizImportAudit.objects.create(
@@ -1238,7 +1324,7 @@ class NotificacionViewSet(viewsets.ModelViewSet):
             if not sede:
                 return Notificacion.objects.none()
             qs = qs.filter(Q(user__isnull=True) | Q(user__sede_principal__code=sede) | Q(user=user))
-        return qs
+        return AuthorizationService.scoped_queryset(user, qs, resource="notificacion")
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
@@ -1278,13 +1364,11 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if is_admin_role(user):
-            qs = Equipo.objects.all().order_by("-creado_en")
-            qs = _admin_sede_qs(qs, user, "propietario__sede_principal_id")
-        elif getattr(user, "rol", None) == Usuario.Rol.APRENDIZ:
-            qs = Equipo.objects.filter(propietario=user).order_by("-creado_en")
-        else:
-            qs = Equipo.objects.none()
+        qs = AuthorizationService.scoped_queryset(
+            user,
+            Equipo.objects.all(),
+            resource="equipo",
+        ).order_by("-creado_en")
 
         estado = _parse_choice_query_param(
             self.request,
@@ -1438,11 +1522,13 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         if getattr(request.user, "rol", None) == Usuario.Rol.APRENDIZ:
+            policy = PolicyService.get_policy(getattr(request.user, "sede_principal", None))
+            max_equipos = int(policy.max_equipos_aprendiz or 4)
             total = Equipo.objects.filter(propietario=request.user).count()
-            if total >= 4:
+            if total >= max_equipos:
                 return error_response(
                     code=ErrorCode.EQUIPO_LIMIT_REACHED,
-                    message="Solo puedes registrar hasta 4 equipos.",
+                    message=f"Solo puedes registrar hasta {max_equipos} equipos.",
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
         return super().create(request, *args, **kwargs)
@@ -1452,9 +1538,11 @@ class EquipoViewSet(viewsets.ModelViewSet):
         rol = getattr(user, "rol", None)
 
         if rol == Usuario.Rol.APRENDIZ:
+            policy = PolicyService.get_policy(getattr(user, "sede_principal", None))
+            max_equipos = int(policy.max_equipos_aprendiz or 4)
             total = Equipo.objects.filter(propietario=user).count()
-            if total >= 4:
-                raise ValidationError({"equipos": "Solo puedes registrar hasta 4 equipos."})
+            if total >= max_equipos:
+                raise ValidationError({"equipos": f"Solo puedes registrar hasta {max_equipos} equipos."})
             serializer.save(propietario=user)
             return
 
@@ -1553,11 +1641,11 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if is_admin_role(user):
-            qs = Turno.objects.select_related("sede", "guarda").all().order_by("-inicio")
-            qs = _admin_sede_qs(qs, user, "sede_id")
-        else:
-            qs = Turno.objects.select_related("sede", "guarda").filter(guarda=user).order_by("-inicio")
+        qs = AuthorizationService.scoped_queryset(
+            user,
+            Turno.objects.select_related("sede", "guarda").all(),
+            resource="turno",
+        ).order_by("-inicio")
 
         sede = _parse_sede_query_param(
             self.request,
@@ -1616,12 +1704,11 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         s = TurnoIniciarSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        guarda_sede = _scope_sede(request.user)
         selected_sede: Sede = s.validated_data["sede"]
-        if guarda_sede and selected_sede.code != guarda_sede:
+        if not _guard_can_use_sede(request.user, selected_sede):
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
-                message="Solo puedes iniciar turno en tu sede asignada.",
+                message="No tienes permisos para iniciar turno en esta sede.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
@@ -1750,23 +1837,16 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        rol = getattr(user, "rol", None)
-
         qs = (
-            Acceso.objects.all()
+            AuthorizationService.scoped_queryset(
+                user,
+                Acceso.objects.all(),
+                resource="acceso",
+            )
             .select_related("turno", "turno__guarda", "turno__sede", "usuario", "registrado_por", "sede")
             .prefetch_related("equipos")
             .order_by("-fecha")
         )
-
-        if is_admin_role(user):
-            qs = _admin_sede_qs(qs, user, "sede_id")
-        elif rol == "guarda":
-            qs = qs.filter(turno__guarda=user)
-        elif rol == "aprendiz":
-            qs = qs.filter(usuario=user)
-        else:
-            qs = qs.none()
 
         tipo = _parse_choice_query_param(
             self.request,
@@ -1932,13 +2012,21 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         if rol == Usuario.Rol.GUARDA:
             turno = obtener_turno_activo(request_user)
-            if not turno:
+            guarda_sede = getattr(request_user, "sede_principal", None)
+            policy = PolicyService.get_policy(turno.sede if turno else guarda_sede)
+            if policy.access_requires_active_turno and not turno:
                 return error_response(
                     code=ErrorCode.TURNO_REQUIRED,
                     message="Debes iniciar turno antes de registrar accesos.",
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-            sede = turno.sede
+            sede = turno.sede if turno else guarda_sede
+            if not sede:
+                return error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No tienes una sede operativa para registrar accesos.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
         elif is_admin_sede(request_user):
             sede = getattr(request_user, "sede_principal", None)
             if not sede:
@@ -2023,26 +2111,35 @@ class AccesoViewSet(viewsets.ModelViewSet):
     def validar_documento(self, request):
         s = ValidarDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        try:
-            documento = _extract_documento_from_scan(s.validated_data["documento"])
-        except SignatureExpired:
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="QR expirado. Genera uno nuevo.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        except (BadSignature, ValidationError):
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="QR o codigo de barras invalido.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
         turno = obtener_turno_activo(request.user)
-        if not turno:
+        default_sede = getattr(request.user, "sede_principal", None)
+        policy = PolicyService.get_policy(turno.sede if turno else default_sede)
+        if policy.access_requires_active_turno and not turno:
             return error_response(
                 code=ErrorCode.TURNO_REQUIRED,
                 message="Debes iniciar turno para validar y registrar accesos.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        scan_sede = turno.sede if turno else default_sede
+        if not scan_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No tienes una sede operativa para validar documentos.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            documento = _extract_documento_from_scan(s.validated_data["documento"], sede=scan_sede)
+        except QRParseError as exc:
+            if getattr(exc, "code", "") == "expired":
+                return error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="QR expirado. Genera uno nuevo.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc) or "QR o codigo de barras invalido.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -2077,7 +2174,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 "estado": estado,
                 "aprendiz": UsuarioSerializer(aprendiz).data,
                 "equipos": EquipoSerializer(equipos_aprobados, many=True).data,
-                "turno": TurnoSerializer(turno).data,
+                "turno": TurnoSerializer(turno).data if turno else None,
             }
         )
 
@@ -2086,31 +2183,40 @@ class AccesoViewSet(viewsets.ModelViewSet):
         s = RegistrarAccesoDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        try:
-            documento = _extract_documento_from_scan(s.validated_data["documento"])
-        except SignatureExpired:
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="QR expirado. Genera uno nuevo.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        except (BadSignature, ValidationError):
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="QR o codigo de barras invalido.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        tipo = s.validated_data["tipo"]
-        equipos_ids = s.validated_data.get("equipos", [])
-        equipos = list(Equipo.objects.filter(id__in=equipos_ids)) if equipos_ids else []
-
         turno = obtener_turno_activo(request.user)
-        if not turno:
+        default_sede = getattr(request.user, "sede_principal", None)
+        policy = PolicyService.get_policy(turno.sede if turno else default_sede)
+        if policy.access_requires_active_turno and not turno:
             return error_response(
                 code=ErrorCode.TURNO_REQUIRED,
                 message="Debes iniciar turno antes de registrar accesos.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
+        scan_sede = turno.sede if turno else default_sede
+        if not scan_sede:
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No tienes una sede operativa para registrar accesos.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            documento = _extract_documento_from_scan(s.validated_data["documento"], sede=scan_sede)
+        except QRParseError as exc:
+            if getattr(exc, "code", "") == "expired":
+                return error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="QR expirado. Genera uno nuevo.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc) or "QR o codigo de barras invalido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        tipo = s.validated_data["tipo"]
+        equipos_ids = s.validated_data.get("equipos", [])
+        equipos = list(Equipo.objects.filter(id__in=equipos_ids)) if equipos_ids else []
 
         aprendiz = Usuario.objects.filter(documento=documento).first()
         if not aprendiz:
@@ -2159,7 +2265,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
             usuario=aprendiz,
             tipo=tipo,
             fecha=timezone.now(),
-            sede=turno.sede,
+            sede=scan_sede,
             turno=turno,
             registrado_por=request.user,
         )
@@ -2171,12 +2277,21 @@ class AccesoViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
         turno = obtener_turno_activo(request.user)
-        if not turno:
+        default_sede = getattr(request.user, "sede_principal", None)
+        policy = PolicyService.get_policy(turno.sede if turno else default_sede)
+        if policy.access_requires_active_turno and not turno:
             return error_response(
                 code=ErrorCode.TURNO_REQUIRED,
                 message="No tienes turno activo.",
                 status_code=status.HTTP_400_BAD_REQUEST,
                 extra={"stats": None},
+            )
+        if not turno:
+            return ok_response(
+                {
+                    "turno": None,
+                    "stats": {"ingresos": 0, "salidas": 0, "total": 0},
+                }
             )
 
         qs = Acceso.objects.filter(turno=turno)

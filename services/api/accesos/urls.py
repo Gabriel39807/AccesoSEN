@@ -1,30 +1,25 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from .jwt_views import SadiLogoutAllView, SadiLogoutView, SadiTokenObtainPairView, SadiTokenRefreshView
-from .views import (
-    SedeViewSet,
-    UsuarioViewSet,
-    AccesoViewSet,
-    EquipoViewSet,
-    TurnoViewSet,
-    NotificacionViewSet,
-    MeView,
-    GuardiaEstadoActualView,
-    ChangeInitialPasswordView,
-    AprendizPerfilView,
-    AprendizEmailChangeRequestView,
+from accesos.api.viewsets import AccesoViewSet, EquipoViewSet, NotificacionViewSet, SedeViewSet, TurnoViewSet, UsuarioViewSet
+from accesos.api.viewsets.auth import (
     AprendizEmailChangeConfirmView,
-    AprendizMiQRView,
+    AprendizEmailChangeRequestView,
     AprendizMiQRDownloadView,
-    PasskeyRegisterOptionsView,
-    PasskeyRegisterVerifyView,
+    AprendizMiQRView,
+    AprendizPerfilView,
+    ChangeInitialPasswordView,
+    GuardiaEstadoActualView,
+    MeView,
     PasskeyAuthOptionsView,
     PasskeyAuthVerifyView,
+    PasskeyRegisterOptionsView,
+    PasskeyRegisterVerifyView,
+    PasswordResetConfirmView,
     PasswordResetRequestView,
     PasswordResetVerifyView,
-    PasswordResetConfirmView,
 )
+from .jwt_views import SadiLogoutAllView, SadiLogoutView, SadiTokenObtainPairView, SadiTokenRefreshView
 
 router = DefaultRouter()
 router.register(r"sedes", SedeViewSet, basename="sedes")

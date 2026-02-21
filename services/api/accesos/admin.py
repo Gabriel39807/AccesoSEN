@@ -1,6 +1,22 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Acceso, EmailChangeOTP, Equipo, PasswordResetOTP, RefreshSession, Sede, Turno, Usuario, WebAuthnCredential
+from .models import (
+    Acceso,
+    AllowedEmailDomain,
+    EmailChangeOTP,
+    Equipo,
+    PasswordResetOTP,
+    Permission,
+    RefreshSession,
+    Role,
+    RolePermission,
+    Sede,
+    SedePolicy,
+    Turno,
+    UserMembership,
+    Usuario,
+    WebAuthnCredential,
+)
 
 
 @admin.register(Sede)
@@ -8,6 +24,55 @@ class SedeAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "is_active", "created_at")
     list_filter = ("is_active",)
     search_fields = ("code", "name")
+
+
+@admin.register(SedePolicy)
+class SedePolicyAdmin(admin.ModelAdmin):
+    list_display = (
+        "sede",
+        "max_equipos_aprendiz",
+        "guards_can_switch_sede",
+        "qr_mode",
+        "require_equipo_approval",
+        "access_requires_active_turno",
+    )
+    search_fields = ("sede__code", "sede__name")
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "is_system", "created_at")
+    list_filter = ("is_system",)
+    search_fields = ("code", "name")
+
+
+@admin.register(Permission)
+class PermissionAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "created_at")
+    search_fields = ("code", "name")
+
+
+@admin.register(RolePermission)
+class RolePermissionAdmin(admin.ModelAdmin):
+    list_display = ("role", "permission", "scope", "created_at")
+    list_filter = ("scope", "role__code")
+    search_fields = ("role__code", "permission__code")
+
+
+@admin.register(UserMembership)
+class UserMembershipAdmin(admin.ModelAdmin):
+    list_display = ("user", "role", "sede", "is_primary", "is_active", "can_switch_sede", "created_at")
+    list_filter = ("role__code", "is_primary", "is_active", "can_switch_sede", "sede__code")
+    search_fields = ("user__username", "role__code", "sede__code", "sede__name")
+    autocomplete_fields = ("user", "role", "sede")
+
+
+@admin.register(AllowedEmailDomain)
+class AllowedEmailDomainAdmin(admin.ModelAdmin):
+    list_display = ("role", "sede", "domain", "is_active", "created_at")
+    list_filter = ("role__code", "sede__code", "is_active")
+    search_fields = ("domain", "role__code", "sede__code")
+    autocomplete_fields = ("role", "sede")
 
 
 @admin.register(Usuario)

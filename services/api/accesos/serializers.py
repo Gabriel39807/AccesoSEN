@@ -1,6 +1,8 @@
 import re
+import secrets
 
 from rest_framework import serializers
+from accesos.domain.services.email_domain_service import EmailDomainService
 from .models import Sede, Usuario, Acceso, Equipo, Turno
 from .models import Notificacion
 
@@ -77,7 +79,7 @@ class SedeSerializer(serializers.ModelSerializer):
 class UsuarioSerializer(serializers.ModelSerializer):
     # ✅ para crear/editar desde Admin (no se devuelve nunca)
     username = serializers.CharField(required=True, allow_blank=False, max_length=150)
-    password = serializers.CharField(write_only=True, required=False, allow_blank=False, min_length=4)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=False, min_length=8, max_length=20)
     sede_principal = serializers.SlugRelatedField(
         slug_field="code",
         queryset=Sede.objects.all(),
@@ -129,6 +131,25 @@ class UsuarioSerializer(serializers.ModelSerializer):
     def validate_telefono(self, value):
         return validatePhone10(value, required=False)
 
+    def validate(self, attrs):
+        role_code = attrs.get("rol") or getattr(self.instance, "rol", None) or Usuario.Rol.APRENDIZ
+        sede = attrs.get("sede_principal")
+        if sede is None:
+            sede = getattr(self.instance, "sede_principal", None)
+
+        if "email" in attrs:
+            email = attrs.get("email")
+            if email:
+                result = EmailDomainService.validate(
+                    email=email,
+                    role_code=role_code,
+                    sede=sede,
+                )
+                if not result.allowed:
+                    raise serializers.ValidationError({"email": result.message or "Dominio de correo no permitido."})
+
+        return attrs
+
     def create(self, validated_data):
         password = validated_data.pop("password", None)
         auto_password = False
@@ -141,7 +162,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             elif len(doc) >= 4:
                 password = doc[-4:]
             else:
-                password = "1234"  # fallback simple (puedes cambiarlo)
+                password = f"Sadi!{secrets.token_urlsafe(8)[:10]}"
             auto_password = True
 
         user = Usuario(**validated_data)
@@ -203,7 +224,18 @@ class AprendizEmailChangeRequestSerializer(serializers.Serializer):
     new_email = serializers.EmailField()
 
     def validate_new_email(self, value):
-        return value.strip().lower()
+        value = value.strip().lower()
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if user and getattr(user, "is_authenticated", False):
+            result = EmailDomainService.validate(
+                email=value,
+                role_code=getattr(user, "rol", Usuario.Rol.APRENDIZ),
+                sede=getattr(user, "sede_principal", None),
+            )
+            if not result.allowed:
+                raise serializers.ValidationError(result.message or "Dominio de correo no permitido.")
+        return value
 
 
 class AprendizEmailChangeConfirmSerializer(serializers.Serializer):
