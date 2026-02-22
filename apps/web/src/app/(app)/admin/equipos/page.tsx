@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { toErrorMessage } from "@/lib/errors";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 
 type Usuario = {
   id: number;
   username: string;
-  rol: "superadmin" | "admin_sede" | "guarda" | "aprendiz" | string;
+  rol: "admin" | "guarda" | "aprendiz" | string;
   first_name?: string;
   last_name?: string;
   documento?: string | null;
@@ -43,9 +42,18 @@ function useDebounced<T>(value: T, delay = 450) {
   return debounced;
 }
 
+function safeErrorMessage(e: any) {
+  return (
+    e?.response?.data?.detail ??
+    e?.response?.data?.motivo ??
+    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
+    e?.message ??
+    "Ocurrió un error."
+  );
+}
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "Ã¢â‚¬â€";
+  if (!u) return "—";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
@@ -76,7 +84,7 @@ function StatSkeleton() {
 function TableSkeleton({ rows = 7 }: { rows?: number }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-      {/* Barra superior: Mostrando... + paginaciÃƒÂ³n (skeleton) */}
+      {/* Barra superior: Mostrando... + paginación (skeleton) */}
       <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="h-4 w-64 rounded sadi-skeleton" />
 
@@ -90,7 +98,7 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
       {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          {/* Mantener el header real da contexto y se ve mÃƒÂ¡s Ã¢â‚¬Å“productoÃ¢â‚¬Â */}
+          {/* Mantener el header real da contexto y se ve más “producto” */}
           <thead className="bg-gray-50 border-b">
             <tr className="text-left">
               <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
@@ -110,13 +118,13 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
                   <div className="h-4 w-24 rounded sadi-skeleton" />
                 </td>
 
-                {/* Marca / Modelo (dos lÃƒÂ­neas) */}
+                {/* Marca / Modelo (dos líneas) */}
                 <td className="px-4 py-3">
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-24 rounded sadi-skeleton" />
                 </td>
 
-                {/* Propietario (dos lÃƒÂ­neas) */}
+                {/* Propietario (dos líneas) */}
                 <td className="px-4 py-3">
                   <div className="h-4 w-40 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-20 rounded sadi-skeleton" />
@@ -132,7 +140,7 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botÃƒÂ³n a la derecha) */}
+                {/* Acciones (botón a la derecha) */}
                 <td className="px-4 py-3 text-right">
                   <div className="ml-auto h-8 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -212,7 +220,7 @@ export default function AdminEquiposPage() {
       setCount(c);
     } catch (e: any) {
       if (rid !== requestIdRef.current) return;
-      setError(toErrorMessage(e, "No se pudieron cargar los equipos."));
+      setError(safeErrorMessage(e));
     } finally {
       if (rid === requestIdRef.current) setLoadingTable(false);
     }
@@ -227,7 +235,7 @@ export default function AdminEquiposPage() {
       await cargarEquipos(1);
       setPage(1);
     } catch (e: any) {
-      setError(toErrorMessage(e, "No se pudieron cargar los equipos."));
+      setError(safeErrorMessage(e));
     } finally {
       setLoading(false);
       setLoadingTable(false);
@@ -249,10 +257,9 @@ export default function AdminEquiposPage() {
 
   async function confirmarRevision() {
     if (!equipoSel) return;
-    setError(null);
 
     if (accion === "rechazado" && !motivo.trim()) {
-      setError("Debes escribir el motivo de rechazo para continuar.");
+      alert("Debes escribir el motivo de rechazo.");
       return;
     }
 
@@ -267,7 +274,7 @@ export default function AdminEquiposPage() {
       setEquipoSel(null);
       await cargarEquipos(page);
     } catch (e: any) {
-      setError(toErrorMessage(e, "No se pudo revisar el equipo."));
+      alert(safeErrorMessage(e));
       await cargarEquipos(page);
     } finally {
       setRevisando(false);
@@ -301,7 +308,7 @@ export default function AdminEquiposPage() {
         <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-emerald-900">Admin / Equipos</h1>
-            <p className="text-sm text-gray-500">PaginaciÃƒÂ³n + debounce + skeleton loaders.</p>
+            <p className="text-sm text-gray-500">Paginación + debounce + skeleton loaders.</p>
           </div>
 
           <div className="flex gap-2 items-center">
@@ -312,7 +319,7 @@ export default function AdminEquiposPage() {
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/pÃƒÂ¡gina
+                  {n}/página
                 </option>
               ))}
             </select>
@@ -342,15 +349,15 @@ export default function AdminEquiposPage() {
                 <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
               </div>
               <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta pÃƒÂ¡gina: Pendientes</div>
+                <div className="text-sm text-gray-500">En esta página: Pendientes</div>
                 <div className="text-2xl font-bold text-amber-700">{stats.pendientes}</div>
               </div>
               <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta pÃƒÂ¡gina: Aprobados</div>
+                <div className="text-sm text-gray-500">En esta página: Aprobados</div>
                 <div className="text-2xl font-bold text-emerald-700">{stats.aprobados}</div>
               </div>
               <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta pÃƒÂ¡gina: Rechazados</div>
+                <div className="text-sm text-gray-500">En esta página: Rechazados</div>
                 <div className="text-2xl font-bold text-rose-700">{stats.rechazados}</div>
               </div>
             </>
@@ -362,7 +369,7 @@ export default function AdminEquiposPage() {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <input
               className="md:col-span-6 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por serial, marca, modelo, documento o usernameÃ¢â‚¬Â¦"
+              placeholder="Buscar por serial, marca, modelo, documento o username…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -449,11 +456,11 @@ export default function AdminEquiposPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-semibold text-gray-900">{nombreUsuario(owner)}</div>
-                          <div className="text-xs text-gray-500">{owner?.documento ?? "Ã¢â‚¬â€"}</div>
+                          <div className="text-xs text-gray-500">{owner?.documento ?? "—"}</div>
                         </td>
                         <td className="px-4 py-3">{badge}</td>
                         <td className="px-4 py-3 text-gray-700">
-                          {st === "rechazado" ? (e.motivo_rechazo || "Ã¢â‚¬â€") : "Ã¢â‚¬â€"}
+                          {st === "rechazado" ? (e.motivo_rechazo || "—") : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -499,7 +506,7 @@ export default function AdminEquiposPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-gray-500">AcciÃƒÂ³n</label>
+                <label className="text-xs text-gray-500">Acción</label>
                 <select
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                   value={accion}
@@ -521,7 +528,7 @@ export default function AdminEquiposPage() {
                 <label className="text-xs text-gray-500">Motivo (solo si rechazas)</label>
                 <input
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                  placeholder="Ej: Equipo sin etiqueta / serial no coincideÃ¢â‚¬Â¦"
+                  placeholder="Ej: Equipo sin etiqueta / serial no coincide…"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   disabled={accion !== "rechazado"}
@@ -543,7 +550,7 @@ export default function AdminEquiposPage() {
                 disabled={revisando}
                 className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-60"
               >
-                {revisando ? "GuardandoÃ¢â‚¬Â¦" : "Guardar"}
+                {revisando ? "Guardando…" : "Guardar"}
               </button>
             </div>
           </div>
