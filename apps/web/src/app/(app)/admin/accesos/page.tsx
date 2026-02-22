@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -20,7 +20,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MAÑANA" | "TARDE" | "NOCHE";
+  jornada: "MAÃ‘ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -57,11 +57,11 @@ const SEDES: Array<NonNullable<Acceso["sede"]>> = ["CEGAFE", "SANTA_CLARA", "ITE
 
 function clsBadge(variant: "green" | "red" | "blue" | "amber" | "gray") {
   const base = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
-  if (variant === "green") return `${base} bg-emerald-100 text-emerald-800 border-emerald-200`;
+  if (variant === "green") return `${base} bg-primary/10 text-primary border-primary/20`;
   if (variant === "red") return `${base} bg-rose-100 text-rose-800 border-rose-200`;
   if (variant === "blue") return `${base} bg-sky-100 text-sky-800 border-sky-200`;
   if (variant === "amber") return `${base} bg-amber-100 text-amber-800 border-amber-200`;
-  return `${base} bg-gray-100 text-gray-800 border-gray-200`;
+  return `${base} bg-gray-100 text-text/90 border-gray-200`;
 }
 
 function Badge({ variant, label }: { variant: "green" | "red" | "blue" | "amber" | "gray"; label: string }) {
@@ -69,15 +69,15 @@ function Badge({ variant, label }: { variant: "green" | "red" | "blue" | "amber"
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "—";
+  if (!u) return "â€”";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "â€”";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "â€”";
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
@@ -93,7 +93,7 @@ function safeErrorMessage(e: any) {
     e?.response?.data?.detail ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
     e?.message ??
-    "Ocurrió un error."
+    "OcurriÃ³ un error."
   );
 }
 
@@ -107,11 +107,11 @@ function useDebounced<T>(value: T, delay = 450) {
 }
 
 function StatSkeleton() {
-  return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
+  return <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4 animate-pulse h-[92px]" />;
 }
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+    <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
       <div className="px-4 py-3 border-b">
         <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
       </div>
@@ -146,7 +146,7 @@ export default function AdminAccesosPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // búsqueda selects
+  // bÃºsqueda selects
   const [aprendizSearch, setAprendizSearch] = useState("");
   const [guardaSearch, setGuardaSearch] = useState("");
 
@@ -213,7 +213,7 @@ export default function AdminAccesosPage() {
     try {
       const params: any = {
         page: p,
-        page_size: pageSize, // DRF lo acepta si habilitas PageNumberPagination (por defecto sí)
+        page_size: pageSize, // DRF lo acepta si habilitas PageNumberPagination (por defecto sÃ­)
       };
       if (dq.trim()) params.q = dq.trim();
       if (tipo) params.tipo = tipo;
@@ -225,7 +225,7 @@ export default function AdminAccesosPage() {
 
       const r = await api.get<Paginated<Acceso> | Acceso[]>("/api/accesos/", { params });
 
-      // si todavía no tienes paginación, soporta array
+      // si todavÃ­a no tienes paginaciÃ³n, soporta array
       const payload: any = r.data;
       const results = Array.isArray(payload) ? payload : payload.results ?? [];
       const c = Array.isArray(payload) ? results.length : payload.count ?? results.length;
@@ -301,13 +301,13 @@ export default function AdminAccesosPage() {
     }
   }
 
-  // ✅ Cargar inicial
+  // âœ… Cargar inicial
   useEffect(() => {
     cargarBase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Auto-refetch con debounce cuando cambian filtros “de request”
+  // âœ… Auto-refetch con debounce cuando cambian filtros â€œde requestâ€
   useEffect(() => {
     // cuando cambian filtros, vuelvo a page=1
     setPage(1);
@@ -315,7 +315,7 @@ export default function AdminAccesosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dq, tipo, sede, aprendizId, guardaId, dDateFrom, dDateTo, pageSize]);
 
-  // ✅ refetch cuando cambie page
+  // âœ… refetch cuando cambie page
   useEffect(() => {
     cargarAccesos(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -327,10 +327,10 @@ export default function AdminAccesosPage() {
     <div className="space-y-4">
       <div className="space-y-4">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-emerald-900">Admin / Accesos</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-2xl font-bold text-primary">Admin / Accesos</h1>
+            <p className="text-sm text-text/70">
               Paginado + filtros con debounce + skeleton loaders.
             </p>
           </div>
@@ -343,14 +343,14 @@ export default function AdminAccesosPage() {
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/página
+                  {n}/pÃ¡gina
                 </option>
               ))}
             </select>
 
             <button
               onClick={() => cargarAccesos(page)}
-              className="rounded-xl px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
+              className="rounded-xl px-4 py-2 bg-primary text-white hover:bg-primary/90 shadow-sm transition"
             >
               Recargar
             </button>
@@ -368,32 +368,32 @@ export default function AdminAccesosPage() {
             </>
           ) : (
             <>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">Total</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">Total</div>
+                <div className="text-2xl font-bold text-text">{stats.total}</div>
               </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Ingresos</div>
-                <div className="text-2xl font-bold text-emerald-700">{stats.ingresos}</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">En esta pÃ¡gina: Ingresos</div>
+                <div className="text-2xl font-bold text-primary">{stats.ingresos}</div>
               </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Salidas</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">En esta pÃ¡gina: Salidas</div>
                 <div className="text-2xl font-bold text-rose-700">{stats.salidas}</div>
               </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Con equipos</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.conEquipos}</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">En esta pÃ¡gina: Con equipos</div>
+                <div className="text-2xl font-bold text-text">{stats.conEquipos}</div>
               </div>
             </>
           )}
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4">
+        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <input
               className="md:col-span-4 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por documento o username…"
+              placeholder="Buscar por documento o usernameâ€¦"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -424,7 +424,7 @@ export default function AdminAccesosPage() {
             <div className="md:col-span-2 space-y-1">
               <input
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                placeholder="Buscar aprendiz…"
+                placeholder="Buscar aprendizâ€¦"
                 value={aprendizSearch}
                 onChange={(e) => setAprendizSearch(e.target.value)}
               />
@@ -445,7 +445,7 @@ export default function AdminAccesosPage() {
             <div className="md:col-span-2 space-y-1">
               <input
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                placeholder="Buscar guarda…"
+                placeholder="Buscar guardaâ€¦"
                 value={guardaSearch}
                 onChange={(e) => setGuardaSearch(e.target.value)}
               />
@@ -464,7 +464,7 @@ export default function AdminAccesosPage() {
             </div>
 
             <div className="md:col-span-3">
-              <label className="text-xs text-gray-500">Desde</label>
+              <label className="text-xs text-text/70">Desde</label>
               <input
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                 type="date"
@@ -474,7 +474,7 @@ export default function AdminAccesosPage() {
             </div>
 
             <div className="md:col-span-3">
-              <label className="text-xs text-gray-500">Hasta</label>
+              <label className="text-xs text-text/70">Hasta</label>
               <input
                 className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                 type="date"
@@ -486,7 +486,7 @@ export default function AdminAccesosPage() {
             <div className="md:col-span-6 flex items-end gap-2">
               <button
                 onClick={() => resetFiltros()}
-                className="rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition"
+                className="rounded-xl px-4 py-2 border border-surface-border bg-surface hover:bg-gray-50 transition"
               >
                 Limpiar
               </button>
@@ -504,31 +504,31 @@ export default function AdminAccesosPage() {
         {loadingTable ? (
           <TableSkeleton />
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+          <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
             <div className="px-4 py-3 border-b">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-text/75">
                 Resultados: <span className="font-semibold">{count}</span>
               </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-surface border-b border-surface-border">
                   <tr className="text-left">
-                    <th className="px-4 py-3 font-semibold text-gray-700">Fecha</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Tipo</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Sede</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Aprendiz</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Registrado por</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Equipos</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Fecha</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Tipo</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Sede</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Aprendiz</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Registrado por</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Equipos</th>
+                    <th className="px-4 py-3 font-semibold text-text/80 text-right">Acciones</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {accesos.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                      <td colSpan={7} className="px-4 py-10 text-center text-text/70">
                         Sin registros con estos filtros.
                       </td>
                     </tr>
@@ -540,7 +540,7 @@ export default function AdminAccesosPage() {
                     const equiposCount = (a.equipos ?? []).length;
 
                     return (
-                      <tr key={a.id} className="border-b hover:bg-emerald-50/30 transition">
+                      <tr key={a.id} className="border-b hover:bg-primary/10 transition">
                         <td className="px-4 py-3 whitespace-nowrap">{formatFecha(a.fecha)}</td>
                         <td className="px-4 py-3">
                           {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
@@ -549,17 +549,17 @@ export default function AdminAccesosPage() {
                           {a.sede ? <Badge variant="blue" label={a.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-gray-900">{nombreUsuario(aprendiz)}</div>
-                          <div className="text-xs text-gray-500">{aprendiz?.documento ?? "—"}</div>
+                          <div className="font-semibold text-text">{nombreUsuario(aprendiz)}</div>
+                          <div className="text-xs text-text/70">{aprendiz?.documento ?? "â€”"}</div>
                         </td>
-                        <td className="px-4 py-3 text-gray-800">{registrado ? nombreUsuario(registrado) : "—"}</td>
+                        <td className="px-4 py-3 text-text/90">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
                         <td className="px-4 py-3">
-                          {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "—"}
+                          {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "â€”"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => abrirDetalle(a)}
-                            className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 transition"
+                            className="rounded-xl px-3 py-2 text-xs font-semibold border border-surface-border bg-surface hover:bg-gray-50 transition"
                           >
                             Ver
                           </button>
@@ -598,41 +598,41 @@ export default function AdminAccesosPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="rounded-xl border p-3">
-                  <div className="text-xs text-gray-500">Fecha</div>
+                  <div className="text-xs text-text/70">Fecha</div>
                   <div className="font-semibold">{formatFecha(selected.fecha)}</div>
                 </div>
 
                 <div className="rounded-xl border p-3">
-                  <div className="text-xs text-gray-500">Tipo</div>
+                  <div className="text-xs text-text/70">Tipo</div>
                   <div className="mt-1">
                     {selected.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                   </div>
                 </div>
 
                 <div className="rounded-xl border p-3">
-                  <div className="text-xs text-gray-500">Sede</div>
+                  <div className="text-xs text-text/70">Sede</div>
                   <div className="mt-1">
                     {selected.sede ? <Badge variant="blue" label={selected.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
                   </div>
                 </div>
 
                 <div className="rounded-xl border p-3">
-                  <div className="text-xs text-gray-500">Turno</div>
-                  <div className="font-semibold">{selected.turno ? `#${selected.turno}` : "—"}</div>
+                  <div className="text-xs text-text/70">Turno</div>
+                  <div className="font-semibold">{selected.turno ? `#${selected.turno}` : "â€”"}</div>
                 </div>
               </div>
 
               <div className="rounded-2xl border p-4">
-                <div className="text-sm font-bold text-gray-900">Personas</div>
-                <div className="mt-2 text-sm text-gray-700 space-y-1">
+                <div className="text-sm font-bold text-text">Personas</div>
+                <div className="mt-2 text-sm text-text/80 space-y-1">
                   <div>
-                    <span className="text-gray-500">Aprendiz:</span>{" "}
+                    <span className="text-text/70">Aprendiz:</span>{" "}
                     <span className="font-medium">{nombreUsuario(usuariosMap.get(selected.usuario))}</span>
                   </div>
                   <div>
-                    <span className="text-gray-500">Registrado por:</span>{" "}
+                    <span className="text-text/70">Registrado por:</span>{" "}
                     <span className="font-medium">
-                      {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "—"}
+                      {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "â€”"}
                     </span>
                   </div>
                 </div>
@@ -640,21 +640,21 @@ export default function AdminAccesosPage() {
 
               <div className="rounded-2xl border p-4">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-bold text-gray-900">Equipos</div>
-                  {loadingDetalle ? <div className="text-xs text-gray-500">Cargando…</div> : null}
+                  <div className="text-sm font-bold text-text">Equipos</div>
+                  {loadingDetalle ? <div className="text-xs text-text/70">Cargandoâ€¦</div> : null}
                 </div>
 
                 <div className="mt-2">
                   {(selected.equipos ?? []).length === 0 ? (
-                    <div className="text-sm text-gray-500">Sin equipos asociados.</div>
+                    <div className="text-sm text-text/70">Sin equipos asociados.</div>
                   ) : detalleEquipos.length ? (
                     <div className="space-y-2">
                       {detalleEquipos.map((e) => (
                         <div key={e.id} className="rounded-xl border p-3 flex items-center justify-between">
                           <div>
-                            <div className="font-semibold text-gray-900">{e.serial}</div>
-                            <div className="text-xs text-gray-500">
-                              {e.marca} {e.modelo} • propietario #{e.propietario}
+                            <div className="font-semibold text-text">{e.serial}</div>
+                            <div className="text-xs text-text/70">
+                              {e.marca} {e.modelo} â€¢ propietario #{e.propietario}
                             </div>
                           </div>
 
@@ -678,9 +678,9 @@ export default function AdminAccesosPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-text/75">
                       IDs: {(selected.equipos ?? []).join(", ")}{" "}
-                      <span className="text-xs text-gray-500">(no se pudieron cargar detalles)</span>
+                      <span className="text-xs text-text/70">(no se pudieron cargar detalles)</span>
                     </div>
                   )}
                 </div>
@@ -692,4 +692,5 @@ export default function AdminAccesosPage() {
     </div>
   );
 }
+
 

@@ -6,6 +6,7 @@ import { useMe } from "@/hooks/useMe";
 import { api } from "@/lib/api";
 import { toErrorMessage } from "@/lib/errors";
 import { sanitizeDigits, validatePhone10 } from "@/lib/validators";
+import { useInstitution } from "@/context/institution-context";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -53,6 +54,7 @@ type AprendizPerfilDto = {
 
 export default function AprendizPerfilPage() {
   const { me, loadingMe } = useMe();
+  const { sedeLabel } = useInstitution();
 
   const [editing, setEditing] = useState(false);
   const [loadingPerfil, setLoadingPerfil] = useState(false);
@@ -297,7 +299,7 @@ export default function AprendizPerfilPage() {
             <DataCard label="Documento" value={perfil?.documento ?? me?.documento ?? "-"} />
             <DataCard label="Correo" value={perfil?.email ?? me?.email ?? "-"} />
             <DataCard label="Telefono" value={perfil?.telefono ?? "-"} />
-            <DataCard label="Centro de formacion" value={perfil?.sede_principal ?? me?.sede_principal ?? "-"} />
+            <DataCard label={sedeLabel} value={perfil?.sede_principal ?? me?.sede_principal ?? "-"} />
             <DataCard label="Programa" value={perfil?.programa_formacion ?? me?.programa_formacion ?? "-"} />
           </div>
 

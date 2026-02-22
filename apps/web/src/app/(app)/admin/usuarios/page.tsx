@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -8,6 +8,7 @@ import PageHeader from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { useInstitution } from "@/context/institution-context";
 
 type Usuario = {
   id: number;
@@ -62,7 +63,7 @@ function safeErrorMessage(e: any) {
     e?.response?.data?.motivo ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
     e?.message ??
-    "No se pudo completar la acción."
+    "No se pudo completar la acciÃ³n."
   );
 }
 
@@ -79,11 +80,11 @@ function StatSkeleton() {
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <>
-      {/* Tabla skeleton (misma “caja” que tu tabla real) */}
+      {/* Tabla skeleton (misma â€œcajaâ€ que tu tabla real) */}
       <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
         <table className="min-w-full text-sm">
           {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
-          <thead className="bg-emerald-50 text-emerald-900">
+          <thead className="bg-primary/10 text-primary">
             <tr className="text-left">
               <th className="p-3">ID</th>
               <th className="p-3">Usuario</th>
@@ -99,13 +100,13 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
           <tbody className="divide-y">
             {Array.from({ length: rows }).map((_, i) => (
-              <tr key={i} className="hover:bg-emerald-50/40 transition">
+              <tr key={i} className="hover:bg-primary/10 transition">
                 {/* ID */}
                 <td className="p-3">
                   <div className="h-4 w-10 rounded sadi-skeleton" />
                 </td>
 
-                {/* Usuario (2 líneas: username + email) */}
+                {/* Usuario (2 lÃ­neas: username + email) */}
                 <td className="p-3">
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
@@ -147,7 +148,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botón) */}
+                {/* Acciones (botÃ³n) */}
                 <td className="p-3">
                   <div className="h-10 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -157,7 +158,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
         </table>
       </div>
 
-      {/* Paginación skeleton (misma caja que tu paginación real) */}
+      {/* PaginaciÃ³n skeleton (misma caja que tu paginaciÃ³n real) */}
       <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border p-3 mt-4">
         <div className="h-4 w-40 rounded sadi-skeleton" />
 
@@ -172,6 +173,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
 
 export default function AdminUsuariosPage() {
+  const { emailPlaceholder } = useInstitution();
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [count, setCount] = useState<number>(0);
@@ -259,7 +261,7 @@ export default function AdminUsuariosPage() {
       if (rid !== requestIdRef.current) return;
 
       if (Array.isArray(payload)) {
-        // fallback: backend sin paginación
+        // fallback: backend sin paginaciÃ³n
         setServerPaginated(false);
         setUsuarios(payload);
         setCount(payload.length);
@@ -332,7 +334,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, filtrados, page, serverPaginated]);
 
   const stats = useMemo(() => {
-    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseño)
+    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseÃ±o)
     const base = serverPaginated ? usuarios : usuarios;
 
     const total = serverPaginated ? count : base.length;
@@ -394,7 +396,7 @@ export default function AdminUsuariosPage() {
     }
   }
 
-  // ⚡ inline update: rol/estado (mantengo como lo tenías, no toco estética)
+  // âš¡ inline update: rol/estado (mantengo como lo tenÃ­as, no toco estÃ©tica)
   async function inlinePatch(id: number, patch: Partial<Usuario>) {
     setUsuarios((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
 
@@ -446,7 +448,7 @@ export default function AdminUsuariosPage() {
       setOpenCrear(false);
       setPage(1);
       await cargar(1);
-      alert("✅ Usuario creado.");
+      alert("âœ… Usuario creado.");
     } catch (e: any) {
       alert(safeErrorMessage(e));
     } finally {
@@ -505,7 +507,7 @@ export default function AdminUsuariosPage() {
       const created = data.created ?? data.created_count ?? 0;
       const updated = data.updated ?? data.updated_count ?? 0;
 
-      alert(`Importación aplicada. Creados: ${created}. Actualizados: ${updated}.`);
+      alert(`ImportaciÃ³n aplicada. Creados: ${created}. Actualizados: ${updated}.`);
       setOpenImportar(false);
       setPage(1);
       await cargar(1);
@@ -526,19 +528,19 @@ export default function AdminUsuariosPage() {
           <>
             <button
               onClick={abrirCrear}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90"
             >
               Crear usuario
             </button>
             <button
               onClick={abrirImportar}
-              className="rounded-xl bg-gradient-to-r from-teal-700 to-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105"
+              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105"
             >
               Cargar aprendices (Excel)
             </button>
             <button
               onClick={() => cargar(page)}
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+              className="rounded-xl border border-surface-border bg-surface px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
             >
               Recargar
             </button>
@@ -576,9 +578,9 @@ export default function AdminUsuariosPage() {
         }
       >
         <div className="relative w-full md:col-span-4">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">⌕</span>
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">âŒ•</span>
           <input
-            className="w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+            className="w-full rounded-xl border border-surface-border bg-surface pl-9 pr-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
             placeholder="Buscar: username, email, documento, nombre..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -586,7 +588,7 @@ export default function AdminUsuariosPage() {
         </div>
 
         <select
-          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 md:col-span-2"
+          className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
           value={rolFilter}
           onChange={(e) => setRolFilter(e.target.value as "todos" | "admin" | "guarda" | "aprendiz")}
         >
@@ -597,7 +599,7 @@ export default function AdminUsuariosPage() {
         </select>
 
         <select
-          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 md:col-span-2"
+          className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
           value={estadoFilter}
           onChange={(e) => setEstadoFilter(e.target.value as "todos" | "activo" | "bloqueado")}
         >
@@ -607,7 +609,7 @@ export default function AdminUsuariosPage() {
         </select>
 
         <select
-          className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 md:col-span-2"
+          className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
           value={sedeFilter}
           onChange={(e) => setSedeFilter(e.target.value as "todos" | (typeof SEDES)[number])}
         >
@@ -627,12 +629,12 @@ export default function AdminUsuariosPage() {
             setSedeFilter("todos");
             setPage(1);
           }}
-          className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60 md:col-span-1"
+          className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 md:col-span-1"
         >
           Limpiar
         </button>
 
-        <div className="flex items-center justify-end rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-600 md:col-span-1">
+        <div className="flex items-center justify-end rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-zinc-600 md:col-span-1">
           {totalCount} usuarios
         </div>
       </FilterBar>
@@ -643,7 +645,7 @@ export default function AdminUsuariosPage() {
         <>
           <section className="overflow-auto rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
             <table className="min-w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-emerald-50 text-emerald-900">
+              <thead className="sticky top-0 z-10 bg-primary/10 text-primary">
                 <tr className="text-left">
                   <th className="p-3">ID</th>
                   <th className="p-3">Usuario</th>
@@ -659,11 +661,11 @@ export default function AdminUsuariosPage() {
 
               <tbody className="divide-y divide-zinc-100">
                 {pageItems.map((u, idx) => (
-                  <tr key={u.id} className={cx("transition hover:bg-emerald-50/35", idx % 2 === 1 && "bg-zinc-50/35")}>
+                  <tr key={u.id} className={cx("transition hover:bg-primary/10", idx % 2 === 1 && "bg-zinc-50/35")}>
                     <td className="p-3">{u.id}</td>
 
                     <td className="p-3">
-                      <div className="font-semibold text-emerald-900">{u.username}</div>
+                      <div className="font-semibold text-primary">{u.username}</div>
                       {u.email ? <div className="text-zinc-500">{u.email}</div> : null}
                     </td>
 
@@ -673,7 +675,7 @@ export default function AdminUsuariosPage() {
                       <div className="flex flex-col gap-2">
                         <BadgeChip tone={u.rol === "admin" ? "purple" : u.rol === "guarda" ? "info" : "success"}>{u.rol ?? "-"}</BadgeChip>
                         <select
-                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
                           value={u.rol ?? "aprendiz"}
                           onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
                           title="Cambiar rol (rapido)"
@@ -691,7 +693,7 @@ export default function AdminUsuariosPage() {
                       <div className="flex flex-col gap-2">
                         <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
                         <select
-                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
                           value={(u.estado ?? "activo").toLowerCase()}
                           onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
                           title="Cambiar estado (rapido)"
@@ -709,7 +711,7 @@ export default function AdminUsuariosPage() {
                     <td className="p-3">
                       <button
                         onClick={() => abrirEditar(u)}
-                        className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                        className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                       >
                         Editar
                       </button>
@@ -720,7 +722,7 @@ export default function AdminUsuariosPage() {
                 {pageItems.length === 0 ? (
                   <tr>
                     <td className="p-10 text-center" colSpan={9}>
-                      <div className="mx-auto max-w-md rounded-2xl border border-emerald-100 bg-gradient-to-b from-emerald-50/70 to-cyan-50/50 p-6 text-zinc-700">
+                      <div className="mx-auto max-w-md rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/10 to-primary/5 p-6 text-zinc-700">
                         <p className="text-base font-semibold text-zinc-900">No hay usuarios para mostrar</p>
                         <p className="mt-1 text-sm text-zinc-600">Prueba limpiando o ajustando los filtros activos.</p>
                       </div>
@@ -754,7 +756,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Rol</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={rol}
                     onChange={(e) => setRol(e.target.value)}
                   >
@@ -769,7 +771,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Estado</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={estado.toLowerCase()}
                     onChange={(e) => setEstado(e.target.value)}
                   >
@@ -781,28 +783,28 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Correo (email)</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="usuario@sena.edu.co"
+                    placeholder={emailPlaceholder}
                   />
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Documento</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={documento}
                     onChange={(e) => setDocumento(e.target.value)}
                     placeholder="QR / documento"
                   />
                 </label>
 
-                {/* ✅ SEDE como SELECT en el MODAL (como pediste) */}
+                {/* âœ… SEDE como SELECT en el MODAL (como pediste) */}
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Sede principal</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={sede}
                     onChange={(e) => setSede(e.target.value)}
                   >
@@ -816,9 +818,9 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Programa formación</div>
+                  <div className="text-xs text-gray-500">Programa formaciÃ³n</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={programa}
                     onChange={(e) => setPrograma(e.target.value)}
                     placeholder="ADSO..."
@@ -837,7 +839,7 @@ export default function AdminUsuariosPage() {
                 <button
                   disabled={saving}
                   onClick={guardarModal}
-                  className="bg-emerald-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-emerald-700 shadow-sm transition"
+                  className="bg-primary text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-primary/90 shadow-sm transition"
                 >
                   {saving ? "Guardando..." : "Guardar cambios"}
                 </button>
@@ -858,7 +860,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Username *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_username}
                     onChange={(e) => setCUsername(e.target.value)}
                   />
@@ -868,7 +870,7 @@ export default function AdminUsuariosPage() {
                   <div className="text-xs text-gray-500">Password *</div>
                   <input
                     type="password"
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_password}
                     onChange={(e) => setCPassword(e.target.value)}
                   />
@@ -877,7 +879,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Nombres</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_first}
                     onChange={(e) => setCFirst(e.target.value)}
                   />
@@ -886,7 +888,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Apellidos</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_last}
                     onChange={(e) => setCLast(e.target.value)}
                   />
@@ -895,17 +897,17 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Email</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_email}
                     onChange={(e) => setCEmail(e.target.value)}
-                    placeholder="usuario@sena.edu.co"
+                    placeholder={emailPlaceholder}
                   />
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Documento (QR)</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_documento}
                     onChange={(e) => setCDocumento(e.target.value)}
                     placeholder="1012345678"
@@ -915,7 +917,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Rol</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_rol}
                     onChange={(e) => setCRol(e.target.value)}
                   >
@@ -930,7 +932,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Estado</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_estado}
                     onChange={(e) => setCEstado(e.target.value)}
                   >
@@ -942,7 +944,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Sede principal</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_sede}
                     onChange={(e) => setCSede(e.target.value)}
                   >
@@ -958,7 +960,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Programa</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     value={c_programa}
                     onChange={(e) => setCPrograma(e.target.value)}
                     placeholder="COCINA / ADSO..."
@@ -978,7 +980,7 @@ export default function AdminUsuariosPage() {
                 <button
                   onClick={crearUsuario}
                   disabled={creating}
-                  className="bg-emerald-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-emerald-700 shadow-sm transition"
+                  className="bg-primary text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-primary/90 shadow-sm transition"
                 >
                   {creating ? "Creando..." : "Crear usuario"}
                 </button>
@@ -994,8 +996,8 @@ export default function AdminUsuariosPage() {
           closeDisabled={validandoImport || confirmandoImport}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importación.
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-text/80">
+              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importaciÃ³n.
             </div>
 
             <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
@@ -1003,33 +1005,33 @@ export default function AdminUsuariosPage() {
                 type="file"
                 accept=".xlsx,.xlsm,.xltx,.xltm"
                 onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
               />
               <button
                 onClick={validarImportacion}
                 disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {validandoImport ? "Validando..." : "Validar archivo"}
               </button>
               <button
                 onClick={confirmarImportacion}
                 disabled={!importId || confirmandoImport || validandoImport}
-                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {confirmandoImport ? "Confirmando..." : "Confirmar importación"}
+                {confirmandoImport ? "Confirmando..." : "Confirmar importaciÃ³n"}
               </button>
             </div>
 
             {importResumen && (
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="text-xs text-slate-500">Total</div>
-                  <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
+                  <div className="text-xs text-text/70">Total</div>
+                  <div className="text-xl font-semibold text-text">{importResumen.total}</div>
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="text-xs text-emerald-700">Válidos</div>
-                  <div className="text-xl font-semibold text-emerald-800">{importResumen.validos}</div>
+                <div className="rounded-xl border border-primary/20 bg-primary/10 p-3">
+                  <div className="text-xs text-primary">VÃ¡lidos</div>
+                  <div className="text-xl font-semibold text-primary">{importResumen.validos}</div>
                 </div>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
                   <div className="text-xs text-rose-700">Errores</div>
@@ -1041,14 +1043,14 @@ export default function AdminUsuariosPage() {
             {importErrores.length > 0 && (
               <div className="overflow-hidden rounded-2xl border border-rose-200">
                 <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800">
-                  Errores de validación
+                  Errores de validaciÃ³n
                 </div>
                 <div className="max-h-64 overflow-auto bg-white">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
+                    <thead className="bg-surface text-left text-text/75">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
-                        <th className="px-3 py-2">Código</th>
+                        <th className="px-3 py-2">CÃ³digo</th>
                         <th className="px-3 py-2">Mensaje</th>
                       </tr>
                     </thead>
@@ -1057,7 +1059,7 @@ export default function AdminUsuariosPage() {
                         <tr key={`${err.row}-${err.code}-${idx}`}>
                           <td className="px-3 py-2">{err.row}</td>
                           <td className="px-3 py-2 font-medium text-rose-700">{err.code}</td>
-                          <td className="px-3 py-2 text-slate-700">
+                          <td className="px-3 py-2 text-text/80">
                             {err.message}
                             {err.field ? ` (campo: ${err.field})` : ""}
                             {err.fields?.length ? ` (campos: ${err.fields.join(", ")})` : ""}
@@ -1074,3 +1076,6 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
+
+
+

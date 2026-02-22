@@ -1,7 +1,9 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+
 import { clearTokens } from "@/lib/auth";
 import { useMe } from "@/hooks/useMe";
 
@@ -9,6 +11,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { me, loadingMe } = useMe();
+  const { resolvedTheme, setTheme } = useTheme();
 
   function logout() {
     clearTokens();
@@ -17,9 +20,6 @@ export default function Navbar() {
 
   const isAdmin = pathname.startsWith("/admin");
   const isAprendiz = pathname.startsWith("/aprendiz");
-  const badgeClass = isAprendiz
-    ? "from-sky-700 to-cyan-600"
-    : "from-teal-700 to-emerald-600";
 
   const nombreBonito =
     me?.first_name || me?.last_name
@@ -27,25 +27,23 @@ export default function Navbar() {
       : me?.username ?? "";
 
   return (
-    <div className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur">
+    <div className="sticky top-0 z-40 w-full border-b border-surface-border bg-surface/95 text-text backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-4">
-          <span className={`rounded-xl bg-gradient-to-r ${badgeClass} px-3 py-1.5 text-sm font-bold tracking-wide text-white shadow-sm`}>
-            SADI
-          </span>
+          <span className="rounded-xl bg-primary px-3 py-1.5 text-sm font-bold tracking-wide text-white shadow-sm">SADI</span>
 
           {isAdmin && (
             <div className="flex items-center gap-1 text-sm">
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/admin/usuarios">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/admin/usuarios">
                 Usuarios
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/admin/equipos">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/admin/equipos">
                 Equipos
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/admin/accesos">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/admin/accesos">
                 Accesos
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/admin/turnos">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/admin/turnos">
                 Turnos
               </Link>
             </div>
@@ -53,19 +51,19 @@ export default function Navbar() {
 
           {isAprendiz && (
             <div className="flex items-center gap-1 text-sm">
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/aprendiz/inicio">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/aprendiz/inicio">
                 Inicio
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/aprendiz/equipos">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/aprendiz/equipos">
                 Mis equipos
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/aprendiz/accesos">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/aprendiz/accesos">
                 Historial
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/aprendiz/perfil">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/aprendiz/perfil">
                 Mi perfil
               </Link>
-              <Link className="rounded-lg px-3 py-2 font-medium text-slate-700 transition hover:bg-slate-100" href="/aprendiz/ayuda">
+              <Link className="rounded-lg px-3 py-2 font-medium text-text transition hover:bg-primary/10 hover:text-primary" href="/aprendiz/ayuda">
                 Ayuda
               </Link>
             </div>
@@ -73,18 +71,25 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-primary/10 hover:text-primary"
+            title="Cambiar tema"
+          >
+            Cambiar tema
+          </button>
+
           <div className="text-right leading-tight">
-            <div className="text-sm font-semibold text-slate-900">
-              {loadingMe ? "Cargando..." : nombreBonito || "—"}
-            </div>
-            <div className="text-xs text-slate-500">{loadingMe ? "" : me?.rol ?? ""}</div>
+            <div className="text-sm font-semibold text-text">{loadingMe ? "Cargando..." : nombreBonito || "-"}</div>
+            <div className="text-xs text-text/60">{loadingMe ? "" : me?.rol ?? ""}</div>
           </div>
 
           <button
             onClick={logout}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-primary/10 hover:text-primary"
           >
-            Cerrar sesión
+            Cerrar sesion
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ReactNode } from "react";
 
@@ -22,15 +22,15 @@ export default function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-[2px]">
-      <div className={`w-full ${maxWidthClassName} overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl`}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]">
+      <div className={`w-full ${maxWidthClassName} overflow-hidden rounded-3xl border border-surface-border bg-surface shadow-2xl`}>
+        <div className="flex items-center justify-between border-b border-surface-border px-5 py-4">
+          <h2 className="text-lg font-semibold tracking-tight text-text">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             disabled={closeDisabled}
-            className="rounded-xl border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl border border-surface-border bg-surface px-3 py-1.5 text-sm font-medium text-text/80 transition hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cerrar
           </button>

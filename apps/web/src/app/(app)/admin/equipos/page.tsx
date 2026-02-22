@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -48,12 +48,12 @@ function safeErrorMessage(e: any) {
     e?.response?.data?.motivo ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
     e?.message ??
-    "Ocurrió un error."
+    "OcurriÃ³ un error."
   );
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "—";
+  if (!u) return "â€”";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
@@ -68,23 +68,23 @@ function Badge({
   const base = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
   const cls =
     variant === "green"
-      ? `${base} bg-emerald-100 text-emerald-800 border-emerald-200`
+      ? `${base} bg-primary/10 text-primary border-primary/20`
       : variant === "red"
       ? `${base} bg-rose-100 text-rose-800 border-rose-200`
       : variant === "amber"
       ? `${base} bg-amber-100 text-amber-800 border-amber-200`
-      : `${base} bg-gray-100 text-gray-800 border-gray-200`;
+      : `${base} bg-gray-100 text-text/90 border-gray-200`;
 
   return <span className={cls}>{label}</span>;
 }
 
 function StatSkeleton() {
-  return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
+  return <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4 animate-pulse h-[92px]" />;
 }
 function TableSkeleton({ rows = 7 }: { rows?: number }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-      {/* Barra superior: Mostrando... + paginación (skeleton) */}
+    <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
+      {/* Barra superior: Mostrando... + paginaciÃ³n (skeleton) */}
       <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="h-4 w-64 rounded sadi-skeleton" />
 
@@ -98,15 +98,15 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
       {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          {/* Mantener el header real da contexto y se ve más “producto” */}
-          <thead className="bg-gray-50 border-b">
+          {/* Mantener el header real da contexto y se ve mÃ¡s â€œproductoâ€ */}
+          <thead className="bg-surface border-b border-surface-border">
             <tr className="text-left">
-              <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
-              <th className="px-4 py-3 font-semibold text-gray-700">Marca / Modelo</th>
-              <th className="px-4 py-3 font-semibold text-gray-700">Propietario</th>
-              <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
-              <th className="px-4 py-3 font-semibold text-gray-700">Motivo</th>
-              <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
+              <th className="px-4 py-3 font-semibold text-text/80">Serial</th>
+              <th className="px-4 py-3 font-semibold text-text/80">Marca / Modelo</th>
+              <th className="px-4 py-3 font-semibold text-text/80">Propietario</th>
+              <th className="px-4 py-3 font-semibold text-text/80">Estado</th>
+              <th className="px-4 py-3 font-semibold text-text/80">Motivo</th>
+              <th className="px-4 py-3 font-semibold text-text/80 text-right">Acciones</th>
             </tr>
           </thead>
 
@@ -118,13 +118,13 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
                   <div className="h-4 w-24 rounded sadi-skeleton" />
                 </td>
 
-                {/* Marca / Modelo (dos líneas) */}
+                {/* Marca / Modelo (dos lÃ­neas) */}
                 <td className="px-4 py-3">
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-24 rounded sadi-skeleton" />
                 </td>
 
-                {/* Propietario (dos líneas) */}
+                {/* Propietario (dos lÃ­neas) */}
                 <td className="px-4 py-3">
                   <div className="h-4 w-40 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-20 rounded sadi-skeleton" />
@@ -140,7 +140,7 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botón a la derecha) */}
+                {/* Acciones (botÃ³n a la derecha) */}
                 <td className="px-4 py-3 text-right">
                   <div className="ml-auto h-8 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -305,10 +305,10 @@ export default function AdminEquiposPage() {
     <div className="space-y-4">
       <div className="space-y-4">
         {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-emerald-900">Admin / Equipos</h1>
-            <p className="text-sm text-gray-500">Paginación + debounce + skeleton loaders.</p>
+            <h1 className="text-2xl font-bold text-primary">Admin / Equipos</h1>
+            <p className="text-sm text-text/70">PaginaciÃ³n + debounce + skeleton loaders.</p>
           </div>
 
           <div className="flex gap-2 items-center">
@@ -319,14 +319,14 @@ export default function AdminEquiposPage() {
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/página
+                  {n}/pÃ¡gina
                 </option>
               ))}
             </select>
 
             <button
               onClick={() => cargarEquipos(page)}
-              className="rounded-xl px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
+              className="rounded-xl px-4 py-2 bg-primary text-white hover:bg-primary/90 shadow-sm transition"
             >
               Recargar
             </button>
@@ -344,20 +344,20 @@ export default function AdminEquiposPage() {
             </>
           ) : (
             <>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">Total</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">Total</div>
+                <div className="text-2xl font-bold text-text">{stats.total}</div>
               </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Pendientes</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">En esta pÃ¡gina: Pendientes</div>
                 <div className="text-2xl font-bold text-amber-700">{stats.pendientes}</div>
               </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Aprobados</div>
-                <div className="text-2xl font-bold text-emerald-700">{stats.aprobados}</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">En esta pÃ¡gina: Aprobados</div>
+                <div className="text-2xl font-bold text-primary">{stats.aprobados}</div>
               </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Rechazados</div>
+              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
+                <div className="text-sm text-text/70">En esta pÃ¡gina: Rechazados</div>
                 <div className="text-2xl font-bold text-rose-700">{stats.rechazados}</div>
               </div>
             </>
@@ -365,11 +365,11 @@ export default function AdminEquiposPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4">
+        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <input
               className="md:col-span-6 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por serial, marca, modelo, documento o username…"
+              placeholder="Buscar por serial, marca, modelo, documento o usernameâ€¦"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -388,7 +388,7 @@ export default function AdminEquiposPage() {
             <div className="md:col-span-3 flex items-center gap-2">
               <button
                 onClick={resetFiltros}
-                className="rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition"
+                className="rounded-xl px-4 py-2 border border-surface-border bg-surface hover:bg-gray-50 transition"
               >
                 Limpiar
               </button>
@@ -406,30 +406,30 @@ export default function AdminEquiposPage() {
         {loadingTable ? (
           <TableSkeleton />
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+          <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
             <div className="px-4 py-3 border-b">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-text/75">
                 Resultados: <span className="font-semibold">{count}</span>
               </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-surface border-b border-surface-border">
                   <tr className="text-left">
-                    <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Marca / Modelo</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Propietario</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Motivo</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Serial</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Marca / Modelo</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Propietario</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Estado</th>
+                    <th className="px-4 py-3 font-semibold text-text/80">Motivo</th>
+                    <th className="px-4 py-3 font-semibold text-text/80 text-right">Acciones</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {equipos.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                      <td colSpan={6} className="px-4 py-10 text-center text-text/70">
                         Sin registros con estos filtros.
                       </td>
                     </tr>
@@ -448,24 +448,24 @@ export default function AdminEquiposPage() {
                       );
 
                     return (
-                      <tr key={e.id} className="border-b hover:bg-emerald-50/30 transition">
-                        <td className="px-4 py-3 font-semibold text-gray-900">{e.serial}</td>
-                        <td className="px-4 py-3 text-gray-800">
+                      <tr key={e.id} className="border-b hover:bg-primary/10 transition">
+                        <td className="px-4 py-3 font-semibold text-text">{e.serial}</td>
+                        <td className="px-4 py-3 text-text/90">
                           <div className="font-medium">{e.marca}</div>
-                          <div className="text-xs text-gray-500">{e.modelo}</div>
+                          <div className="text-xs text-text/70">{e.modelo}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-gray-900">{nombreUsuario(owner)}</div>
-                          <div className="text-xs text-gray-500">{owner?.documento ?? "—"}</div>
+                          <div className="font-semibold text-text">{nombreUsuario(owner)}</div>
+                          <div className="text-xs text-text/70">{owner?.documento ?? "â€”"}</div>
                         </td>
                         <td className="px-4 py-3">{badge}</td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {st === "rechazado" ? (e.motivo_rechazo || "—") : "—"}
+                        <td className="px-4 py-3 text-text/80">
+                          {st === "rechazado" ? (e.motivo_rechazo || "â€”") : "â€”"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
                             onClick={() => abrirRevisar(e)}
-                            className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 transition"
+                            className="rounded-xl px-3 py-2 text-xs font-semibold border border-surface-border bg-surface hover:bg-gray-50 transition"
                           >
                             Revisar
                           </button>
@@ -500,13 +500,13 @@ export default function AdminEquiposPage() {
           }}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
+            <div className="rounded-xl border border-surface-border bg-surface p-4 text-sm text-text/80">
               Selecciona aprobar o rechazar. Si rechazas, debes poner un motivo.
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-gray-500">Acción</label>
+                <label className="text-xs text-text/70">AcciÃ³n</label>
                 <select
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                   value={accion}
@@ -525,10 +525,10 @@ export default function AdminEquiposPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-gray-500">Motivo (solo si rechazas)</label>
+                <label className="text-xs text-text/70">Motivo (solo si rechazas)</label>
                 <input
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                  placeholder="Ej: Equipo sin etiqueta / serial no coincide…"
+                  placeholder="Ej: Equipo sin etiqueta / serial no coincideâ€¦"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   disabled={accion !== "rechazado"}
@@ -540,7 +540,7 @@ export default function AdminEquiposPage() {
               <button
                 onClick={() => setOpenRevisar(false)}
                 disabled={revisando}
-                className="rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition disabled:opacity-60"
+                className="rounded-xl px-4 py-2 border border-surface-border bg-surface hover:bg-gray-50 transition disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -548,9 +548,9 @@ export default function AdminEquiposPage() {
               <button
                 onClick={confirmarRevision}
                 disabled={revisando}
-                className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-60"
+                className="rounded-xl px-4 py-2 bg-primary text-white hover:bg-primary/90 shadow-sm transition disabled:opacity-60"
               >
-                {revisando ? "Guardando…" : "Guardar"}
+                {revisando ? "Guardandoâ€¦" : "Guardar"}
               </button>
             </div>
           </div>
@@ -559,6 +559,7 @@ export default function AdminEquiposPage() {
     </div>
   );
 }
+
 
 
 

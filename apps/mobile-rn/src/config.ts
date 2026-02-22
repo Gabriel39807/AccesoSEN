@@ -10,6 +10,8 @@
 // - http://192.168.1.100:8000
 // - https://api.tu-dominio.com
 const RAW_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const RAW_INSTITUTION_NAME = process.env.EXPO_PUBLIC_INSTITUTION_NAME || "Institución";
+const RAW_SEDE_LABEL = process.env.EXPO_PUBLIC_SEDE_LABEL || "La Sede";
 
 /**
  * Normalizes backend URL by trimming spaces/trailing slashes and ensuring protocol.
@@ -22,3 +24,5 @@ function normalizeApiUrl(value: string): string {
 }
 
 export const API_URL = normalizeApiUrl(RAW_API_URL);
+export const INSTITUTION_NAME = RAW_INSTITUTION_NAME.trim() || "Institución";
+export const SEDE_LABEL = RAW_SEDE_LABEL.trim() || "La Sede";
