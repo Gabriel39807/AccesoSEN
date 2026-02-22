@@ -3,7 +3,7 @@ import secrets
 
 from rest_framework import serializers
 from accesos.domain.services.email_domain_service import EmailDomainService
-from .models import Sede, Usuario, Acceso, Equipo, Turno
+from .models import ConfiguracionSistema, Sede, Usuario, Acceso, Equipo, Turno
 from .models import Notificacion
 
 
@@ -74,6 +74,22 @@ class SedeSerializer(serializers.ModelSerializer):
         model = Sede
         fields = ["id", "code", "name", "is_active", "metadata", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+
+class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConfiguracionSistema
+        fields = [
+            "nombre_institucion",
+            "color_aprendiz_light",
+            "color_aprendiz_dark",
+            "color_admin_light",
+            "color_admin_dark",
+            "color_guarda_light",
+            "color_guarda_dark",
+            "updated_at",
+        ]
+        read_only_fields = ["updated_at"]
 
 
 class UsuarioSerializer(serializers.ModelSerializer):

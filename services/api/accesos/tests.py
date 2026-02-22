@@ -19,6 +19,7 @@ from .models import (
     Acceso,
     AprendizImportAudit,
     AllowedEmailDomain,
+    ConfiguracionSistema,
     EmailChangeOTP,
     Equipo,
     PasswordResetOTP,
@@ -96,6 +97,53 @@ class HealthEndpointsTests(BaseApiTest):
         body = r.json()
         self.assertIn(r.status_code, [status.HTTP_200_OK, status.HTTP_503_SERVICE_UNAVAILABLE], body)
         self.assertIn("checks", body)
+
+
+class ConfiguracionSistemaEndpointTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superuser = self.create_user(
+            username="cfg_super",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="cfg.super@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+        self.admin_sede = self.create_user(
+            username="cfg_admin",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="cfg.admin@sadi.test",
+            is_staff=True,
+            is_superuser=False,
+            sede_principal="sede-1",
+        )
+
+    def test_public_get_returns_singleton_payload(self):
+        r = self.client.get("/api/configuracion/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertTrue(r.data.get("permitido"))
+        payload = r.data.get("configuracion", {})
+        self.assertEqual(payload.get("nombre_institucion"), "Institución")
+        self.assertIn("color_aprendiz_light", payload)
+
+    def test_put_requires_superuser(self):
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+        denied = self.client.put("/api/configuracion/", {"nombre_institucion": "Institucion X"}, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+
+        self.auth(self.superuser.username, "Passw0rd!", expected_role="admin")
+        ok = self.client.put(
+            "/api/configuracion/",
+            {"nombre_institucion": "Institucion X", "color_admin_light": "#123ABC"},
+            format="json",
+        )
+        self.assertEqual(ok.status_code, status.HTTP_200_OK, ok.data)
+        self.assertEqual(ok.data["configuracion"]["nombre_institucion"], "Institucion X")
+        self.assertEqual(ok.data["configuracion"]["color_admin_light"], "#123ABC")
+        self.assertEqual(ConfiguracionSistema.objects.count(), 1)
 
 
 class LoginAndLockTests(BaseApiTest):

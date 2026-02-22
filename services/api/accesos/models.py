@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
+from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.db.models import Q, F
 from datetime import timedelta
@@ -19,6 +20,52 @@ class Sede(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+
+HEX_COLOR_VALIDATOR = RegexValidator(
+    regex=r"^#[0-9A-Fa-f]{6}$",
+    message="El color debe estar en formato hexadecimal #RRGGBB.",
+)
+
+
+class ConfiguracionSistema(models.Model):
+    """
+    Configuración global de marca blanca para frontend.
+
+    Es un singleton: siempre se guarda con `pk=1`, por lo que solo existe
+    un registro activo para toda la plataforma.
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    nombre_institucion = models.CharField(max_length=120, default="Institución")
+
+    color_aprendiz_light = models.CharField(max_length=7, default="#14B8A6", validators=[HEX_COLOR_VALIDATOR])
+    color_aprendiz_dark = models.CharField(max_length=7, default="#0F766E", validators=[HEX_COLOR_VALIDATOR])
+
+    color_admin_light = models.CharField(max_length=7, default="#3B82F6", validators=[HEX_COLOR_VALIDATOR])
+    color_admin_dark = models.CharField(max_length=7, default="#1E3A8A", validators=[HEX_COLOR_VALIDATOR])
+
+    color_guarda_light = models.CharField(max_length=7, default="#F59E0B", validators=[HEX_COLOR_VALIDATOR])
+    color_guarda_dark = models.CharField(max_length=7, default="#B45309", validators=[HEX_COLOR_VALIDATOR])
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuración del sistema"
+        verbose_name_plural = "Configuración del sistema"
+
+    @classmethod
+    def get_solo(cls) -> "ConfiguracionSistema":
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        # Fuerza singleton por clave primaria fija.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Configuración: {self.nombre_institucion}"
 
 
 class Role(models.Model):

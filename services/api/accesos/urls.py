@@ -16,6 +16,7 @@ from accesos.api.viewsets.auth import (
     AprendizMiQRView,
     AprendizPerfilView,
     ChangeInitialPasswordView,
+    ConfiguracionSistemaView,
     GuardiaEstadoActualView,
     HealthCheckView,
     MeView,
@@ -39,6 +40,7 @@ router.register(r"notificaciones", NotificacionViewSet, basename="notificaciones
 
 urlpatterns = [
     path("health/", HealthCheckView.as_view(), name="api-health"),
+    path("configuracion/", ConfiguracionSistemaView.as_view(), name="configuracion-sistema"),
     path("auth/login/", SadiTokenObtainPairView.as_view(), name="auth-login"),
     path("auth/refresh/", SadiTokenRefreshView.as_view(), name="auth-refresh"),
     path("auth/logout/", SadiLogoutView.as_view(), name="auth-logout"),

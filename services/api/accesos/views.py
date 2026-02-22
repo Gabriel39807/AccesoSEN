@@ -46,6 +46,7 @@ from .import_services import (
 from .jwt_views import issue_tokens_for_user
 from .models import (
     Acceso,
+    ConfiguracionSistema,
     EmailChangeOTP,
     Equipo,
     Notificacion,
@@ -76,6 +77,7 @@ from .serializers import (
     AprendizPerfilSerializer,
     AprendizPerfilUpdateSerializer,
     ChangeInitialPasswordSerializer,
+    ConfiguracionSistemaSerializer,
     EquipoRevisionSerializer,
     EquipoSerializer,
     ImportAprendicesConfirmSerializer,
@@ -95,7 +97,6 @@ from .serializers import (
     UsuarioSerializer,
     ValidarDocumentoSerializer,
 )
-from core.institution_settings import DEFAULT_SEDES_PROFILE
 
 PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
 PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
@@ -110,17 +111,8 @@ GENERIC_SEDES = [
     {"code": "sede-4", "name": "Sede 4"},
 ]
 
-SENA_SEDES = [
-    {"code": "cegafe", "name": "CEGAFE"},
-    {"code": "santa-clara", "name": "SANTA CLARA"},
-    {"code": "itedris", "name": "ITEDRIS"},
-    {"code": "gastronomia", "name": "GASTRONOMIA"},
-]
-
 
 def _default_sede_rows():
-    if str(DEFAULT_SEDES_PROFILE or "").strip().lower() == "sena":
-        return SENA_SEDES
     return GENERIC_SEDES
 
 
@@ -462,6 +454,45 @@ class HealthCheckView(APIView):
             )
 
         return ok_response({"status": "ok", "database": "ok", "service": "accesos"})
+
+
+class ConfiguracionSistemaView(APIView):
+    """Configuración global de marca blanca para frontend.
+
+    GET:
+        Público. Entrega nombre institucional y paleta por rol.
+    PUT:
+        Solo superusuario. Permite actualizar branding global.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        cfg = ConfiguracionSistema.get_solo()
+        payload = ConfiguracionSistemaSerializer(cfg).data
+        return ok_response({"configuracion": payload})
+
+    def put(self, request):
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return error_response(
+                code=ErrorCode.NOT_AUTHENTICATED,
+                message="Debes iniciar sesion para modificar la configuracion.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not bool(getattr(user, "is_superuser", False)):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo un superusuario puede actualizar la configuracion global.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        cfg = ConfiguracionSistema.get_solo()
+        serializer = ConfiguracionSistemaSerializer(cfg, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return ok_response({"configuracion": serializer.data, "mensaje": "Configuracion actualizada correctamente."})
 
 
 def _role_display_name(code: str) -> str:

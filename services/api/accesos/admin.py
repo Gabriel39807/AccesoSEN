@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Acceso,
     AllowedEmailDomain,
+    ConfiguracionSistema,
     EmailChangeOTP,
     Equipo,
     PasswordResetOTP,
@@ -24,6 +25,23 @@ class SedeAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "is_active", "created_at")
     list_filter = ("is_active",)
     search_fields = ("code", "name")
+
+
+@admin.register(ConfiguracionSistema)
+class ConfiguracionSistemaAdmin(admin.ModelAdmin):
+    list_display = (
+        "nombre_institucion",
+        "color_aprendiz_light",
+        "color_admin_light",
+        "color_guarda_light",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        # Singleton: si ya existe, no se puede agregar otro registro.
+        if ConfiguracionSistema.objects.exists():
+            return False
+        return super().has_add_permission(request)
 
 
 @admin.register(SedePolicy)
