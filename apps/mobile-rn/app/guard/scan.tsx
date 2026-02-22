@@ -1,3 +1,11 @@
+/**
+ * Scanner de guarda para QR/codigo de barras.
+ *
+ * Responsabilidad:
+ * - Leer codigo de documento.
+ * - Bloquear lecturas concurrentes mientras se procesa una validacion.
+ * - Permitir reinicio manual seguro con "Leer otro QR".
+ */
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { router } from "expo-router";
@@ -23,6 +31,10 @@ export default function ScanScreen() {
 
   const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
 
+  /**
+   * Valida documento en backend y navega a pantalla de confirmacion.
+   * Mientras se procesa se mantiene loading=true para evitar dobles envios.
+   */
   async function validar(doc: string) {
     const clean = doc.trim();
     if (!clean) {
@@ -57,6 +69,9 @@ export default function ScanScreen() {
     }
   }
 
+  /**
+   * Reinicia estado de scanner para una nueva lectura manual.
+   */
   function reiniciarLectura() {
     setScanned(false);
     setIsProcessing(false);

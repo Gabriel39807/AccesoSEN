@@ -1,3 +1,10 @@
+"""API routing for the `accesos` app.
+
+Responsibility:
+- Wire auth and business resource endpoints.
+- Expose DRF routers and utility routes like healthcheck.
+"""
+
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
@@ -10,6 +17,7 @@ from accesos.api.viewsets.auth import (
     AprendizPerfilView,
     ChangeInitialPasswordView,
     GuardiaEstadoActualView,
+    HealthCheckView,
     MeView,
     PasskeyAuthOptionsView,
     PasskeyAuthVerifyView,
@@ -30,6 +38,7 @@ router.register(r"turnos", TurnoViewSet, basename="turnos")
 router.register(r"notificaciones", NotificacionViewSet, basename="notificaciones")
 
 urlpatterns = [
+    path("health/", HealthCheckView.as_view(), name="api-health"),
     path("auth/login/", SadiTokenObtainPairView.as_view(), name="auth-login"),
     path("auth/refresh/", SadiTokenRefreshView.as_view(), name="auth-refresh"),
     path("auth/logout/", SadiLogoutView.as_view(), name="auth-logout"),

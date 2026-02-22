@@ -10,6 +10,9 @@ Thumbs.db
 
 # Env / secrets
 .env
+.env.local
+.env.development
+.env.production
 .env.*
 !.env.example
 !.env.*.example
@@ -65,5 +68,4 @@ apps/mobile-rn/.expo-shared/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
 

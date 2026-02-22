@@ -1,0 +1,14 @@
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+.env.*
+!.env.example
+
+# Local virtualenvs
+venv/
+.venv/
+
+# Local sqlite db
+db.sqlite3

@@ -1,3 +1,10 @@
+/**
+ * Pantalla web para registrar un nuevo equipo de aprendiz.
+ *
+ * Responsabilidad:
+ * - Validar datos minimos del equipo.
+ * - Mostrar estado de guardado y errores de negocio amigables.
+ */
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -21,6 +28,10 @@ export default function AprendizNuevoEquipoPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTipo, setMsgTipo] = useState<"ok" | "err" | null>(null);
 
+  /**
+   * Envia el formulario de registro de equipo.
+   * Mantiene `saving` activo para reflejar estado de carga en el boton.
+   */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);

@@ -1,3 +1,10 @@
+"""Business HTTP views for auth, users, shifts and access records.
+
+Responsibility:
+- Expose DRF endpoints for critical S.A.D.I flows.
+- Apply business rules and UI-friendly responses.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -11,6 +18,7 @@ from uuid import uuid4
 import qrcode
 from django.conf import settings
 from django.core.cache import cache
+from django.db import connection
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
@@ -429,6 +437,31 @@ def _find_user_for_password_reset(email: str = "") -> Usuario | None:
     if not email:
         return None
     return Usuario.objects.filter(email__iexact=email).first()
+
+
+class HealthCheckView(APIView):
+    """Healthcheck API for uptime monitoring.
+
+    Runs a minimal database query (`SELECT 1`) to validate readiness.
+    Intended for load balancers and monitoring probes.
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        """Return service/database status."""
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        except Exception:
+            return error_response(
+                code=ErrorCode.SERVER_ERROR,
+                message="Healthcheck fallido: base de datos no disponible.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return ok_response({"status": "ok", "database": "ok", "service": "accesos"})
 
 
 def _role_display_name(code: str) -> str:

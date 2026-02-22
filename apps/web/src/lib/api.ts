@@ -1,3 +1,12 @@
+/**
+ * Cliente HTTP central de la app web.
+ *
+ * Responsabilidad:
+ * - Manejar autenticacion con access/refresh token.
+ * - Normalizar respuestas del backend con Zod para evitar errores de render.
+ * - Exponer DTOs tipados via `z.infer` como contrato de datos.
+ */
+
 import axios, { AxiosHeaders } from "axios";
 import { z } from "zod";
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./auth";
@@ -14,7 +23,10 @@ const nullableText = z.union([z.string(), z.null(), z.undefined()]).transform((v
   return text.length ? text : null;
 });
 
-const usuarioSchema = z
+/**
+ * Schema de Usuario basado en `UsuarioSerializer` de Django.
+ */
+export const usuarioSchema = z
   .object({
     id: z.number(),
     username: z.string(),
@@ -34,7 +46,33 @@ const usuarioSchema = z
   })
   .passthrough();
 
-const equipoSchema = z
+/**
+ * Schema de perfil de aprendiz basado en `AprendizPerfilSerializer`.
+ */
+export const aprendizPerfilSchema = z
+  .object({
+    id: z.number(),
+    username: z.string(),
+    email: nullableText,
+    first_name: z.string().default(""),
+    last_name: z.string().default(""),
+    documento: nullableText,
+    rol: z.string(),
+    estado: z.string(),
+    sede_principal: nullableText,
+    jornada: nullableText,
+    programa_formacion: nullableText,
+    telefono: nullableText,
+    must_change_password: z.boolean().default(false),
+    force_password_reset: z.boolean().default(false),
+    pending_email_change: nullableText.optional().default(null),
+  })
+  .passthrough();
+
+/**
+ * Schema de Equipo basado en `EquipoSerializer`.
+ */
+export const equipoSchema = z
   .object({
     id: z.number(),
     serial: z.string(),
@@ -55,10 +93,41 @@ const equipoSchema = z
   })
   .passthrough();
 
+/**
+ * Schema de Acceso basado en `AccesoSerializer`.
+ */
+export const accesoSchema = z
+  .object({
+    id: z.number(),
+    usuario: z.number(),
+    fecha: z.string(),
+    tipo: z.string(),
+    sede: nullableText,
+    sede_name: nullableText,
+    registrado_por: z.union([z.number(), z.null(), z.undefined()]).transform((value) => {
+      if (value === null || value === undefined) return null;
+      return Number(value);
+    }),
+    turno: z.union([z.number(), z.null(), z.undefined()]).transform((value) => {
+      if (value === null || value === undefined) return null;
+      return Number(value);
+    }),
+    equipos: z.array(z.number()).optional().default([]),
+  })
+  .passthrough();
+
+export type UsuarioDto = z.infer<typeof usuarioSchema>;
+export type AprendizPerfilDto = z.infer<typeof aprendizPerfilSchema>;
+export type EquipoDto = z.infer<typeof equipoSchema>;
+export type AccesoDto = z.infer<typeof accesoSchema>;
+
 function isPaginatedPayload(value: unknown): value is { results: unknown[] } {
   return Boolean(value && typeof value === "object" && Array.isArray((value as { results?: unknown[] }).results));
 }
 
+/**
+ * Parsea payloads de entidades aisladas, listas o paginados.
+ */
 function parseEntityPayload<T>(schema: z.ZodType<T>, data: unknown): unknown {
   if (Array.isArray(data)) {
     const parsed = z.array(schema).safeParse(data);
@@ -69,8 +138,8 @@ function parseEntityPayload<T>(schema: z.ZodType<T>, data: unknown): unknown {
     const paginatedSchema = z
       .object({
         count: z.number().optional(),
-        next: z.any().nullable().optional(),
-        previous: z.any().nullable().optional(),
+        next: z.unknown().nullable().optional(),
+        previous: z.unknown().nullable().optional(),
         results: z.array(schema),
       })
       .passthrough();
@@ -86,6 +155,16 @@ function parseEntityPayload<T>(schema: z.ZodType<T>, data: unknown): unknown {
   return data;
 }
 
+/**
+ * Parsea respuestas con forma `{ perfil: ... }` del módulo aprendiz.
+ */
+function parseAprendizPerfilPayload(data: unknown): unknown {
+  if (!data || typeof data !== "object") return data;
+  const wrapperSchema = z.object({ perfil: aprendizPerfilSchema }).passthrough();
+  const parsed = wrapperSchema.safeParse(data);
+  return parsed.success ? parsed.data : data;
+}
+
 function extractPath(url: unknown): string {
   const raw = String(url || "");
   if (!raw) return "";
@@ -98,6 +177,9 @@ function extractPath(url: unknown): string {
   }
 }
 
+/**
+ * Normaliza respuestas GET por recurso para evitar crashes por nulos/campos opcionales.
+ */
 function normalizeResponseData(url: unknown, data: unknown): unknown {
   const path = extractPath(url);
   if (!path) return data;
@@ -106,8 +188,16 @@ function normalizeResponseData(url: unknown, data: unknown): unknown {
     return parseEntityPayload(usuarioSchema, data);
   }
 
+  if (path.startsWith("/api/aprendiz/perfil/")) {
+    return parseAprendizPerfilPayload(data);
+  }
+
   if (path.startsWith("/api/equipos/")) {
     return parseEntityPayload(equipoSchema, data);
+  }
+
+  if (path.startsWith("/api/accesos/")) {
+    return parseEntityPayload(accesoSchema, data);
   }
 
   return data;
@@ -115,6 +205,9 @@ function normalizeResponseData(url: unknown, data: unknown): unknown {
 
 let refreshing: Promise<string | null> | null = null;
 
+/**
+ * Intenta renovar el access token usando refresh token almacenado.
+ */
 async function refreshAccessToken(): Promise<string | null> {
   if (!refreshing) {
     refreshing = (async () => {
@@ -161,7 +254,7 @@ api.interceptors.response.use(
           return api.request(original);
         }
       } catch {
-        // handled below
+        // Se delega al manejo global de error.
       }
     }
 

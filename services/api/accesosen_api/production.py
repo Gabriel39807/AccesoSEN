@@ -1,3 +1,10 @@
+"""Production-only hardening settings.
+
+Responsibility:
+- Enable hardening controls for real deployments.
+- Validate critical prerequisites (secret key and hosts).
+"""
+
 from __future__ import annotations
 
 import os
@@ -8,7 +15,7 @@ from .base import *  # noqa: F401,F403
 
 DEBUG = False
 
-if not SECRET_KEY or SECRET_KEY == "django-insecure-change-me":
+if not SECRET_KEY:
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be configured in production.")
 
 if not ALLOWED_HOSTS:

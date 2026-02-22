@@ -1,3 +1,11 @@
+/**
+ * Login movil para roles aprendiz/guarda.
+ *
+ * Responsabilidad:
+ * - Validar credenciales y sede/turno para guardas.
+ * - Exponer acceso con biometria cuando existe sesion persistida.
+ * - Mantener feedback visual de carga/error durante todo el flujo.
+ */
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
@@ -37,10 +45,16 @@ export default function LoginScreen() {
 
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
 
+  /**
+   * Sanitiza documento para permitir solo digitos (maximo 10).
+   */
   function onUsernameChange(value: string) {
     setUsername(sanitizeDigits(value).slice(0, 10));
   }
 
+  /**
+   * Limita longitud de contrasena en UI para evitar envios invalidos.
+   */
   function onPasswordChange(value: string) {
     setPassword(value.slice(0, 20));
   }
@@ -108,6 +122,10 @@ export default function LoginScreen() {
     };
   }, []);
 
+  /**
+   * Flujo de autenticacion por password.
+   * Muestra estado de carga y bloquea botones para evitar doble submit.
+   */
   async function onSubmit() {
     setError(null);
     if (bloqueado) return;
@@ -152,6 +170,11 @@ export default function LoginScreen() {
     }
   }
 
+  /**
+   * Flujo de autenticacion biometrica:
+   * - valida huella/face id local
+   * - refresca sesion con token seguro
+   */
   async function onBiometricSubmit() {
     setError(null);
     if (bloqueado) return;

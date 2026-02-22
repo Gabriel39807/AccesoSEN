@@ -1,12 +1,23 @@
+"""Base settings for S.A.D.I backend.
+
+Responsibility:
+- Define shared configuration between development/production.
+- Load environment variables securely.
+- Keep non-sensitive defaults and require secrets by environment.
+"""
+
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+CURRENT_DJANGO_ENV = os.getenv("DJANGO_ENV", "development").strip().lower()
 
 # Load local .env first when present.
 load_dotenv(BASE_DIR / ".env")
@@ -14,6 +25,15 @@ load_dotenv()
 
 
 def env_bool(name: str, default: bool = False) -> bool:
+    """Read a boolean environment variable.
+
+    Args:
+        name: Environment variable name.
+        default: Default value when variable is missing.
+
+    Returns:
+        bool: Parsed boolean value.
+    """
     raw = os.getenv(name)
     if raw is None:
         return default
@@ -21,16 +41,42 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 def env_list(name: str, default: list[str] | None = None) -> list[str]:
+    """Read a comma-separated environment variable as list."""
     raw = os.getenv(name, "")
     if not raw:
         return default or []
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-change-me-please-use-a-strong-secret-key-32chars",
-)
+def env_required(name: str, *, allow_generated_for_dev: bool = False) -> str:
+    """Read a required environment variable.
+
+    Args:
+        name: Required variable name.
+        allow_generated_for_dev: If True, generate an ephemeral value on
+            non-production environments to keep local checks running.
+
+    Returns:
+        str: Non-empty environment value.
+
+    Raises:
+        ImproperlyConfigured: If value is missing/empty and cannot be generated.
+    """
+    value = os.getenv(name)
+    if value is None:
+        if allow_generated_for_dev and CURRENT_DJANGO_ENV != "production":
+            # Ephemeral key for non-production environments.
+            return secrets.token_urlsafe(64)
+        raise ImproperlyConfigured(f"Missing required environment variable: {name}")
+    clean = value.strip()
+    if not clean:
+        if allow_generated_for_dev and CURRENT_DJANGO_ENV != "production":
+            return secrets.token_urlsafe(64)
+        raise ImproperlyConfigured(f"Environment variable cannot be empty: {name}")
+    return clean
+
+
+SECRET_KEY = env_required("DJANGO_SECRET_KEY", allow_generated_for_dev=True)
 DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
@@ -82,16 +128,17 @@ ASGI_APPLICATION = "accesosen_api.asgi.application"
 
 
 # Database
+# Para PostgreSQL se exigen credenciales por entorno (sin hardcodes de secretos).
 DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "django.db.backends.sqlite3")
 if DATABASE_ENGINE == "django.db.backends.postgresql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DATABASE_NAME", "accesosen"),
-            "USER": os.getenv("DATABASE_USER", "postgres"),
-            "PASSWORD": os.getenv("DATABASE_PASSWORD", "postgres"),
-            "HOST": os.getenv("DATABASE_HOST", "127.0.0.1"),
-            "PORT": os.getenv("DATABASE_PORT", "5432"),
+            "NAME": env_required("DATABASE_NAME"),
+            "USER": env_required("DATABASE_USER"),
+            "PASSWORD": env_required("DATABASE_PASSWORD"),
+            "HOST": env_required("DATABASE_HOST"),
+            "PORT": env_required("DATABASE_PORT"),
             "CONN_MAX_AGE": int(os.getenv("DATABASE_CONN_MAX_AGE", "60")),
         }
     }
@@ -138,7 +185,7 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": env_bool("JWT_BLACKLIST_AFTER_ROTATION", True),
     "UPDATE_LAST_LOGIN": env_bool("JWT_UPDATE_LAST_LOGIN", True),
 }
-REFRESH_TOKEN_PEPPER = os.getenv("REFRESH_TOKEN_PEPPER", SECRET_KEY)
+REFRESH_TOKEN_PEPPER = str(os.getenv("REFRESH_TOKEN_PEPPER", "") or SECRET_KEY).strip()
 GUARDA_SINGLE_ACTIVE_SESSION = env_bool("GUARDA_SINGLE_ACTIVE_SESSION", True)
 
 CACHES = {
@@ -175,8 +222,12 @@ CSRF_TRUSTED_ORIGINS = env_list(
 
 DEFAULT_SUPERADMIN_USERNAME = os.getenv("DEFAULT_SUPERADMIN_USERNAME", "superadmin")
 DEFAULT_SUPERADMIN_EMAIL = os.getenv("DEFAULT_SUPERADMIN_EMAIL", "superadmin@sadi.local")
-DEFAULT_SUPERADMIN_PASSWORD = os.getenv("DEFAULT_SUPERADMIN_PASSWORD", "Superadmin123!")
-DEFAULT_SUPERADMIN_AUTO_CREATE = env_bool("DEFAULT_SUPERADMIN_AUTO_CREATE", True)
+DEFAULT_SUPERADMIN_AUTO_CREATE = env_bool("DEFAULT_SUPERADMIN_AUTO_CREATE", False)
+DEFAULT_SUPERADMIN_PASSWORD = os.getenv("DEFAULT_SUPERADMIN_PASSWORD", "").strip()
+if DEFAULT_SUPERADMIN_AUTO_CREATE and not DEFAULT_SUPERADMIN_PASSWORD:
+    raise ImproperlyConfigured(
+        "DEFAULT_SUPERADMIN_PASSWORD is required when DEFAULT_SUPERADMIN_AUTO_CREATE=true."
+    )
 
 WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "localhost")
 WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "SADI")

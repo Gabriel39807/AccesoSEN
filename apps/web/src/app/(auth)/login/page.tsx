@@ -1,3 +1,11 @@
+/**
+ * Login web de S.A.D.I.
+ *
+ * Responsabilidad:
+ * - Autenticar administradores o aprendices.
+ * - Aplicar bloqueo temporal y flujo passkey.
+ * - Mostrar estados de carga/error claros durante toda la autenticacion.
+ */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -42,6 +50,9 @@ function toBase64Url(buffer: ArrayBuffer) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+/**
+ * Pantalla principal de inicio de sesion web.
+ */
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -105,6 +116,9 @@ export default function LoginPage() {
     setPassword(raw.slice(0, 20));
   }
 
+  /**
+   * Valida los datos del formulario antes de enviar al backend.
+   */
   function validateLogin(): string | null {
     const user = username.trim();
     if (!user) return `Ingresa ${role === "admin" ? "tu usuario o correo" : "tu documento"}.`;
@@ -131,6 +145,9 @@ export default function LoginPage() {
     }
   }
 
+  /**
+   * Envia credenciales por password y redirige segun rol permitido.
+   */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const validationError = validateLogin();
@@ -188,6 +205,9 @@ export default function LoginPage() {
     }
   }
 
+  /**
+   * Inicia sesion usando passkey/webAuthn cuando esta soportado.
+   */
   async function onPasskeyLogin() {
     if (!passkeySupported) {
       setError("Tu navegador no soporta Passkeys/WebAuthn.");

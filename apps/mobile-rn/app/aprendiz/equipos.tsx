@@ -1,3 +1,11 @@
+/**
+ * Pantalla movil de equipos del aprendiz.
+ *
+ * Responsabilidad:
+ * - Registrar equipos del aprendiz.
+ * - Mostrar estado de carga al consultar o guardar.
+ * - Informar errores de forma visible sin romper la navegacion.
+ */
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 
@@ -23,6 +31,9 @@ export default function AprendizEquipos() {
   const [marca, setMarca] = useState("");
   const [modelo, setModelo] = useState("");
 
+  /**
+   * Carga el listado de equipos del usuario autenticado.
+   */
   async function cargar() {
     setLoading(true);
     try {
@@ -36,6 +47,10 @@ export default function AprendizEquipos() {
     }
   }
 
+  /**
+   * Crea un equipo y refresca listado.
+   * Usa `saving` para deshabilitar boton mientras la API responde.
+   */
   async function crear() {
     setMsg(null);
     if (!serial.trim() || !marca.trim() || !modelo.trim()) {

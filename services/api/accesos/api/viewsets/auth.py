@@ -1,3 +1,10 @@
+"""Compatibility layer for auth-related views.
+
+Responsibility:
+- Re-export view classes from `accesos.views`.
+- Keep stable imports for routing modules.
+"""
+
 from accesos.views import (
     AprendizEmailChangeConfirmView,
     AprendizEmailChangeRequestView,
@@ -6,6 +13,7 @@ from accesos.views import (
     AprendizPerfilView,
     ChangeInitialPasswordView,
     GuardiaEstadoActualView,
+    HealthCheckView,
     MeView,
     PasskeyAuthOptionsView,
     PasskeyAuthVerifyView,
@@ -24,6 +32,7 @@ __all__ = [
     "AprendizPerfilView",
     "ChangeInitialPasswordView",
     "GuardiaEstadoActualView",
+    "HealthCheckView",
     "MeView",
     "PasskeyAuthOptionsView",
     "PasskeyAuthVerifyView",
@@ -33,4 +42,3 @@ __all__ = [
     "PasswordResetRequestView",
     "PasswordResetVerifyView",
 ]
-
