@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import Q, F
+from datetime import timedelta
 from uuid import uuid4
 
 
@@ -230,6 +231,7 @@ class Turno(models.Model):
     # ✅ más controlable que auto_now_add
     inicio = models.DateTimeField(default=timezone.now)
     fin = models.DateTimeField(null=True, blank=True)
+    cierre_observacion = models.CharField(max_length=255, blank=True, default="")
 
     activo = models.BooleanField(default=True)
 
@@ -245,7 +247,12 @@ class Turno(models.Model):
             ),
         ]
 
-        
+    @property
+    def is_expired(self) -> bool:
+        if self.fin is not None or self.inicio is None:
+            return False
+        return timezone.now() - self.inicio > timedelta(hours=12)
+
     def __str__(self):
         sede_label = self.sede.name if self.sede_id else "Sin sede"
         return f"Turno {self.guarda.username} - {sede_label} - {self.jornada} ({'activo' if self.activo else 'finalizado'})"

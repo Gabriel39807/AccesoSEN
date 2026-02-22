@@ -14,8 +14,10 @@ from rest_framework.test import APITestCase
 
 from accesos.domain.services.qr_service import QRParseError, QRService
 from .exceptions import ui_exception_handler
+from .import_services import ImportServiceError, execute_aprendices_import
 from .models import (
     Acceso,
+    AprendizImportAudit,
     AllowedEmailDomain,
     EmailChangeOTP,
     Equipo,
@@ -1429,3 +1431,85 @@ class SedeBootstrapTests(BaseApiTest):
         self.assertGreaterEqual(len(rows), 4)
         codes = {item.get("code") for item in rows}
         self.assertTrue({"sede-1", "sede-2", "sede-3", "sede-4"}.issubset(codes))
+
+
+class ImportAtomicityTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.admin = self.create_user(
+            username="import_admin",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="import.admin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+
+    def test_execute_aprendices_import_rolls_back_on_single_row_error(self):
+        rows = [
+            {
+                "first_name": "Ana",
+                "last_name": "Import",
+                "documento": "6666666666",
+                "telefono": "3001234567",
+                "email": "ana.import@sadi.test",
+                "jornada": "TARDE",
+                "programa_formacion": "Analisis",
+                "sede_principal": "sede-1",
+            },
+            {
+                "first_name": "Luis",
+                "last_name": "Fallido",
+                "documento": "7777777777",
+                "telefono": "3011234567",
+                "email": "luis.fallido@sadi.test",
+                "jornada": "NOCHE",
+                "programa_formacion": "Desarrollo",
+                "sede_principal": "sede-invalida",
+            },
+        ]
+
+        with self.assertRaises(ImportServiceError):
+            execute_aprendices_import(rows=rows, imported_by=self.admin, errors=[])
+
+        self.assertFalse(self.User.objects.filter(documento="6666666666").exists())
+        self.assertFalse(self.User.objects.filter(documento="7777777777").exists())
+        self.assertEqual(AprendizImportAudit.objects.count(), 0)
+
+
+class TurnoExpirationRulesTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.guarda = self.create_user(
+            username="5151515151",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="5151515151",
+            email="turno.expira@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def test_iniciar_turno_cierra_turno_expirado_automaticamente(self):
+        expired_turno = Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede("sede-1"),
+            jornada=Turno.Jornada.TARDE,
+            inicio=timezone.now() - timedelta(hours=13),
+            activo=True,
+            fin=None,
+        )
+        self.assertTrue(expired_turno.is_expired)
+
+        self.auth(self.guarda.username, "Passw0rd!", expected_role="guarda")
+        r = self.client.post(
+            "/api/turnos/iniciar/",
+            {"sede": "sede-1", "jornada": Turno.Jornada.TARDE},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+
+        expired_turno.refresh_from_db()
+        self.assertFalse(expired_turno.activo)
+        self.assertIsNotNone(expired_turno.fin)
+        self.assertEqual(expired_turno.cierre_observacion, "Cierre por tiempo limite alcanzado")

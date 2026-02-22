@@ -11,7 +11,6 @@ from uuid import uuid4
 import qrcode
 from django.conf import settings
 from django.core.cache import cache
-from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
@@ -29,11 +28,16 @@ from .domain.services.email_domain_service import EmailDomainService
 from .domain.services.policy_service import PolicyService
 from .domain.services.qr_service import QRParseError, QRService
 from .error_codes import ErrorCode
-from .import_services import cache_import_payload, get_cached_import_payload, validate_excel
+from .import_services import (
+    ImportServiceError,
+    cache_import_payload,
+    execute_aprendices_import,
+    get_cached_import_payload,
+    validate_excel,
+)
 from .jwt_views import issue_tokens_for_user
 from .models import (
     Acceso,
-    AprendizImportAudit,
     EmailChangeOTP,
     Equipo,
     Notificacion,
@@ -89,6 +93,7 @@ PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
 PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
 MAX_ADMINS_PER_SEDE = 4
 FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
+TURNO_AUTO_CLOSE_OBSERVATION = "Cierre por tiempo limite alcanzado"
 
 GENERIC_SEDES = [
     {"code": "sede-1", "name": "Sede 1"},
@@ -379,11 +384,24 @@ def _uniform_response_delay(start_ts: float, min_ms: int = 220):
 
 def obtener_turno_activo(user):
     qs = Turno.objects.filter(guarda=user, activo=True).order_by("-inicio")
-    for t in qs[:5]:
-        if t.fin is None:
-            return t
-        t.activo = False
-        t.save(update_fields=["activo"])
+    now = timezone.now()
+    for t in qs[:10]:
+        if t.fin is not None:
+            t.activo = False
+            t.save(update_fields=["activo"])
+            continue
+
+        if t.is_expired:
+            t.activo = False
+            t.fin = _safe_fin(now, t.inicio)
+            if not (t.cierre_observacion or "").strip():
+                t.cierre_observacion = TURNO_AUTO_CLOSE_OBSERVATION
+                t.save(update_fields=["activo", "fin", "cierre_observacion"])
+            else:
+                t.save(update_fields=["activo", "fin"])
+            continue
+
+        return t
     return None
 
 
@@ -391,15 +409,6 @@ def _safe_fin(now, inicio):
     if inicio and now < inicio:
         return inicio
     return now
-
-
-def _initial_password_from_documento(documento: str, digits: int = 6) -> str:
-    doc = (documento or "").strip()
-    if len(doc) >= digits:
-        return doc[-digits:]
-    if len(doc) >= 4:
-        return doc[-4:]
-    return f"Sadi!{secrets.token_urlsafe(8)[:10]}"
 
 
 def _build_aprendiz_qr_value(user: Usuario) -> tuple[str, str]:
@@ -1212,8 +1221,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
         rows = payload.get("rows", [])
         errors = payload.get("errors", [])
-        created_count = 0
-        updated_count = 0
         if is_admin_sede(request.user):
             actor_sede = _scope_sede(request.user)
             if not actor_sede:
@@ -1231,77 +1238,26 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                     detail={"rows": invalid_rows[:20]},
                 )
 
-        with transaction.atomic():
-            sedes_by_code = {
-                s.code: s
-                for s in Sede.objects.filter(code__in=[str(r.get("sede_principal", "")).strip() for r in rows])
-            }
-            for row in rows:
-                sede_obj = sedes_by_code.get(str(row.get("sede_principal", "")).strip())
-                if not sede_obj:
-                    return error_response(
-                        code=ErrorCode.VALIDATION_ERROR,
-                        message="Una o mas filas del archivo tienen sede invalida.",
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        field="sede_principal",
-                    )
-                user = Usuario.objects.filter(documento=row["documento"]).first()
-                if user:
-                    user.first_name = row["first_name"]
-                    user.last_name = row["last_name"]
-                    user.email = row["email"]
-                    user.telefono = row["telefono"]
-                    user.sede_principal = sede_obj
-                    user.jornada = row["jornada"]
-                    user.programa_formacion = row["programa_formacion"]
-                    user.rol = Usuario.Rol.APRENDIZ
-                    user.save(
-                        update_fields=[
-                            "first_name",
-                            "last_name",
-                            "email",
-                            "telefono",
-                            "sede_principal",
-                            "jornada",
-                            "programa_formacion",
-                            "rol",
-                        ]
-                    )
-                    _sync_primary_membership_for_user(user)
-                    updated_count += 1
-                else:
-                    created = Usuario.objects.create(
-                        username=row["documento"],
-                        first_name=row["first_name"],
-                        last_name=row["last_name"],
-                        email=row["email"],
-                        telefono=row["telefono"],
-                        documento=row["documento"],
-                        sede_principal=sede_obj,
-                        jornada=row["jornada"],
-                        programa_formacion=row["programa_formacion"],
-                        rol=Usuario.Rol.APRENDIZ,
-                        estado=Usuario.Estado.ACTIVO,
-                        must_change_password=True,
-                    )
-                    created.set_password(_initial_password_from_documento(row["documento"], digits=6))
-                    created.save(update_fields=["password"])
-                    _sync_primary_membership_for_user(created)
-                    created_count += 1
-
-            AprendizImportAudit.objects.create(
+        try:
+            result = execute_aprendices_import(
+                rows=rows,
                 imported_by=request.user,
-                total_rows=len(rows) + len(errors),
-                created_count=created_count,
-                updated_count=updated_count,
-                errors_count=len(errors),
+                errors=errors,
+            )
+        except ImportServiceError as exc:
+            return error_response(
+                code=exc.code,
+                message=exc.message,
+                status_code=exc.status_code,
+                detail=exc.detail,
+                field=exc.field,
             )
 
         return ok_response(
             {
-                "created": created_count,
-                "updated": updated_count,
-                "errors": len(errors),
+                "created": result.created_count,
+                "updated": result.updated_count,
+                "errors": result.errors_count,
             }
         )
 

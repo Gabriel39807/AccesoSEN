@@ -310,11 +310,12 @@ class EquipoRevisionSerializer(serializers.Serializer):
 class TurnoSerializer(serializers.ModelSerializer):
     sede = serializers.SlugRelatedField(slug_field="code", queryset=Sede.objects.filter(is_active=True))
     sede_name = serializers.CharField(source="sede.name", read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Turno
-        fields = ["id", "guarda", "sede", "sede_name", "jornada", "inicio", "fin", "activo"]
-        read_only_fields = ["guarda", "inicio", "fin", "activo"]
+        fields = ["id", "guarda", "sede", "sede_name", "jornada", "inicio", "fin", "activo", "cierre_observacion", "is_expired"]
+        read_only_fields = ["guarda", "inicio", "fin", "activo", "cierre_observacion", "is_expired"]
 
 
 class TurnoIniciarSerializer(serializers.Serializer):

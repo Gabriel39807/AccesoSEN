@@ -6,10 +6,13 @@ from dataclasses import dataclass
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
+from django.db import transaction
 from openpyxl import load_workbook
+from rest_framework import status
 
 from accesos.domain.services.email_domain_service import EmailDomainService
-from .models import Sede
+from .error_codes import ErrorCode
+from .models import AprendizImportAudit, Role, Sede, UserMembership, Usuario
 
 EXPECTED_COLUMNS = [
     "Nombres",
@@ -41,6 +44,32 @@ JORNADA_ALIASES = {
 class ImportValidationResult:
     rows: list[dict]
     errors: list[dict]
+
+
+@dataclass
+class ImportExecutionResult:
+    created_count: int
+    updated_count: int
+    errors_count: int
+    total_rows: int
+
+
+class ImportServiceError(Exception):
+    def __init__(
+        self,
+        *,
+        code: str,
+        message: str,
+        status_code: int = status.HTTP_400_BAD_REQUEST,
+        detail: dict | None = None,
+        field: str | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+        self.detail = detail
+        self.field = field
 
 
 def _normalize_cell(value) -> str:
@@ -77,6 +106,46 @@ def _build_sede_lookup() -> dict[str, str]:
 def _normalize_jornada(value: str) -> str:
     raw = _normalize_cell(value).upper()
     return JORNADA_ALIASES.get(raw, raw)
+
+
+def _role_display_name(code: str) -> str:
+    names = {
+        Usuario.Rol.SUPERADMIN: "Superadmin",
+        Usuario.Rol.ADMIN_SEDE: "Admin de sede",
+        Usuario.Rol.GUARDA: "Guarda",
+        Usuario.Rol.APRENDIZ: "Aprendiz",
+    }
+    return names.get(code, code)
+
+
+def _sync_primary_membership_for_user(user: Usuario):
+    role_code = str(getattr(user, "rol", "") or "").strip()
+    if not role_code:
+        return
+
+    role_obj, _ = Role.objects.get_or_create(
+        code=role_code,
+        defaults={"name": _role_display_name(role_code), "is_system": True},
+    )
+    target_sede = None if role_code == Usuario.Rol.SUPERADMIN else getattr(user, "sede_principal", None)
+
+    UserMembership.objects.filter(user=user, is_primary=True).update(is_primary=False)
+    membership, created = UserMembership.objects.get_or_create(
+        user=user,
+        role=role_obj,
+        sede=target_sede,
+        defaults={"is_primary": True, "is_active": True, "can_switch_sede": False},
+    )
+    if not created:
+        updates: list[str] = []
+        if not membership.is_primary:
+            membership.is_primary = True
+            updates.append("is_primary")
+        if not membership.is_active:
+            membership.is_active = True
+            updates.append("is_active")
+        if updates:
+            membership.save(update_fields=updates)
 
 
 def validate_excel(content) -> ImportValidationResult:
@@ -227,3 +296,101 @@ def cache_import_payload(import_id: str, user_id: int, rows: list[dict], errors:
 
 def get_cached_import_payload(import_id: str):
     return cache.get(f"sadi:import:{import_id}")
+
+
+def execute_aprendices_import(
+    *,
+    rows: list[dict],
+    imported_by: Usuario,
+    errors: list[dict] | None = None,
+) -> ImportExecutionResult:
+    created_count = 0
+    updated_count = 0
+    errors = errors or []
+
+    try:
+        with transaction.atomic():
+            sedes_by_code = {
+                s.code: s for s in Sede.objects.filter(code__in=[str(r.get("sede_principal", "")).strip() for r in rows])
+            }
+
+            for idx, row in enumerate(rows, start=2):
+                sede_code = str(row.get("sede_principal", "")).strip()
+                sede_obj = sedes_by_code.get(sede_code)
+                if not sede_obj:
+                    raise ImportServiceError(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message="Una o mas filas del archivo tienen sede invalida.",
+                        field="sede_principal",
+                        detail={"row": idx, "sede_principal": sede_code},
+                    )
+
+                user = Usuario.objects.filter(documento=row["documento"]).first()
+                if user:
+                    user.first_name = row["first_name"]
+                    user.last_name = row["last_name"]
+                    user.email = row["email"]
+                    user.telefono = row["telefono"]
+                    user.sede_principal = sede_obj
+                    user.jornada = row["jornada"]
+                    user.programa_formacion = row["programa_formacion"]
+                    user.rol = Usuario.Rol.APRENDIZ
+                    user.save(
+                        update_fields=[
+                            "first_name",
+                            "last_name",
+                            "email",
+                            "telefono",
+                            "sede_principal",
+                            "jornada",
+                            "programa_formacion",
+                            "rol",
+                        ]
+                    )
+                    _sync_primary_membership_for_user(user)
+                    updated_count += 1
+                else:
+                    created = Usuario.objects.create(
+                        username=row["documento"],
+                        first_name=row["first_name"],
+                        last_name=row["last_name"],
+                        email=row["email"],
+                        telefono=row["telefono"],
+                        documento=row["documento"],
+                        sede_principal=sede_obj,
+                        jornada=row["jornada"],
+                        programa_formacion=row["programa_formacion"],
+                        rol=Usuario.Rol.APRENDIZ,
+                        estado=Usuario.Estado.ACTIVO,
+                        must_change_password=True,
+                    )
+                    doc = str(row["documento"] or "").strip()
+                    initial_password = doc[-6:] if len(doc) >= 6 else doc[-4:] if len(doc) >= 4 else doc
+                    created.set_password(initial_password)
+                    created.save(update_fields=["password"])
+                    _sync_primary_membership_for_user(created)
+                    created_count += 1
+
+            AprendizImportAudit.objects.create(
+                imported_by=imported_by,
+                total_rows=len(rows) + len(errors),
+                created_count=created_count,
+                updated_count=updated_count,
+                errors_count=len(errors),
+            )
+
+        return ImportExecutionResult(
+            created_count=created_count,
+            updated_count=updated_count,
+            errors_count=len(errors),
+            total_rows=len(rows) + len(errors),
+        )
+    except ImportServiceError:
+        raise
+    except Exception as exc:
+        raise ImportServiceError(
+            code=ErrorCode.SERVER_ERROR,
+            message="No se pudo completar la importacion masiva. Intenta nuevamente.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"reason": "unexpected_error"},
+        ) from exc
