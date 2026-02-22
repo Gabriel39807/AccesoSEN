@@ -15,12 +15,13 @@ export default function ScanScreen() {
 
   const [documento, setDocumento] = useState("");
   const [scanned, setScanned] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canScan = useMemo(() => !scanned && !loading, [scanned, loading]);
+  const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
 
   async function validar(doc: string) {
     const clean = doc.trim();
@@ -42,6 +43,7 @@ export default function ScanScreen() {
       Accesos.__cache.set(clean, data);
       router.push({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean } } as any);
     } catch (e: any) {
+      setIsProcessing(false);
       const status = e?.response?.status;
 
       if (status === 404) {
@@ -57,6 +59,7 @@ export default function ScanScreen() {
 
   function reiniciarLectura() {
     setScanned(false);
+    setIsProcessing(false);
     setLoading(false);
     setMsg(null);
     setDocumento("");
@@ -102,6 +105,7 @@ export default function ScanScreen() {
             onBarcodeScanned={(res) => {
               if (!canScan) return;
               setScanned(true);
+              setIsProcessing(true);
               setDocumento((res.data || "").trim());
               setMsg("Codigo detectado. Pulsa Validar o Leer otro QR.");
             }}

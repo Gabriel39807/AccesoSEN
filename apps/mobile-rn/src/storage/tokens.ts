@@ -34,7 +34,10 @@ export async function setAccessToken(access: string | null) {
   if (Platform.OS === "web") {
     if (access) webSet(ACCESS_KEY, access);
     else webDel(ACCESS_KEY);
+    return;
   }
+  if (access) await SecureStore.setItemAsync(ACCESS_KEY, access);
+  else await SecureStore.deleteItemAsync(ACCESS_KEY);
 }
 
 export async function saveTokens(access: string, refresh: string) {
@@ -48,7 +51,10 @@ export async function saveTokens(access: string, refresh: string) {
 
 export async function getAccessToken() {
   if (Platform.OS === "web") return webGet(ACCESS_KEY);
-  return memoryAccessToken;
+  if (memoryAccessToken) return memoryAccessToken;
+  const stored = await SecureStore.getItemAsync(ACCESS_KEY);
+  memoryAccessToken = stored;
+  return stored;
 }
 
 export async function getRefreshToken() {

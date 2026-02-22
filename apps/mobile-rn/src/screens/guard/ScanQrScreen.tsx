@@ -15,12 +15,13 @@ export function ScanQrScreen({ navigation }: Props) {
 
   const [documento, setDocumento] = useState("");
   const [scanned, setScanned] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canScan = useMemo(() => !scanned && !loading, [scanned, loading]);
+  const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
 
   async function validar() {
     const doc = documento.trim();
@@ -41,6 +42,7 @@ export function ScanQrScreen({ navigation }: Props) {
       const data = await Accesos.validarDocumento(doc);
       navigation.navigate("Confirmacion", { status: "ok", documento: doc, data });
     } catch (e: any) {
+      setIsProcessing(false);
       const status = e?.response?.status;
 
       if (status === 404) {
@@ -56,6 +58,7 @@ export function ScanQrScreen({ navigation }: Props) {
 
   function reiniciarLectura() {
     setScanned(false);
+    setIsProcessing(false);
     setLoading(false);
     setMsg(null);
     setDocumento("");
@@ -97,6 +100,7 @@ export function ScanQrScreen({ navigation }: Props) {
           onBarcodeScanned={(res) => {
             if (!canScan) return;
             setScanned(true);
+            setIsProcessing(true);
             setDocumento((res.data || "").trim());
             setMsg("Codigo detectado. Pulsa Digitar para validar o Leer otro QR.");
           }}
