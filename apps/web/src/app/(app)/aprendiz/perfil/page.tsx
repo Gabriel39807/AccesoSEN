@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -218,7 +218,7 @@ export default function AprendizPerfilPage() {
     setMsgTipo(null);
 
     if (!passwordRulesValid) {
-      setMsg("La nueva contraseÃ±a no cumple todos los requisitos.");
+      setMsg("La nueva contrasena no cumple todos los requisitos.");
       setMsgTipo("err");
       return;
     }
@@ -228,7 +228,7 @@ export default function AprendizPerfilPage() {
       await api.patch(`/api/usuarios/${me.id}/`, {
         password: pw,
       });
-      setMsg("ContraseÃ±a actualizada.");
+      setMsg("Contrasena actualizada.");
       setMsgTipo("ok");
       setPwOpen(false);
       setPw("");
@@ -275,7 +275,7 @@ export default function AprendizPerfilPage() {
               onClick={() => setPwOpen(true)}
               className="rounded-full bg-gradient-to-r from-sky-600 to-cyan-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
-              Cambiar contraseÃ±a
+              Cambiar contrasena
             </button>
           </div>
         </div>
@@ -324,7 +324,7 @@ export default function AprendizPerfilPage() {
               <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{perfil?.estado ?? me?.estado ?? "-"}</p>
             </div>
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4 text-sm text-zinc-700">
-              Usa una contraseÃ±a fuerte (minimo 8 caracteres), unica y evita compartirla.
+              Usa una contrasena fuerte (minimo 8 caracteres), unica y evita compartirla.
             </div>
           </div>
         </section>
@@ -457,7 +457,7 @@ export default function AprendizPerfilPage() {
           <div className="w-full max-w-lg rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contraseÃ±a</h3>
+                <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contrasena</h3>
                 <p className="mt-1 text-sm text-zinc-600">Usa una clave fuerte y unica.</p>
               </div>
               <button
@@ -470,11 +470,11 @@ export default function AprendizPerfilPage() {
 
             <div className="mt-5 space-y-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Nueva contraseÃ±a</label>
+                <label className="text-xs font-semibold text-zinc-700">Nueva contrasena</label>
                 <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw} onChange={(e) => setPw(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contraseÃ±a</label>
+                <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contrasena</label>
                 <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw2} onChange={(e) => setPw2(e.target.value)} />
               </div>
               <div className="rounded-2xl border bg-zinc-50 p-4 text-xs text-zinc-600">
@@ -495,7 +495,7 @@ export default function AprendizPerfilPage() {
                 disabled={savingPassword || !passwordRulesValid}
                 className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
               >
-                {savingPassword ? "Guardando..." : "Actualizar contraseÃ±a"}
+                {savingPassword ? "Guardando..." : "Actualizar contrasena"}
               </button>
               <button
                 onClick={() => setPwOpen(false)}

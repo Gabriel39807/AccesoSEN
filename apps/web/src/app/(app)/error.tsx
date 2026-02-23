@@ -17,9 +17,7 @@ export default function AppError({
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
       <div className="w-full max-w-xl rounded-3xl border bg-white p-6 shadow-sm">
-        <div className="text-xs font-semibold tracking-wide text-emerald-700">
-          AccesoSEN
-        </div>
+        <div className="text-xs font-semibold tracking-wide text-emerald-700">SADI</div>
         <h2 className="mt-1 text-xl font-extrabold tracking-tight text-zinc-900">
           Ocurrió un error inesperado
         </h2>

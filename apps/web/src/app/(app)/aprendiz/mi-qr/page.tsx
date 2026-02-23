@@ -1,10 +1,9 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import { api } from "@/lib/api";
-import { toErrorMessage } from "@/lib/errors";
 
 type QrResponse = {
   permitido: boolean;
@@ -13,6 +12,15 @@ type QrResponse = {
   documento: string;
   algoritmo: string;
   qr_png_base64: string;
+};
+
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      message?: string;
+      motivo?: string;
+    };
+  };
 };
 
 function downloadQr(base64: string, doc: string) {
@@ -42,7 +50,8 @@ export default function MiQrPage() {
       setDoc(r.data.documento);
       setPngBase64(r.data.qr_png_base64);
     } catch (e: unknown) {
-      setError(toErrorMessage(e, "No se pudo cargar tu QR."));
+      const err = e as ApiErrorShape;
+      setError(err.response?.data?.message || err.response?.data?.motivo || "No se pudo cargar tu QR.");
     } finally {
       setLoading(false);
       setReloading(false);

@@ -1,10 +1,17 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "@/lib/api";
+
+import FilterBar from "@/components/admin/FilterBar";
+import PageHeader from "@/components/admin/PageHeader";
+import StatCard from "@/components/admin/StatCard";
+import DataTable from "@/components/dashboard/shared/DataTable";
+import EmptyState from "@/components/dashboard/shared/EmptyState";
+import Button from "@/components/dashboard/shared/Button";
+import { IconHistory } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
-import { useSedes } from "@/hooks/useSedes";
+import { api } from "@/lib/api";
 
 type Usuario = {
   id: number;
@@ -20,8 +27,8 @@ type Usuario = {
 type Turno = {
   id: number;
   guarda: number;
-  sede: string;
-  jornada: "MAÃ‘ANA" | "TARDE" | "NOCHE";
+  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
+  jornada: "MANANA" | "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -41,7 +48,7 @@ type Acceso = {
   usuario: number;
   fecha: string;
   tipo: "ingreso" | "salida";
-  sede: string | null;
+  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA" | null;
   registrado_por: number | null;
   turno: number | null;
   equipos: number[];
@@ -54,29 +61,37 @@ type Paginated<T> = {
   results: T[];
 };
 
+const SEDES: Array<NonNullable<Acceso["sede"]>> = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
+
 function clsBadge(variant: "green" | "red" | "blue" | "amber" | "gray") {
-  const base = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
-  if (variant === "green") return `${base} bg-primary/10 text-primary border-primary/20`;
-  if (variant === "red") return `${base} bg-rose-100 text-rose-800 border-rose-200`;
-  if (variant === "blue") return `${base} bg-sky-100 text-sky-800 border-sky-200`;
-  if (variant === "amber") return `${base} bg-amber-100 text-amber-800 border-amber-200`;
-  return `${base} bg-gray-100 text-text/90 border-gray-200`;
+  const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
+  if (variant === "green") return `${base} border-emerald-200 bg-emerald-100 text-emerald-800`;
+  if (variant === "red") return `${base} border-rose-200 bg-rose-100 text-rose-800`;
+  if (variant === "blue") return `${base} border-sky-200 bg-sky-100 text-sky-800`;
+  if (variant === "amber") return `${base} border-amber-200 bg-amber-100 text-amber-800`;
+  return `${base} border-zinc-200 bg-zinc-100 text-zinc-700`;
 }
 
-function Badge({ variant, label }: { variant: "green" | "red" | "blue" | "amber" | "gray"; label: string }) {
+function Badge({
+  variant,
+  label,
+}: {
+  variant: "green" | "red" | "blue" | "amber" | "gray";
+  label: string;
+}) {
   return <span className={clsBadge(variant)}>{label}</span>;
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "â€”";
+  if (!u) return "—";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "â€”";
+  if (!iso) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "â€”";
+  if (Number.isNaN(d.getTime())) return "—";
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
@@ -92,7 +107,7 @@ function safeErrorMessage(e: any) {
     e?.response?.data?.detail ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
     e?.message ??
-    "OcurriÃ³ un error."
+    "Ocurrio un error."
   );
 }
 
@@ -106,17 +121,34 @@ function useDebounced<T>(value: T, delay = 450) {
 }
 
 function StatSkeleton() {
-  return <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4 animate-pulse h-[92px]" />;
+  return <div className="h-[92px] animate-pulse rounded-2xl border bg-white p-4 shadow-sm" />;
 }
+
+function FilterSkeleton() {
+  return (
+    <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-12 lg:col-span-5" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-1" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-12 lg:col-span-2" />
+      </div>
+    </section>
+  );
+}
+
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
-      <div className="px-4 py-3 border-b">
-        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-      </div>
+    <div className="rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
       <div className="p-4 space-y-3">
         {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 bg-gray-100 rounded-xl animate-pulse" />
+          <div key={i} className="h-10 animate-pulse rounded-xl bg-zinc-100" />
         ))}
       </div>
     </div>
@@ -124,10 +156,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 }
 
 export default function AdminAccesosPage() {
-  const { sedes } = useSedes();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-
-  // tabla paginada
   const [accesos, setAccesos] = useState<Acceso[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -137,27 +166,18 @@ export default function AdminAccesosPage() {
   const [loadingTable, setLoadingTable] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // filtros (API)
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState<"" | Acceso["tipo"]>("");
-  const [sede, setSede] = useState("");
+  const [sede, setSede] = useState<"" | NonNullable<Acceso["sede"]>>("");
   const [aprendizId, setAprendizId] = useState<number | "">("");
   const [guardaId, setGuardaId] = useState<number | "">("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // bÃºsqueda selects
-  const [aprendizSearch, setAprendizSearch] = useState("");
-  const [guardaSearch, setGuardaSearch] = useState("");
-
-  // debounce
   const dq = useDebounced(q, 450);
-  const dAprendizSearch = useDebounced(aprendizSearch, 450);
-  const dGuardaSearch = useDebounced(guardaSearch, 450);
   const dDateFrom = useDebounced(dateFrom, 450);
   const dDateTo = useDebounced(dateTo, 450);
 
-  // detalle
   const [openDetalle, setOpenDetalle] = useState(false);
   const [selected, setSelected] = useState<Acceso | null>(null);
   const [detalleTurno, setDetalleTurno] = useState<Turno | null>(null);
@@ -171,32 +191,9 @@ export default function AdminAccesosPage() {
     usuarios.forEach((u) => m.set(u.id, u));
     return m;
   }, [usuarios]);
-  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
-
-  function sedeLabel(code?: string | null): string {
-    const clean = String(code || "").trim();
-    if (!clean) return "(sin sede)";
-    return sedesByCode.get(clean) || `Sede eliminada/inactiva (${clean})`;
-  }
 
   const aprendicesAll = useMemo(() => usuarios.filter((u) => u.rol === "aprendiz"), [usuarios]);
   const guardasAll = useMemo(() => usuarios.filter((u) => u.rol === "guarda"), [usuarios]);
-
-  const aprendicesFiltrados = useMemo(() => {
-    const s = dAprendizSearch.trim().toLowerCase();
-    if (!s) return aprendicesAll;
-    return aprendicesAll.filter((u) =>
-      `${u.username} ${u.first_name ?? ""} ${u.last_name ?? ""} ${u.documento ?? ""}`.toLowerCase().includes(s)
-    );
-  }, [aprendicesAll, dAprendizSearch]);
-
-  const guardasFiltrados = useMemo(() => {
-    const s = dGuardaSearch.trim().toLowerCase();
-    if (!s) return guardasAll;
-    return guardasAll.filter((u) =>
-      `${u.username} ${u.first_name ?? ""} ${u.last_name ?? ""}`.toLowerCase().includes(s)
-    );
-  }, [guardasAll, dGuardaSearch]);
 
   const stats = useMemo(() => {
     const total = count;
@@ -206,6 +203,15 @@ export default function AdminAccesosPage() {
     return { total, ingresos, salidas, conEquipos };
   }, [accesos, count]);
 
+  const hasFilters =
+    q.trim().length > 0 ||
+    tipo !== "" ||
+    sede !== "" ||
+    aprendizId !== "" ||
+    guardaId !== "" ||
+    dateFrom !== "" ||
+    dateTo !== "";
+
   async function cargarUsuarios() {
     const res = await api.get<Usuario[] | Paginated<Usuario>>("/api/usuarios/");
     const data = Array.isArray(res.data) ? res.data : (res.data as any)?.results ?? [];
@@ -213,15 +219,12 @@ export default function AdminAccesosPage() {
   }
 
   async function cargarAccesos(p = page) {
-    const rid = ++requestIdRef.current; // evita race conditions
+    const rid = ++requestIdRef.current;
     setLoadingTable(true);
     setError(null);
 
     try {
-      const params: any = {
-        page: p,
-        page_size: pageSize, // DRF lo acepta si habilitas PageNumberPagination (por defecto sÃ­)
-      };
+      const params: any = { page: p, page_size: pageSize };
       if (dq.trim()) params.q = dq.trim();
       if (tipo) params.tipo = tipo;
       if (sede) params.sede = sede;
@@ -231,14 +234,11 @@ export default function AdminAccesosPage() {
       if (dDateTo) params.date_to = dDateTo;
 
       const r = await api.get<Paginated<Acceso> | Acceso[]>("/api/accesos/", { params });
-
-      // si todavÃ­a no tienes paginaciÃ³n, soporta array
       const payload: any = r.data;
       const results = Array.isArray(payload) ? payload : payload.results ?? [];
       const c = Array.isArray(payload) ? results.length : payload.count ?? results.length;
 
       if (rid !== requestIdRef.current) return;
-
       setAccesos(results);
       setCount(c);
     } catch (e: any) {
@@ -273,8 +273,6 @@ export default function AdminAccesosPage() {
     setGuardaId("");
     setDateFrom("");
     setDateTo("");
-    setAprendizSearch("");
-    setGuardaSearch("");
     setPage(1);
   }
 
@@ -289,7 +287,6 @@ export default function AdminAccesosPage() {
       const promises: Promise<any>[] = [];
       if (a.turno) promises.push(api.get<Turno>(`/api/turnos/${a.turno}/`));
       for (const id of a.equipos ?? []) promises.push(api.get<Equipo>(`/api/equipos/${id}/`));
-
       const results = await Promise.allSettled(promises);
 
       let idx = 0;
@@ -308,21 +305,17 @@ export default function AdminAccesosPage() {
     }
   }
 
-  // âœ… Cargar inicial
   useEffect(() => {
     cargarBase();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // âœ… Auto-refetch con debounce cuando cambian filtros â€œde requestâ€
   useEffect(() => {
-    // cuando cambian filtros, vuelvo a page=1
     setPage(1);
     cargarAccesos(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dq, tipo, sede, aprendizId, guardaId, dDateFrom, dDateTo, pageSize]);
 
-  // âœ… refetch cuando cambie page
   useEffect(() => {
     cargarAccesos(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -331,374 +324,327 @@ export default function AdminAccesosPage() {
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Admin / Accesos</h1>
-            <p className="text-sm text-text/70">
-              Paginado + filtros con debounce + skeleton loaders.
-            </p>
-          </div>
-
-          <div className="flex gap-2 items-center">
+    <div className="space-y-7 pb-2">
+      <PageHeader
+        breadcrumb="ADMIN > ACCESOS"
+        title="Accesos"
+        description="Paginado y filtros por usuario, sede, tipo y rango de fechas."
+        actions={
+          <>
             <select
-              className="rounded-xl border px-3 py-2 text-sm bg-white"
+              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/pÃ¡gina
+                  {n}/pagina
                 </option>
               ))}
             </select>
 
-            <button
-              onClick={() => cargarAccesos(page)}
-              className="rounded-xl px-4 py-2 bg-primary text-white hover:bg-primary/90 shadow-sm transition"
-            >
+            <Button onClick={() => cargarAccesos(page)} variant="secondary">
               Recargar
-            </button>
-          </div>
-        </div>
+            </Button>
+          </>
+        }
+      />
 
-        {/* Stats */}
-        <div className="grid gap-3 sm:grid-cols-4">
-          {loading ? (
-            <>
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-            </>
-          ) : (
-            <>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">Total</div>
-                <div className="text-2xl font-bold text-text">{stats.total}</div>
-              </div>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">En esta pÃ¡gina: Ingresos</div>
-                <div className="text-2xl font-bold text-primary">{stats.ingresos}</div>
-              </div>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">En esta pÃ¡gina: Salidas</div>
-                <div className="text-2xl font-bold text-rose-700">{stats.salidas}</div>
-              </div>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">En esta pÃ¡gina: Con equipos</div>
-                <div className="text-2xl font-bold text-text">{stats.conEquipos}</div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Filters */}
-        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <input
-              className="md:col-span-4 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por documento o usernameâ€¦"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-
-            <select
-              className="md:col-span-2 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value as any)}
-            >
-              <option value="">Tipo</option>
-              <option value="ingreso">Ingreso</option>
-              <option value="salida">Salida</option>
-            </select>
-
-            <select
-              className="md:col-span-2 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={sede}
-              onChange={(e) => setSede(e.target.value)}
-            >
-              <option value="">Sede</option>
-              {sedes.length === 0 ? <option value="" disabled>No tienes sedes asignadas</option> : null}
-              {sedes.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-
-            <div className="md:col-span-2 space-y-1">
-              <input
-                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                placeholder="Buscar aprendizâ€¦"
-                value={aprendizSearch}
-                onChange={(e) => setAprendizSearch(e.target.value)}
-              />
-              <select
-                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                value={aprendizId}
-                onChange={(e) => setAprendizId(e.target.value ? Number(e.target.value) : "")}
-              >
-                <option value="">Aprendiz</option>
-                {aprendicesFiltrados.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {nombreUsuario(u)} ({u.documento ?? "sin doc"})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-2 space-y-1">
-              <input
-                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                placeholder="Buscar guardaâ€¦"
-                value={guardaSearch}
-                onChange={(e) => setGuardaSearch(e.target.value)}
-              />
-              <select
-                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                value={guardaId}
-                onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
-              >
-                <option value="">Guarda</option>
-                {guardasFiltrados.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {nombreUsuario(u)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="md:col-span-3">
-              <label className="text-xs text-text/70">Desde</label>
-              <input
-                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </div>
-
-            <div className="md:col-span-3">
-              <label className="text-xs text-text/70">Hasta</label>
-              <input
-                className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </div>
-
-            <div className="md:col-span-6 flex items-end gap-2">
-              <button
-                onClick={() => resetFiltros()}
-                className="rounded-xl px-4 py-2 border border-surface-border bg-surface hover:bg-gray-50 transition"
-              >
-                Limpiar
-              </button>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">
-              {error}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Table */}
-        {loadingTable ? (
-          <TableSkeleton />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {loading ? (
+          <>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </>
         ) : (
-          <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <div className="text-sm text-text/75">
-                Resultados: <span className="font-semibold">{count}</span>
+          <>
+            <StatCard label="Total" value={stats.total} />
+            <StatCard label="Ingresos" value={stats.ingresos} tone="success" />
+            <StatCard label="Salidas" value={stats.salidas} tone="danger" />
+            <StatCard label="Con equipos" value={stats.conEquipos} tone="warning" />
+          </>
+        )}
+      </div>
+
+      {loading ? (
+        <FilterSkeleton />
+      ) : (
+        <FilterBar
+          footer={
+            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+          }
+        >
+          <input
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-12 lg:col-span-5"
+            placeholder="Buscar por documento o username..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as any)}
+          >
+            <option value="">Tipo</option>
+            <option value="ingreso">Ingreso</option>
+            <option value="salida">Salida</option>
+          </select>
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
+            value={sede}
+            onChange={(e) => setSede(e.target.value as any)}
+          >
+            <option value="">Sede</option>
+            {SEDES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
+            value={aprendizId}
+            onChange={(e) => setAprendizId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Aprendiz</option>
+            {aprendicesAll.map((u) => (
+              <option key={u.id} value={u.id}>
+                {nombreUsuario(u)} ({u.documento ?? "sin doc"})
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
+            value={guardaId}
+            onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Guarda</option>
+            {guardasAll.map((u) => (
+              <option key={u.id} value={u.id}>
+                {nombreUsuario(u)}
+              </option>
+            ))}
+          </select>
+
+          <div className="md:col-span-6 lg:col-span-2">
+            <label className="text-xs text-gray-500">Desde</label>
+            <input
+              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+
+          <div className="md:col-span-6 lg:col-span-2">
+            <label className="text-xs text-gray-500">Hasta</label>
+            <input
+              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+
+          <div className="md:col-span-6 lg:col-span-1">
+            <Button onClick={resetFiltros} variant="secondary" disabled={!hasFilters}>
+              Limpiar
+            </Button>
+          </div>
+
+          <div className="flex h-11 items-center justify-end md:col-span-12 lg:col-span-2">
+            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
+              {count} accesos
+            </span>
+          </div>
+        </FilterBar>
+      )}
+
+      <div className="space-y-4">
+        <DataTable
+          loading={loadingTable}
+          skeleton={<TableSkeleton />}
+          hasRows={accesos.length > 0}
+          tableClassName="min-w-[1050px]"
+          headers={
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold">Fecha</th>
+              <th className="px-4 py-3 font-semibold">Tipo</th>
+              <th className="px-4 py-3 font-semibold">Sede</th>
+              <th className="px-4 py-3 font-semibold">Aprendiz</th>
+              <th className="px-4 py-3 font-semibold">Registrado por</th>
+              <th className="px-4 py-3 font-semibold">Equipos</th>
+              <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+            </tr>
+          }
+          emptyState={
+            <tr>
+              <td colSpan={7} className="px-4 py-10 text-center">
+                <div className="mx-auto max-w-md">
+                  <EmptyState
+                    title="Sin registros con estos filtros"
+                    description="Ajusta los filtros para continuar."
+                    icon={<IconHistory className="h-5 w-5" />}
+                  />
+                </div>
+              </td>
+            </tr>
+          }
+        >
+          {accesos.map((a) => {
+            const aprendiz = usuariosMap.get(a.usuario);
+            const registrado = a.registrado_por ? usuariosMap.get(a.registrado_por) : null;
+            const equiposCount = (a.equipos ?? []).length;
+
+            return (
+              <tr key={a.id} className="transition hover:bg-sky-50/35">
+                <td className="px-4 py-3 whitespace-nowrap">{formatFecha(a.fecha)}</td>
+                <td className="px-4 py-3">
+                  {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
+                </td>
+                <td className="px-4 py-3">
+                  {a.sede ? <Badge variant="blue" label={a.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-gray-900">{nombreUsuario(aprendiz)}</div>
+                  <div className="text-xs text-gray-500">{aprendiz?.documento ?? "—"}</div>
+                </td>
+                <td className="px-4 py-3 text-gray-800">{registrado ? nombreUsuario(registrado) : "—"}</td>
+                <td className="px-4 py-3">
+                  {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "—"}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button onClick={() => abrirDetalle(a)} variant="secondary" className="px-3 py-1.5 text-xs">
+                    Ver
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={count}
+          pageSize={pageSize}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        />
+      </div>
+
+      <Modal
+        open={openDetalle}
+        title={selected ? `Detalle acceso #${selected.id}` : "Detalle"}
+        onClose={() => {
+          setOpenDetalle(false);
+          setSelected(null);
+          setDetalleTurno(null);
+          setDetalleEquipos([]);
+        }}
+      >
+        {!selected ? null : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-xl border p-3">
+                <div className="text-xs text-gray-500">Fecha</div>
+                <div className="font-semibold">{formatFecha(selected.fecha)}</div>
+              </div>
+
+              <div className="rounded-xl border p-3">
+                <div className="text-xs text-gray-500">Tipo</div>
+                <div className="mt-1">
+                  {selected.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-3">
+                <div className="text-xs text-gray-500">Sede</div>
+                <div className="mt-1">
+                  {selected.sede ? <Badge variant="blue" label={selected.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
+                </div>
+              </div>
+
+              <div className="rounded-xl border p-3">
+                <div className="text-xs text-gray-500">Turno</div>
+                <div className="font-semibold">
+                  {selected.turno ? `#${selected.turno}` : "—"}
+                  {detalleTurno ? ` (${detalleTurno.activo ? "activo" : "finalizado"})` : ""}
+                </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-surface border-b border-surface-border">
-                  <tr className="text-left">
-                    <th className="px-4 py-3 font-semibold text-text/80">Fecha</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Tipo</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Sede</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Aprendiz</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Registrado por</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Equipos</th>
-                    <th className="px-4 py-3 font-semibold text-text/80 text-right">Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {accesos.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-text/70">
-                        Sin registros con estos filtros.
-                      </td>
-                    </tr>
-                  ) : null}
-
-                  {accesos.map((a) => {
-                    const aprendiz = usuariosMap.get(a.usuario);
-                    const registrado = a.registrado_por ? usuariosMap.get(a.registrado_por) : null;
-                    const equiposCount = (a.equipos ?? []).length;
-
-                    return (
-                      <tr key={a.id} className="border-b hover:bg-primary/10 transition">
-                        <td className="px-4 py-3 whitespace-nowrap">{formatFecha(a.fecha)}</td>
-                        <td className="px-4 py-3">
-                          {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
-                        </td>
-                        <td className="px-4 py-3">
-                          {a.sede ? <Badge variant="blue" label={sedeLabel(a.sede)} /> : <Badge variant="gray" label="(sin sede)" />}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-text">{nombreUsuario(aprendiz)}</div>
-                          <div className="text-xs text-text/70">{aprendiz?.documento ?? "â€”"}</div>
-                        </td>
-                        <td className="px-4 py-3 text-text/90">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
-                        <td className="px-4 py-3">
-                          {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "â€”"}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => abrirDetalle(a)}
-                            className="rounded-xl px-3 py-2 text-xs font-semibold border border-surface-border bg-surface hover:bg-gray-50 transition"
-                          >
-                            Ver
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="rounded-2xl border p-4">
+              <div className="text-sm font-bold text-gray-900">Personas</div>
+              <div className="mt-2 space-y-1 text-sm text-gray-700">
+                <div>
+                  <span className="text-gray-500">Aprendiz:</span>{" "}
+                  <span className="font-medium">{nombreUsuario(usuariosMap.get(selected.usuario))}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Registrado por:</span>{" "}
+                  <span className="font-medium">
+                    {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "—"}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="p-3">
-              <Pagination
-                page={page}
-                totalPages={totalPages}
-                totalCount={count}
-                pageSize={pageSize}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-              />
+
+            <div className="rounded-2xl border p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-bold text-gray-900">Equipos</div>
+                {loadingDetalle ? <div className="text-xs text-gray-500">Cargando...</div> : null}
+              </div>
+
+              <div className="mt-2">
+                {(selected.equipos ?? []).length === 0 ? (
+                  <div className="text-sm text-gray-500">Sin equipos asociados.</div>
+                ) : detalleEquipos.length ? (
+                  <div className="space-y-2">
+                    {detalleEquipos.map((e) => (
+                      <div key={e.id} className="flex items-center justify-between rounded-xl border p-3">
+                        <div>
+                          <div className="font-semibold text-gray-900">{e.serial}</div>
+                          <div className="text-xs text-gray-500">
+                            {e.marca} {e.modelo} - propietario #{e.propietario}
+                          </div>
+                        </div>
+                        <Badge
+                          variant={
+                            String(e.estado).toLowerCase() === "aprobado"
+                              ? "green"
+                              : String(e.estado).toLowerCase() === "rechazado"
+                                ? "red"
+                                : "amber"
+                          }
+                          label={
+                            String(e.estado).toLowerCase() === "aprobado"
+                              ? "Aprobado"
+                              : String(e.estado).toLowerCase() === "rechazado"
+                                ? "Rechazado"
+                                : "Pendiente"
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600">
+                    IDs: {(selected.equipos ?? []).join(", ")}{" "}
+                    <span className="text-xs text-gray-500">(sin detalles)</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
-
-        {/* Modal detalle */}
-        <Modal
-          open={openDetalle}
-          title={selected ? `Detalle acceso #${selected.id}` : "Detalle"}
-          onClose={() => {
-            setOpenDetalle(false);
-            setSelected(null);
-            setDetalleTurno(null);
-            setDetalleEquipos([]);
-          }}
-        >
-          {!selected ? null : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-text/70">Fecha</div>
-                  <div className="font-semibold">{formatFecha(selected.fecha)}</div>
-                </div>
-
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-text/70">Tipo</div>
-                  <div className="mt-1">
-                    {selected.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-text/70">Sede</div>
-                  <div className="mt-1">
-                    {selected.sede ? <Badge variant="blue" label={sedeLabel(selected.sede)} /> : <Badge variant="gray" label="(sin sede)" />}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-text/70">Turno</div>
-                  <div className="font-semibold">{selected.turno ? `#${selected.turno}` : "â€”"}</div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <div className="text-sm font-bold text-text">Personas</div>
-                <div className="mt-2 text-sm text-text/80 space-y-1">
-                  <div>
-                    <span className="text-text/70">Aprendiz:</span>{" "}
-                    <span className="font-medium">{nombreUsuario(usuariosMap.get(selected.usuario))}</span>
-                  </div>
-                  <div>
-                    <span className="text-text/70">Registrado por:</span>{" "}
-                    <span className="font-medium">
-                      {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "â€”"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-bold text-text">Equipos</div>
-                  {loadingDetalle ? <div className="text-xs text-text/70">Cargandoâ€¦</div> : null}
-                </div>
-
-                <div className="mt-2">
-                  {(selected.equipos ?? []).length === 0 ? (
-                    <div className="text-sm text-text/70">Sin equipos asociados.</div>
-                  ) : detalleEquipos.length ? (
-                    <div className="space-y-2">
-                      {detalleEquipos.map((e) => (
-                        <div key={e.id} className="rounded-xl border p-3 flex items-center justify-between">
-                          <div>
-                            <div className="font-semibold text-text">{e.serial}</div>
-                            <div className="text-xs text-text/70">
-                              {e.marca} {e.modelo} â€¢ propietario #{e.propietario}
-                            </div>
-                          </div>
-
-                          <Badge
-                            variant={
-                              String(e.estado).toLowerCase() === "aprobado"
-                                ? "green"
-                                : String(e.estado).toLowerCase() === "rechazado"
-                                ? "red"
-                                : "amber"
-                            }
-                            label={
-                              String(e.estado).toLowerCase() === "aprobado"
-                                ? "Aprobado"
-                                : String(e.estado).toLowerCase() === "rechazado"
-                                ? "Rechazado"
-                                : "Pendiente"
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-text/75">
-                      IDs: {(selected.equipos ?? []).join(", ")}{" "}
-                      <span className="text-xs text-text/70">(no se pudieron cargar detalles)</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </Modal>
-      </div>
+      </Modal>
     </div>
   );
 }
-
-

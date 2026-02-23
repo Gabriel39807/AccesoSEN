@@ -1,7 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import BadgeChip from "@/components/admin/BadgeChip";
+import FilterBar from "@/components/admin/FilterBar";
+import PageHeader from "@/components/admin/PageHeader";
+import StatCard from "@/components/admin/StatCard";
+import DataTable from "@/components/dashboard/shared/DataTable";
+import EmptyState from "@/components/dashboard/shared/EmptyState";
+import Button from "@/components/dashboard/shared/Button";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 
@@ -48,43 +55,34 @@ function safeErrorMessage(e: any) {
     e?.response?.data?.motivo ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
     e?.message ??
-    "OcurriÃ³ un error."
+    "Ocurrió un error."
   );
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "â€”";
+  if (!u) return "—";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
 
-function Badge({
-  variant,
-  label,
-}: {
-  variant: "green" | "red" | "amber" | "gray";
-  label: string;
-}) {
-  const base = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
-  const cls =
-    variant === "green"
-      ? `${base} bg-primary/10 text-primary border-primary/20`
-      : variant === "red"
-      ? `${base} bg-rose-100 text-rose-800 border-rose-200`
-      : variant === "amber"
-      ? `${base} bg-amber-100 text-amber-800 border-amber-200`
-      : `${base} bg-gray-100 text-text/90 border-gray-200`;
-
-  return <span className={cls}>{label}</span>;
-}
-
 function StatSkeleton() {
-  return <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4 animate-pulse h-[92px]" />;
+  return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
+}
+function FilterSkeleton() {
+  return (
+    <section className="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-7" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+      </div>
+    </section>
+  );
 }
 function TableSkeleton({ rows = 7 }: { rows?: number }) {
   return (
-    <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
-      {/* Barra superior: Mostrando... + paginaciÃ³n (skeleton) */}
+    <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+      {/* Barra superior: Mostrando... + paginación (skeleton) */}
       <div className="px-4 py-3 border-b flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="h-4 w-64 rounded sadi-skeleton" />
 
@@ -98,15 +96,15 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
       {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          {/* Mantener el header real da contexto y se ve mÃ¡s â€œproductoâ€ */}
-          <thead className="bg-surface border-b border-surface-border">
+          {/* Mantener el header real da contexto y se ve más “producto” */}
+          <thead className="bg-gray-50 border-b">
             <tr className="text-left">
-              <th className="px-4 py-3 font-semibold text-text/80">Serial</th>
-              <th className="px-4 py-3 font-semibold text-text/80">Marca / Modelo</th>
-              <th className="px-4 py-3 font-semibold text-text/80">Propietario</th>
-              <th className="px-4 py-3 font-semibold text-text/80">Estado</th>
-              <th className="px-4 py-3 font-semibold text-text/80">Motivo</th>
-              <th className="px-4 py-3 font-semibold text-text/80 text-right">Acciones</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Marca / Modelo</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Propietario</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
+              <th className="px-4 py-3 font-semibold text-gray-700">Motivo</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
             </tr>
           </thead>
 
@@ -118,13 +116,13 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
                   <div className="h-4 w-24 rounded sadi-skeleton" />
                 </td>
 
-                {/* Marca / Modelo (dos lÃ­neas) */}
+                {/* Marca / Modelo (dos líneas) */}
                 <td className="px-4 py-3">
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-24 rounded sadi-skeleton" />
                 </td>
 
-                {/* Propietario (dos lÃ­neas) */}
+                {/* Propietario (dos líneas) */}
                 <td className="px-4 py-3">
                   <div className="h-4 w-40 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-20 rounded sadi-skeleton" />
@@ -140,7 +138,7 @@ function TableSkeleton({ rows = 7 }: { rows?: number }) {
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botÃ³n a la derecha) */}
+                {/* Acciones (botón a la derecha) */}
                 <td className="px-4 py-3 text-right">
                   <div className="ml-auto h-8 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -301,193 +299,155 @@ export default function AdminEquiposPage() {
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
-  return (
-    <div className="space-y-4">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Admin / Equipos</h1>
-            <p className="text-sm text-text/70">PaginaciÃ³n + debounce + skeleton loaders.</p>
-          </div>
+  const hasFilters = q.trim().length > 0 || estado !== "";
 
-          <div className="flex gap-2 items-center">
+  return (
+    <div className="space-y-6 pb-2">
+      <PageHeader
+        breadcrumb="ADMIN > EQUIPOS"
+        title="Equipos"
+        description="Revision y control de equipos registrados por los aprendices."
+        actions={
+          <>
             <select
-              className="rounded-xl border px-3 py-2 text-sm bg-white"
+              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/pÃ¡gina
+                  {n}/pagina
                 </option>
               ))}
             </select>
-
-            <button
-              onClick={() => cargarEquipos(page)}
-              className="rounded-xl px-4 py-2 bg-primary text-white hover:bg-primary/90 shadow-sm transition"
-            >
+            <Button onClick={() => cargarEquipos(page)} variant="secondary">
               Recargar
-            </button>
-          </div>
-        </div>
+            </Button>
+          </>
+        }
+      />
 
-        {/* Stats */}
-        <div className="grid gap-3 sm:grid-cols-4">
-          {loading ? (
-            <>
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-            </>
-          ) : (
-            <>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">Total</div>
-                <div className="text-2xl font-bold text-text">{stats.total}</div>
-              </div>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">En esta pÃ¡gina: Pendientes</div>
-                <div className="text-2xl font-bold text-amber-700">{stats.pendientes}</div>
-              </div>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">En esta pÃ¡gina: Aprobados</div>
-                <div className="text-2xl font-bold text-primary">{stats.aprobados}</div>
-              </div>
-              <div className="rounded-2xl border border-surface-border bg-surface shadow-sm p-4">
-                <div className="text-sm text-text/70">En esta pÃ¡gina: Rechazados</div>
-                <div className="text-2xl font-bold text-rose-700">{stats.rechazados}</div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Filters */}
-        <div className="bg-surface rounded-2xl shadow-sm border border-surface-border p-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <input
-              className="md:col-span-6 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por serial, marca, modelo, documento o usernameâ€¦"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-
-            <select
-              className="md:col-span-3 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={estado}
-              onChange={(e) => setEstado(e.target.value as any)}
-            >
-              <option value="">Estado (todos)</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="aprobado">Aprobado</option>
-              <option value="rechazado">Rechazado</option>
-            </select>
-
-            <div className="md:col-span-3 flex items-center gap-2">
-              <button
-                onClick={resetFiltros}
-                className="rounded-xl px-4 py-2 border border-surface-border bg-surface hover:bg-gray-50 transition"
-              >
-                Limpiar
-              </button>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">
-              {error}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Table */}
-        {loadingTable ? (
-          <TableSkeleton />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {loading ? (
+          <>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </>
         ) : (
-          <div className="bg-surface rounded-2xl shadow-sm border border-surface-border overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <div className="text-sm text-text/75">
-                Resultados: <span className="font-semibold">{count}</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-surface border-b border-surface-border">
-                  <tr className="text-left">
-                    <th className="px-4 py-3 font-semibold text-text/80">Serial</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Marca / Modelo</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Propietario</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Estado</th>
-                    <th className="px-4 py-3 font-semibold text-text/80">Motivo</th>
-                    <th className="px-4 py-3 font-semibold text-text/80 text-right">Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {equipos.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-text/70">
-                        Sin registros con estos filtros.
-                      </td>
-                    </tr>
-                  ) : null}
-
-                  {equipos.map((e) => {
-                    const owner = usuariosMap.get(e.propietario);
-                    const st = String(e.estado).toLowerCase();
-                    const badge =
-                      st === "aprobado" ? (
-                        <Badge variant="green" label="Aprobado" />
-                      ) : st === "rechazado" ? (
-                        <Badge variant="red" label="Rechazado" />
-                      ) : (
-                        <Badge variant="amber" label="Pendiente" />
-                      );
-
-                    return (
-                      <tr key={e.id} className="border-b hover:bg-primary/10 transition">
-                        <td className="px-4 py-3 font-semibold text-text">{e.serial}</td>
-                        <td className="px-4 py-3 text-text/90">
-                          <div className="font-medium">{e.marca}</div>
-                          <div className="text-xs text-text/70">{e.modelo}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-text">{nombreUsuario(owner)}</div>
-                          <div className="text-xs text-text/70">{owner?.documento ?? "â€”"}</div>
-                        </td>
-                        <td className="px-4 py-3">{badge}</td>
-                        <td className="px-4 py-3 text-text/80">
-                          {st === "rechazado" ? (e.motivo_rechazo || "â€”") : "â€”"}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => abrirRevisar(e)}
-                            className="rounded-xl px-3 py-2 text-xs font-semibold border border-surface-border bg-surface hover:bg-gray-50 transition"
-                          >
-                            Revisar
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="p-3">
-              <Pagination
-                page={page}
-                totalPages={totalPages}
-                totalCount={count}
-                pageSize={pageSize}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-              />
-            </div>
-          </div>
+          <>
+            <StatCard label="Total" value={stats.total} />
+            <StatCard label="Pendientes" value={stats.pendientes} tone="warning" />
+            <StatCard label="Aprobados" value={stats.aprobados} tone="success" />
+            <StatCard label="Rechazados" value={stats.rechazados} tone="danger" />
+          </>
         )}
+      </div>
+
+      {loading ? (
+        <FilterSkeleton />
+      ) : (
+        <FilterBar
+          footer={
+            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+          }
+        >
+          <input
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-7"
+            placeholder="Buscar por serial, marca, modelo, documento o username..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-3"
+            value={estado}
+            onChange={(e) => setEstado(e.target.value as any)}
+          >
+            <option value="">Estado (todos)</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+
+          <Button
+            onClick={resetFiltros}
+            className="h-11 md:col-span-2"
+            variant="secondary"
+            disabled={!hasFilters}
+          >
+            Limpiar
+          </Button>
+        </FilterBar>
+      )}
+
+      <div className="space-y-4">
+        <DataTable
+          loading={loadingTable}
+          skeleton={<TableSkeleton />}
+          hasRows={equipos.length > 0}
+          tableClassName="min-w-[920px]"
+          headers={
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold">Serial</th>
+              <th className="px-4 py-3 font-semibold">Marca / Modelo</th>
+              <th className="px-4 py-3 font-semibold">Propietario</th>
+              <th className="px-4 py-3 font-semibold">Estado</th>
+              <th className="px-4 py-3 font-semibold">Motivo</th>
+              <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+            </tr>
+          }
+          emptyState={
+            <tr>
+              <td colSpan={6} className="px-4 py-10 text-center">
+                <div className="mx-auto max-w-md">
+                  <EmptyState title="Sin registros con estos filtros" description="Ajusta los filtros para continuar." />
+                </div>
+              </td>
+            </tr>
+          }
+        >
+          {equipos.map((e) => {
+            const owner = usuariosMap.get(e.propietario);
+            const st = String(e.estado).toLowerCase();
+
+            return (
+              <tr key={e.id} className="border-b transition hover:bg-sky-50/35">
+                <td className="px-4 py-3 font-semibold text-gray-900">{e.serial}</td>
+                <td className="px-4 py-3 text-gray-800">
+                  <div className="font-medium">{e.marca}</div>
+                  <div className="text-xs text-gray-500">{e.modelo}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-gray-900">{nombreUsuario(owner)}</div>
+                  <div className="text-xs text-gray-500">{owner?.documento ?? "—"}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <BadgeChip tone={st === "aprobado" ? "success" : st === "rechazado" ? "danger" : "warning"}>
+                    {st === "aprobado" ? "Aprobado" : st === "rechazado" ? "Rechazado" : "Pendiente"}
+                  </BadgeChip>
+                </td>
+                <td className="px-4 py-3 text-gray-700">{st === "rechazado" ? e.motivo_rechazo || "—" : "—"}</td>
+                <td className="px-4 py-3 text-right">
+                  <Button onClick={() => abrirRevisar(e)} variant="secondary" className="px-3 py-1.5 text-xs">
+                    Revisar
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={count}
+          pageSize={pageSize}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        />
+      </div>
 
         {/* Modal revisar */}
         <Modal
@@ -500,13 +460,13 @@ export default function AdminEquiposPage() {
           }}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border border-surface-border bg-surface p-4 text-sm text-text/80">
+            <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
               Selecciona aprobar o rechazar. Si rechazas, debes poner un motivo.
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-text/70">AcciÃ³n</label>
+                <label className="text-xs text-gray-500">Acción</label>
                 <select
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                   value={accion}
@@ -517,18 +477,18 @@ export default function AdminEquiposPage() {
                 </select>
                 <div className="pt-2">
                   {accion === "aprobado" ? (
-                    <Badge variant="green" label="Aprobado" />
+                    <BadgeChip tone="success">Aprobado</BadgeChip>
                   ) : (
-                    <Badge variant="red" label="Rechazado" />
+                    <BadgeChip tone="danger">Rechazado</BadgeChip>
                   )}
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-text/70">Motivo (solo si rechazas)</label>
+                <label className="text-xs text-gray-500">Motivo (solo si rechazas)</label>
                 <input
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                  placeholder="Ej: Equipo sin etiqueta / serial no coincideâ€¦"
+                  placeholder="Ej: Equipo sin etiqueta / serial no coincide…"
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   disabled={accion !== "rechazado"}
@@ -540,7 +500,7 @@ export default function AdminEquiposPage() {
               <button
                 onClick={() => setOpenRevisar(false)}
                 disabled={revisando}
-                className="rounded-xl px-4 py-2 border border-surface-border bg-surface hover:bg-gray-50 transition disabled:opacity-60"
+                className="rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -548,18 +508,16 @@ export default function AdminEquiposPage() {
               <button
                 onClick={confirmarRevision}
                 disabled={revisando}
-                className="rounded-xl px-4 py-2 bg-primary text-white hover:bg-primary/90 shadow-sm transition disabled:opacity-60"
+                className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-60"
               >
-                {revisando ? "Guardandoâ€¦" : "Guardar"}
+                {revisando ? "Guardando…" : "Guardar"}
               </button>
             </div>
           </div>
         </Modal>
-      </div>
     </div>
   );
 }
-
 
 
 

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -6,10 +6,12 @@ import BadgeChip from "@/components/admin/BadgeChip";
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
+import DataTable from "@/components/dashboard/shared/DataTable";
+import EmptyState from "@/components/dashboard/shared/EmptyState";
+import Button from "@/components/dashboard/shared/Button";
+import { IconBell, IconShield, IconUser, IconClock, IconHistory, IconLaptop } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
-import { useInstitution } from "@/context/institution-context";
-import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -40,6 +42,7 @@ type ImportValidationError = {
 };
 
 const ROLES = ["admin", "guarda", "aprendiz"] as const;
+const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -63,13 +66,13 @@ function safeErrorMessage(e: any) {
     e?.response?.data?.motivo ??
     (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
     e?.message ??
-    "No se pudo completar la acciÃ³n."
+    "No se pudo completar la acción."
   );
 }
 
 function StatSkeleton() {
   return (
-    <div className="text-left bg-white rounded-2xl shadow-sm border p-4 animate-pulse">
+    <div className="text-left rounded-2xl border bg-white p-5 shadow-sm animate-pulse">
       <div className="h-6 w-6 bg-gray-200 rounded mb-2" />
       <div className="h-3 w-20 bg-gray-200 rounded mb-2" />
       <div className="h-6 w-10 bg-gray-200 rounded" />
@@ -77,14 +80,29 @@ function StatSkeleton() {
   );
 }
 
+function FilterSkeleton() {
+  return (
+    <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-4" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-1" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-1" />
+      </div>
+    </section>
+  );
+}
+
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <>
-      {/* Tabla skeleton (misma â€œcajaâ€ que tu tabla real) */}
-      <div className="overflow-auto bg-white rounded-2xl shadow-sm border">
-        <table className="min-w-full text-sm">
+      {/* Tabla skeleton (misma “caja” que tu tabla real) */}
+      <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
+        <table className="min-w-[1020px] table-fixed text-sm">
           {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
-          <thead className="bg-primary/10 text-primary">
+          <thead className="bg-sky-50 text-sky-900">
             <tr className="text-left">
               <th className="p-3">ID</th>
               <th className="p-3">Usuario</th>
@@ -100,13 +118,13 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
           <tbody className="divide-y">
             {Array.from({ length: rows }).map((_, i) => (
-              <tr key={i} className="hover:bg-primary/10 transition">
+              <tr key={i} className="hover:bg-sky-50/40 transition">
                 {/* ID */}
                 <td className="p-3">
                   <div className="h-4 w-10 rounded sadi-skeleton" />
                 </td>
 
-                {/* Usuario (2 lÃ­neas: username + email) */}
+                {/* Usuario (2 líneas: username + email) */}
                 <td className="p-3">
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
@@ -148,7 +166,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botÃ³n) */}
+                {/* Acciones (botón) */}
                 <td className="p-3">
                   <div className="h-10 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -158,8 +176,8 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
         </table>
       </div>
 
-      {/* PaginaciÃ³n skeleton (misma caja que tu paginaciÃ³n real) */}
-      <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border p-3 mt-4">
+      {/* Paginación skeleton (misma caja que tu paginación real) */}
+      <div className="mt-4 flex items-center justify-between rounded-2xl border bg-white p-3 shadow-sm">
         <div className="h-4 w-40 rounded sadi-skeleton" />
 
         <div className="flex items-center gap-2">
@@ -173,8 +191,6 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
 
 export default function AdminUsuariosPage() {
-  const { emailPlaceholder } = useInstitution();
-  const { sedes } = useSedes();
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [count, setCount] = useState<number>(0);
@@ -189,7 +205,7 @@ export default function AdminUsuariosPage() {
   const [q, setQ] = useState("");
   const [rolFilter, setRolFilter] = useState<"todos" | "admin" | "guarda" | "aprendiz">("todos");
   const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
-  const [sedeFilter, setSedeFilter] = useState<string>("todos");
+  const [sedeFilter, setSedeFilter] = useState<"todos" | (typeof SEDES)[number]>("todos");
 
   // debounce
   const dq = useDebounced(q, 450);
@@ -239,13 +255,6 @@ export default function AdminUsuariosPage() {
   const [importErrores, setImportErrores] = useState<ImportValidationError[]>([]);
 
   const requestIdRef = useRef(0);
-  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
-
-  function sedeLabelFromCode(code?: string | null): string {
-    const clean = String(code || "").trim();
-    if (!clean) return "-";
-    return sedesByCode.get(clean) || `Sede eliminada/inactiva (${clean})`;
-  }
 
   async function cargar(p = page) {
     const rid = ++requestIdRef.current;
@@ -269,7 +278,7 @@ export default function AdminUsuariosPage() {
       if (rid !== requestIdRef.current) return;
 
       if (Array.isArray(payload)) {
-        // fallback: backend sin paginaciÃ³n
+        // fallback: backend sin paginación
         setServerPaginated(false);
         setUsuarios(payload);
         setCount(payload.length);
@@ -335,6 +344,11 @@ export default function AdminUsuariosPage() {
 
   const totalCount = serverPaginated ? count : filtrados.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const hasFilters =
+    q.trim().length > 0 ||
+    rolFilter !== "todos" ||
+    estadoFilter !== "todos" ||
+    sedeFilter !== "todos";
 
   const pageItems = useMemo(() => {
     if (serverPaginated) return usuarios;
@@ -342,7 +356,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, filtrados, page, serverPaginated]);
 
   const stats = useMemo(() => {
-    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseÃ±o)
+    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseño)
     const base = serverPaginated ? usuarios : usuarios;
 
     const total = serverPaginated ? count : base.length;
@@ -404,7 +418,7 @@ export default function AdminUsuariosPage() {
     }
   }
 
-  // âš¡ inline update: rol/estado (mantengo como lo tenÃ­as, no toco estÃ©tica)
+  // ⚡ inline update: rol/estado (mantengo como lo tenías, no toco estética)
   async function inlinePatch(id: number, patch: Partial<Usuario>) {
     setUsuarios((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
 
@@ -456,7 +470,7 @@ export default function AdminUsuariosPage() {
       setOpenCrear(false);
       setPage(1);
       await cargar(1);
-      alert("âœ… Usuario creado.");
+      alert("✅ Usuario creado.");
     } catch (e: any) {
       alert(safeErrorMessage(e));
     } finally {
@@ -515,7 +529,7 @@ export default function AdminUsuariosPage() {
       const created = data.created ?? data.created_count ?? 0;
       const updated = data.updated ?? data.updated_count ?? 0;
 
-      alert(`ImportaciÃ³n aplicada. Creados: ${created}. Actualizados: ${updated}.`);
+      alert(`Importación aplicada. Creados: ${created}. Actualizados: ${updated}.`);
       setOpenImportar(false);
       setPage(1);
       await cargar(1);
@@ -527,36 +541,27 @@ export default function AdminUsuariosPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7 pb-2">
       <PageHeader
-        breadcrumb="Admin > Usuarios"
+        breadcrumb="ADMIN > USUARIOS"
         title="Usuarios"
         description="Gestion de cuentas, roles, estado y carga de aprendices."
         actions={
           <>
-            <button
-              onClick={abrirCrear}
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90"
-            >
+            <Button onClick={abrirCrear} variant="primary">
               Crear usuario
-            </button>
-            <button
-              onClick={abrirImportar}
-              className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:brightness-105"
-            >
+            </Button>
+            <Button onClick={abrirImportar} variant="primary">
               Cargar aprendices (Excel)
-            </button>
-            <button
-              onClick={() => cargar(page)}
-              className="rounded-xl border border-surface-border bg-surface px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-            >
+            </Button>
+            <Button onClick={() => cargar(page)} variant="secondary">
               Recargar
-            </button>
+            </Button>
           </>
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {loading ? (
           <>
             <StatSkeleton />
@@ -568,190 +573,193 @@ export default function AdminUsuariosPage() {
           </>
         ) : (
           <>
-            <StatCard label="Total" value={stats.total} onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
-            <StatCard label="Activos" value={stats.activos} tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
-            <StatCard label="Bloqueados" value={stats.bloqueados} tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
-            <StatCard label="Admins" value={stats.admins} tone="purple" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })} />
-            <StatCard label="Guardas" value={stats.guardas} tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
-            <StatCard label="Aprendices" value={stats.aprendices} tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
+            <StatCard label="Total" value={stats.total} icon={<IconHistory className="h-5 w-5" />} onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
+            <StatCard label="Activos" value={stats.activos} icon={<IconShield className="h-5 w-5" />} tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
+            <StatCard label="Bloqueados" value={stats.bloqueados} icon={<IconBell className="h-5 w-5" />} tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
+            <StatCard label="Admins" value={stats.admins} icon={<IconUser className="h-5 w-5" />} tone="purple" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })} />
+            <StatCard label="Guardas" value={stats.guardas} icon={<IconClock className="h-5 w-5" />} tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
+            <StatCard label="Aprendices" value={stats.aprendices} icon={<IconLaptop className="h-5 w-5" />} tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
           </>
         )}
       </div>
 
-      <FilterBar
-        footer={
-          error ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
-          ) : null
-        }
-      >
-        <div className="relative w-full md:col-span-4">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">âŒ•</span>
-          <input
-            className="w-full rounded-xl border border-surface-border bg-surface pl-9 pr-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
-            placeholder="Buscar: username, email, documento, nombre..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-
-        <select
-          className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
-          value={rolFilter}
-          onChange={(e) => setRolFilter(e.target.value as "todos" | "admin" | "guarda" | "aprendiz")}
-        >
-          <option value="todos">Rol: Todos</option>
-          <option value="admin">Rol: admin</option>
-          <option value="guarda">Rol: guarda</option>
-          <option value="aprendiz">Rol: aprendiz</option>
-        </select>
-
-        <select
-          className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
-          value={estadoFilter}
-          onChange={(e) => setEstadoFilter(e.target.value as "todos" | "activo" | "bloqueado")}
-        >
-          <option value="todos">Estado: Todos</option>
-          <option value="activo">Estado: activo</option>
-          <option value="bloqueado">Estado: bloqueado</option>
-        </select>
-
-        <select
-          className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
-          value={sedeFilter}
-          onChange={(e) => setSedeFilter(e.target.value)}
-        >
-          <option value="todos">Sede: Todas</option>
-          {sedes.length === 0 ? <option value="todos" disabled>No tienes sedes asignadas</option> : null}
-          {sedes.map((s) => (
-            <option key={s.code} value={s.code}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-
-        <button
-          onClick={() => {
-            setQ("");
-            setRolFilter("todos");
-            setEstadoFilter("todos");
-            setSedeFilter("todos");
-            setPage(1);
-          }}
-          className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 md:col-span-1"
-        >
-          Limpiar
-        </button>
-
-        <div className="flex items-center justify-end rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-zinc-600 md:col-span-1">
-          {totalCount} usuarios
-        </div>
-      </FilterBar>
-
-      {loadingTable ? (
-        <TableSkeleton rows={Math.min(8, pageSize)} />
+      {loading ? (
+        <FilterSkeleton />
       ) : (
-        <>
-          <section className="overflow-auto rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-primary/10 text-primary">
-                <tr className="text-left">
-                  <th className="p-3">ID</th>
-                  <th className="p-3">Usuario</th>
-                  <th className="p-3">Nombre</th>
-                  <th className="p-3">Rol</th>
-                  <th className="p-3">Estado</th>
-                  <th className="p-3">Documento</th>
-                  <th className="p-3">Sede</th>
-                  <th className="p-3">Programa</th>
-                  <th className="p-3">Acciones</th>
-                </tr>
-              </thead>
+        <FilterBar
+          footer={
+            error ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
+            ) : null
+          }
+        >
+          <div className="relative w-full md:col-span-12 lg:col-span-4">
+            <input
+              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+              placeholder="Buscar: username, email, documento, nombre..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
 
-              <tbody className="divide-y divide-zinc-100">
-                {pageItems.map((u, idx) => (
-                  <tr key={u.id} className={cx("transition hover:bg-primary/10", idx % 2 === 1 && "bg-zinc-50/35")}>
-                    <td className="p-3">{u.id}</td>
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
+            value={rolFilter}
+            onChange={(e) => setRolFilter(e.target.value as "todos" | "admin" | "guarda" | "aprendiz")}
+          >
+            <option value="todos">Rol: Todos</option>
+            <option value="admin">Rol: admin</option>
+            <option value="guarda">Rol: guarda</option>
+            <option value="aprendiz">Rol: aprendiz</option>
+          </select>
 
-                    <td className="p-3">
-                      <div className="font-semibold text-primary">{u.username}</div>
-                      {u.email ? <div className="text-zinc-500">{u.email}</div> : null}
-                    </td>
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
+            value={estadoFilter}
+            onChange={(e) => setEstadoFilter(e.target.value as "todos" | "activo" | "bloqueado")}
+          >
+            <option value="todos">Estado: Todos</option>
+            <option value="activo">Estado: activo</option>
+            <option value="bloqueado">Estado: bloqueado</option>
+          </select>
 
-                    <td className="p-3">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</td>
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
+            value={sedeFilter}
+            onChange={(e) => setSedeFilter(e.target.value as "todos" | (typeof SEDES)[number])}
+          >
+            <option value="todos">Sede: Todas</option>
+            {SEDES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
 
-                    <td className="p-3">
-                      <div className="flex flex-col gap-2">
-                        <BadgeChip tone={u.rol === "admin" ? "purple" : u.rol === "guarda" ? "info" : "success"}>{u.rol ?? "-"}</BadgeChip>
-                        <select
-                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
-                          value={u.rol ?? "aprendiz"}
-                          onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
-                          title="Cambiar rol (rapido)"
-                        >
-                          {ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </td>
+          <Button
+            onClick={() => {
+              setQ("");
+              setRolFilter("todos");
+              setEstadoFilter("todos");
+              setSedeFilter("todos");
+              setPage(1);
+            }}
+            className="h-11 md:col-span-6 lg:col-span-1"
+            variant="secondary"
+            disabled={!hasFilters}
+          >
+            Limpiar
+          </Button>
 
-                    <td className="p-3">
-                      <div className="flex flex-col gap-2">
-                        <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
-                        <select
-                          className="rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
-                          value={(u.estado ?? "activo").toLowerCase()}
-                          onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
-                          title="Cambiar estado (rapido)"
-                        >
-                          <option value="activo">activo</option>
-                          <option value="bloqueado">bloqueado</option>
-                        </select>
-                      </div>
-                    </td>
-
-                    <td className="p-3">{u.documento ?? "-"}</td>
-                    <td className="p-3">{sedeLabelFromCode(u.sede_principal)}</td>
-                    <td className="p-3">{u.programa_formacion ?? "-"}</td>
-
-                    <td className="p-3">
-                      <button
-                        onClick={() => abrirEditar(u)}
-                        className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:-translate-y-0.5 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                      >
-                        Editar
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {pageItems.length === 0 ? (
-                  <tr>
-                    <td className="p-10 text-center" colSpan={9}>
-                      <div className="mx-auto max-w-md rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/10 to-primary/5 p-6 text-zinc-700">
-                        <p className="text-base font-semibold text-zinc-900">No hay usuarios para mostrar</p>
-                        <p className="mt-1 text-sm text-zinc-600">Prueba limpiando o ajustando los filtros activos.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </section>
-
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            totalCount={totalCount}
-            pageSize={pageSize}
-            onPrev={() => setPage((p) => Math.max(1, p - 1))}
-            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-          />
-        </>
+          <div className="flex h-11 items-center justify-end md:col-span-6 lg:col-span-1">
+            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
+              {totalCount} usuarios
+            </span>
+          </div>
+        </FilterBar>
       )}
+
+      <div className="space-y-4">
+        <DataTable
+          loading={loadingTable}
+          skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
+          hasRows={pageItems.length > 0}
+          tableClassName="min-w-[1120px] table-fixed"
+          headers={
+            <tr className="text-left">
+              <th className="w-14 p-3">ID</th>
+              <th className="w-64 p-3">Usuario</th>
+              <th className="w-52 p-3">Nombre</th>
+              <th className="w-44 p-3">Rol</th>
+              <th className="w-44 p-3">Estado</th>
+              <th className="w-40 p-3">Documento</th>
+              <th className="w-36 p-3">Sede</th>
+              <th className="w-44 p-3">Programa</th>
+              <th className="w-32 p-3 text-right">Acciones</th>
+            </tr>
+          }
+          emptyState={
+            <tr>
+              <td className="p-10 text-center" colSpan={9}>
+                <div className="mx-auto max-w-md">
+                  <EmptyState
+                    title="No hay usuarios para mostrar"
+                    description="Prueba limpiando o ajustando los filtros activos."
+                  />
+                </div>
+              </td>
+            </tr>
+          }
+        >
+          {pageItems.map((u, idx) => (
+            <tr key={u.id} className={cx("align-top transition hover:bg-sky-50/35", idx % 2 === 1 && "bg-zinc-50/35")}>
+              <td className="p-3">{u.id}</td>
+
+              <td className="p-3">
+                <div className="max-w-[220px] truncate font-semibold text-sky-900">{u.username}</div>
+                {u.email ? <div className="max-w-[220px] truncate text-zinc-500">{u.email}</div> : null}
+              </td>
+
+              <td className="p-3">
+                <div className="max-w-[180px] truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
+              </td>
+
+              <td className="p-3">
+                <div className="flex flex-col gap-2">
+                  <BadgeChip tone={u.rol === "admin" ? "purple" : u.rol === "guarda" ? "info" : "success"}>{u.rol ?? "-"}</BadgeChip>
+                  <select
+                    className="w-full rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                    value={u.rol ?? "aprendiz"}
+                    onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
+                    title="Cambiar rol (rapido)"
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </td>
+
+              <td className="p-3">
+                <div className="flex flex-col gap-2">
+                  <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
+                  <select
+                    className="w-full rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                    value={(u.estado ?? "activo").toLowerCase()}
+                    onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
+                    title="Cambiar estado (rapido)"
+                  >
+                    <option value="activo">activo</option>
+                    <option value="bloqueado">bloqueado</option>
+                  </select>
+                </div>
+              </td>
+
+              <td className="p-3"><div className="max-w-[130px] truncate">{u.documento ?? "-"}</div></td>
+              <td className="p-3"><div className="max-w-[110px] truncate">{u.sede_principal ?? "-"}</div></td>
+              <td className="p-3"><div className="max-w-[170px] truncate">{u.programa_formacion ?? "-"}</div></td>
+
+              <td className="p-3 text-right">
+                <Button onClick={() => abrirEditar(u)} variant="secondary" className="px-2.5 py-1.5 text-xs">
+                  Editar
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </DataTable>
+
+        <Pagination
+          className="mt-1"
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          pageSize={pageSize}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        />
+      </div>
 
       {/* MODAL EDITAR */}
       {selected && (
@@ -765,7 +773,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Rol</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={rol}
                     onChange={(e) => setRol(e.target.value)}
                   >
@@ -780,7 +788,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Estado</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={estado.toLowerCase()}
                     onChange={(e) => setEstado(e.target.value)}
                   >
@@ -792,47 +800,44 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Correo (email)</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={emailPlaceholder}
+                    placeholder="usuario@sena.edu.co"
                   />
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Documento</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={documento}
                     onChange={(e) => setDocumento(e.target.value)}
                     placeholder="QR / documento"
                   />
                 </label>
 
-                {/* âœ… SEDE como SELECT en el MODAL (como pediste) */}
+                {/* ✅ SEDE como SELECT en el MODAL (como pediste) */}
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Sede principal</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={sede}
                     onChange={(e) => setSede(e.target.value)}
                   >
                     <option value="">(sin sede)</option>
-                    {sede && !sedesByCode.has(sede) ? (
-                      <option value={sede}>{`Sede eliminada/inactiva (${sede})`}</option>
-                    ) : null}
-                    {sedes.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.name}
+                    {SEDES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
                       </option>
                     ))}
                   </select>
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Programa formaciÃ³n</div>
+                  <div className="text-xs text-gray-500">Programa formación</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={programa}
                     onChange={(e) => setPrograma(e.target.value)}
                     placeholder="ADSO..."
@@ -851,7 +856,7 @@ export default function AdminUsuariosPage() {
                 <button
                   disabled={saving}
                   onClick={guardarModal}
-                  className="bg-primary text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-primary/90 shadow-sm transition"
+                  className="bg-sky-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-sky-700 shadow-sm transition"
                 >
                   {saving ? "Guardando..." : "Guardar cambios"}
                 </button>
@@ -872,7 +877,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Username *</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_username}
                     onChange={(e) => setCUsername(e.target.value)}
                   />
@@ -882,7 +887,7 @@ export default function AdminUsuariosPage() {
                   <div className="text-xs text-gray-500">Password *</div>
                   <input
                     type="password"
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_password}
                     onChange={(e) => setCPassword(e.target.value)}
                   />
@@ -891,7 +896,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Nombres</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_first}
                     onChange={(e) => setCFirst(e.target.value)}
                   />
@@ -900,7 +905,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Apellidos</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_last}
                     onChange={(e) => setCLast(e.target.value)}
                   />
@@ -909,17 +914,17 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Email</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_email}
                     onChange={(e) => setCEmail(e.target.value)}
-                    placeholder={emailPlaceholder}
+                    placeholder="usuario@sena.edu.co"
                   />
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
                   <div className="text-xs text-gray-500">Documento (QR)</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_documento}
                     onChange={(e) => setCDocumento(e.target.value)}
                     placeholder="1012345678"
@@ -929,7 +934,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Rol</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_rol}
                     onChange={(e) => setCRol(e.target.value)}
                   >
@@ -944,7 +949,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Estado</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_estado}
                     onChange={(e) => setCEstado(e.target.value)}
                   >
@@ -956,17 +961,14 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Sede principal</div>
                   <select
-                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_sede}
                     onChange={(e) => setCSede(e.target.value)}
                   >
                     <option value="">(sin sede)</option>
-                    {c_sede && !sedesByCode.has(c_sede) ? (
-                      <option value={c_sede}>{`Sede eliminada/inactiva (${c_sede})`}</option>
-                    ) : null}
-                    {sedes.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.name}
+                    {SEDES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
                       </option>
                     ))}
                   </select>
@@ -975,7 +977,7 @@ export default function AdminUsuariosPage() {
                 <label className="space-y-1">
                   <div className="text-xs text-gray-500">Programa</div>
                   <input
-                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_programa}
                     onChange={(e) => setCPrograma(e.target.value)}
                     placeholder="COCINA / ADSO..."
@@ -995,7 +997,7 @@ export default function AdminUsuariosPage() {
                 <button
                   onClick={crearUsuario}
                   disabled={creating}
-                  className="bg-primary text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-primary/90 shadow-sm transition"
+                  className="bg-sky-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-sky-700 shadow-sm transition"
                 >
                   {creating ? "Creando..." : "Crear usuario"}
                 </button>
@@ -1011,8 +1013,8 @@ export default function AdminUsuariosPage() {
           closeDisabled={validandoImport || confirmandoImport}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-text/80">
-              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importaciÃ³n.
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+              Flujo obligatorio: 1) Selecciona archivo. 2) Validar. 3) Confirmar importación.
             </div>
 
             <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
@@ -1020,33 +1022,33 @@ export default function AdminUsuariosPage() {
                 type="file"
                 accept=".xlsx,.xlsm,.xltx,.xltm"
                 onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-                className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
               />
               <button
                 onClick={validarImportacion}
                 disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {validandoImport ? "Validando..." : "Validar archivo"}
               </button>
               <button
                 onClick={confirmarImportacion}
                 disabled={!importId || confirmandoImport || validandoImport}
-                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {confirmandoImport ? "Confirmando..." : "Confirmar importaciÃ³n"}
+                {confirmandoImport ? "Confirmando..." : "Confirmar importación"}
               </button>
             </div>
 
             {importResumen && (
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="text-xs text-text/70">Total</div>
-                  <div className="text-xl font-semibold text-text">{importResumen.total}</div>
+                  <div className="text-xs text-slate-500">Total</div>
+                  <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
                 </div>
-                <div className="rounded-xl border border-primary/20 bg-primary/10 p-3">
-                  <div className="text-xs text-primary">VÃ¡lidos</div>
-                  <div className="text-xl font-semibold text-primary">{importResumen.validos}</div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <div className="text-xs text-emerald-700">Válidos</div>
+                  <div className="text-xl font-semibold text-emerald-800">{importResumen.validos}</div>
                 </div>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
                   <div className="text-xs text-rose-700">Errores</div>
@@ -1058,14 +1060,14 @@ export default function AdminUsuariosPage() {
             {importErrores.length > 0 && (
               <div className="overflow-hidden rounded-2xl border border-rose-200">
                 <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-800">
-                  Errores de validaciÃ³n
+                  Errores de validación
                 </div>
                 <div className="max-h-64 overflow-auto bg-white">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-surface text-left text-text/75">
+                    <thead className="bg-slate-50 text-left text-slate-600">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
-                        <th className="px-3 py-2">CÃ³digo</th>
+                        <th className="px-3 py-2">Código</th>
                         <th className="px-3 py-2">Mensaje</th>
                       </tr>
                     </thead>
@@ -1074,7 +1076,7 @@ export default function AdminUsuariosPage() {
                         <tr key={`${err.row}-${err.code}-${idx}`}>
                           <td className="px-3 py-2">{err.row}</td>
                           <td className="px-3 py-2 font-medium text-rose-700">{err.code}</td>
-                          <td className="px-3 py-2 text-text/80">
+                          <td className="px-3 py-2 text-slate-700">
                             {err.message}
                             {err.field ? ` (campo: ${err.field})` : ""}
                             {err.fields?.length ? ` (campos: ${err.fields.join(", ")})` : ""}
@@ -1091,6 +1093,4 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
-
-
 

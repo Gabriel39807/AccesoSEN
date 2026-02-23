@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 type PaginationProps = {
   page: number;
@@ -24,32 +24,32 @@ export default function Pagination({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-2xl border border-surface-border bg-surface p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between ${className}`}
+      className={`flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between ${className}`}
     >
-      <div className="text-sm text-text/80">
-        Mostrando <span className="font-semibold text-text">{from}</span> -{" "}
-        <span className="font-semibold text-text">{to}</span> de{" "}
-        <span className="font-semibold text-text">{totalCount}</span>
+      <div className="text-sm text-slate-600">
+        Mostrando <span className="font-semibold text-slate-900">{from}</span> -{" "}
+        <span className="font-semibold text-slate-900">{to}</span> de{" "}
+        <span className="font-semibold text-slate-900">{totalCount}</span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={onPrev}
           disabled={page <= 1}
-          className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Anterior
         </button>
-        <div className="min-w-32 text-center text-sm text-text/80">
-          Pagina <span className="font-semibold text-text">{page}</span> /{" "}
-          <span className="font-semibold text-text">{totalPages}</span>
+        <div className="min-w-32 text-center text-sm text-slate-600">
+          Pagina <span className="font-semibold text-slate-900">{page}</span> /{" "}
+          <span className="font-semibold text-slate-900">{totalPages}</span>
         </div>
         <button
           type="button"
           onClick={onNext}
           disabled={page >= totalPages}
-          className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Siguiente
         </button>
@@ -57,3 +57,4 @@ export default function Pagination({
     </div>
   );
 }
+

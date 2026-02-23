@@ -1,4 +1,6 @@
-﻿import Link from "next/link";
+import Link from "next/link";
+
+import SharedEmptyState from "@/components/dashboard/shared/EmptyState";
 
 export default function EmptyState({
   title,
@@ -12,18 +14,19 @@ export default function EmptyState({
   actionHref?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-sky-200/90 bg-gradient-to-br from-sky-50/80 to-cyan-50/60 p-5 text-sm text-zinc-600">
-      <div className="font-semibold text-zinc-900">{title}</div>
-      <p className="mt-1">{description}</p>
-      {actionLabel && actionHref ? (
-        <Link
-          href={actionHref}
-          className="mt-3 inline-flex rounded-full bg-sky-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
-        >
-          {actionLabel}
-        </Link>
-      ) : null}
-    </div>
+    <SharedEmptyState
+      title={title}
+      description={description}
+      action={
+        actionLabel && actionHref ? (
+          <Link
+            href={actionHref}
+            className="inline-flex rounded-full bg-gradient-to-r from-sky-600 to-cyan-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
+          >
+            {actionLabel}
+          </Link>
+        ) : null
+      }
+    />
   );
 }
-

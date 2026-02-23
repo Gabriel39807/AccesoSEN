@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 
@@ -32,14 +32,13 @@ export default function AprendizAyudaPage() {
   const [asunto, setAsunto] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [motivo, setMotivo] = useState("Otro motivo");
-  const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "soporte@institucion.local";
 
   const mailto = useMemo(() => {
-    const to = supportEmail;
-    const subject = encodeURIComponent(`[Accesos] ${motivo}: ${asunto}`.trim());
+    const to = "soporte@sena.edu.co";
+    const subject = encodeURIComponent(`[SADI] ${motivo}: ${asunto}`.trim());
     const body = encodeURIComponent(mensaje);
     return `mailto:${to}?subject=${subject}&body=${body}`;
-  }, [asunto, mensaje, motivo, supportEmail]);
+  }, [asunto, mensaje, motivo]);
 
   const canSend = asunto.trim().length > 0 && mensaje.trim().length > 0;
   const charsLeft = Math.max(0, 500 - mensaje.length);
@@ -79,8 +78,8 @@ export default function AprendizAyudaPage() {
               solicita actualizacion al area administrativa.
             </FaqItem>
 
-            <FaqItem title="Olvide mi contraseÃ±a">
-              Ve a la opcion de recuperacion de contraseÃ±a en login, o contacta administracion con tu documento para
+            <FaqItem title="Olvide mi contrasena">
+              Ve a la opcion de recuperacion de contrasena en login, o contacta administracion con tu documento para
               restablecer acceso.
             </FaqItem>
           </div>
@@ -99,7 +98,7 @@ export default function AprendizAyudaPage() {
                 onChange={(e) => setMotivo(e.target.value)}
               >
                 <option>Otro motivo</option>
-                <option>Olvide mi contraseÃ±a</option>
+                <option>Olvide mi contrasena</option>
                 <option>Problemas para registrar equipo</option>
                 <option>Datos personales</option>
               </select>
@@ -150,7 +149,7 @@ export default function AprendizAyudaPage() {
                 <span className="font-semibold">Linea de atencion:</span> (000) 000 0000
               </div>
               <div>
-                <span className="font-semibold">Correo:</span> {supportEmail}
+                <span className="font-semibold">Correo:</span> soporte@sena.edu.co
               </div>
             </div>
           </div>
