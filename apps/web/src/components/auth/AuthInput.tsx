@@ -14,7 +14,12 @@ export default function AuthInput({ id, label, error, hint, className = "", ...p
       <label htmlFor={id} className="block text-sm font-semibold text-slate-800">
         {label}
       </label>
-      <input id={id} className={`${styles.input} ${error ? styles.inputError : ""} ${className}`} {...props} />
+      <input
+        id={id}
+        suppressHydrationWarning
+        className={`${styles.input} ${error ? styles.inputError : ""} ${className}`}
+        {...props}
+      />
       {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
       {error ? (
         <p aria-live="polite" className={`text-xs font-medium ${styles.statusError} ${styles.status}`}>

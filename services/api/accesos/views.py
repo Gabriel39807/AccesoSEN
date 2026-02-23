@@ -742,7 +742,7 @@ class AprendizEmailChangeConfirmView(APIView):
         )
         if not domain_check.allowed:
             return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
+                code=domain_check.code or ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED,
                 message=domain_check.message or "Dominio de correo no permitido.",
                 status_code=status.HTTP_400_BAD_REQUEST,
                 field="new_email",
@@ -1147,8 +1147,67 @@ class SedePolicyViewSet(viewsets.ModelViewSet):
 
 class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
     serializer_class = AllowedEmailDomainSerializer
-    queryset = AllowedEmailDomain.objects.select_related("role", "sede").all().order_by("role__code", "sede__code", "domain")
+    queryset = AllowedEmailDomain.objects.select_related("role", "sede", "created_by").all().order_by(
+        "domain",
+        "role__code",
+        "sede__code",
+    )
     permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        domain = (self.request.query_params.get("domain") or "").strip().lower()
+        if domain:
+            qs = qs.filter(domain__icontains=domain)
+
+        role = (self.request.query_params.get("role") or "").strip().lower()
+        if role:
+            qs = qs.filter(role__code=role)
+
+        sede = (
+            self.request.query_params.get("sede")
+            or self.request.query_params.get("sede_id")
+            or ""
+        ).strip()
+        if sede:
+            if sede.isdigit():
+                qs = qs.filter(sede_id=int(sede))
+            elif sede.lower() not in FILTER_ALL_VALUES:
+                qs = qs.filter(Q(sede__code__iexact=sede) | Q(sede__name__iexact=sede))
+
+        is_active = _parse_bool_query_param(
+            self.request,
+            names=["is_active", "activo"],
+            field="is_active",
+        )
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active)
+
+        scope = (self.request.query_params.get("scope") or "").strip().upper()
+        if scope:
+            if scope == AllowedEmailDomain.Scope.GLOBAL:
+                qs = qs.filter(role__isnull=True, sede__isnull=True)
+            elif scope == AllowedEmailDomain.Scope.SEDE:
+                qs = qs.filter(role__isnull=True, sede__isnull=False)
+            elif scope == AllowedEmailDomain.Scope.ROLE:
+                qs = qs.filter(role__isnull=False, sede__isnull=True)
+            elif scope == AllowedEmailDomain.Scope.ROLE_SEDE:
+                qs = qs.filter(role__isnull=False, sede__isnull=False)
+            else:
+                raise ValidationError(
+                    {
+                        "scope": (
+                            "Scope invalido. Valores permitidos: "
+                            "GLOBAL, SEDE, ROLE, ROLE_SEDE."
+                        )
+                    }
+                )
+
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class AuditEventsView(APIView):

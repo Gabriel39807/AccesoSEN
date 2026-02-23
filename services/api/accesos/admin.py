@@ -87,10 +87,14 @@ class UserMembershipAdmin(admin.ModelAdmin):
 
 @admin.register(AllowedEmailDomain)
 class AllowedEmailDomainAdmin(admin.ModelAdmin):
-    list_display = ("role", "sede", "domain", "is_active", "created_at")
-    list_filter = ("role__code", "sede__code", "is_active")
-    search_fields = ("domain", "role__code", "sede__code")
-    autocomplete_fields = ("role", "sede")
+    list_display = ("domain", "scope_display", "role", "sede", "is_active", "created_at", "updated_at")
+    list_filter = ("is_active", "role__code", "sede__code")
+    search_fields = ("domain", "role__code", "sede__code", "sede__name")
+    autocomplete_fields = ("role", "sede", "created_by")
+
+    def scope_display(self, obj):
+        return obj.scope
+    scope_display.short_description = "Scope"
 
 
 @admin.register(Usuario)

@@ -4,6 +4,7 @@ import secrets
 from rest_framework import serializers
 from accesos.domain.services.email_domain_service import EmailDomainService
 from accesos.domain.services.authorization import AuthorizationService
+from .error_codes import ErrorCode
 from .models import (
     Acceso,
     AllowedEmailDomain,
@@ -85,6 +86,15 @@ def user_has_role(user: Usuario | None, role_code: str) -> bool:
         return False
     return role_code in AuthorizationService.role_codes(user)
 
+
+def _raise_domain_policy_error(*, field: str, message: str):
+    raise serializers.ValidationError(
+        {
+            field: [message],
+            "code": ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED,
+        }
+    )
+
 # =========================
 # USUARIOS
 # =========================
@@ -134,26 +144,73 @@ class RolePermissionSerializer(serializers.ModelSerializer):
 
 
 class AllowedEmailDomainSerializer(serializers.ModelSerializer):
-    role = serializers.SlugRelatedField(slug_field="code", queryset=Role.objects.all())
+    role = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=Role.objects.all(),
+        allow_null=True,
+        required=False,
+    )
     sede = serializers.SlugRelatedField(
         slug_field="code",
         queryset=Sede.objects.all(),
         allow_null=True,
         required=False,
     )
+    scope = serializers.SerializerMethodField(read_only=True)
     role_name = serializers.CharField(source="role.name", read_only=True)
     sede_name = serializers.CharField(source="sede.name", read_only=True, allow_null=True)
+    created_by = serializers.CharField(source="created_by.username", read_only=True, allow_null=True)
 
     class Meta:
         model = AllowedEmailDomain
-        fields = ["id", "role", "role_name", "sede", "sede_name", "domain", "is_active", "created_at"]
-        read_only_fields = ["id", "created_at", "role_name", "sede_name"]
+        fields = [
+            "id",
+            "domain",
+            "scope",
+            "role",
+            "role_name",
+            "sede",
+            "sede_name",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "created_by",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "role_name", "sede_name", "scope", "created_by"]
+        validators = []
 
     def validate_domain(self, value):
-        clean = (value or "").strip().lower().replace("@", "")
-        if "." not in clean:
-            raise serializers.ValidationError("Debes indicar un dominio valido, por ejemplo gmail.com.")
+        clean = EmailDomainService.normalize_domain(value)
+        if not clean or "." not in clean:
+            raise serializers.ValidationError("Debes indicar un dominio valido, por ejemplo empresa.com.")
+        if " " in clean:
+            raise serializers.ValidationError("El dominio no puede contener espacios.")
+        domain_re = re.compile(
+            r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+        )
+        if not domain_re.fullmatch(clean):
+            raise serializers.ValidationError("Dominio invalido. Usa formato tipo empresa.com.")
         return clean
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        role = attrs.get("role", getattr(self.instance, "role", None))
+        sede = attrs.get("sede", getattr(self.instance, "sede", None))
+        domain = attrs.get("domain", getattr(self.instance, "domain", None))
+        if not domain:
+            raise serializers.ValidationError({"domain": "Debes indicar un dominio."})
+
+        qs = AllowedEmailDomain.objects.filter(domain=domain, role=role, sede=sede)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                {"domain": "Ya existe una regla para ese dominio con el mismo alcance."}
+            )
+        return attrs
+
+    def get_scope(self, obj):
+        return getattr(obj, "scope", AllowedEmailDomain.Scope.GLOBAL)
 
 
 class SedePolicySerializer(serializers.ModelSerializer):
@@ -263,7 +320,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
                     sede=sede,
                 )
                 if not result.allowed:
-                    raise serializers.ValidationError({"email": result.message or "Dominio de correo no permitido."})
+                    _raise_domain_policy_error(
+                        field="email",
+                        message=result.message or "Dominio de correo no permitido.",
+                    )
 
         return attrs
 
@@ -351,7 +411,10 @@ class AprendizEmailChangeRequestSerializer(serializers.Serializer):
                 sede=getattr(user, "sede_principal", None),
             )
             if not result.allowed:
-                raise serializers.ValidationError(result.message or "Dominio de correo no permitido.")
+                _raise_domain_policy_error(
+                    field="new_email",
+                    message=result.message or "Dominio de correo no permitido.",
+                )
         return value
 
 

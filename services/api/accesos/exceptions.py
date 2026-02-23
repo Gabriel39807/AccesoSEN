@@ -82,6 +82,8 @@ def _extract_validation_summary(detail: Any) -> tuple[str | None, str | None]:
         field_messages: list[tuple[str, str]] = []
         global_message: str | None = None
         for field, value in detail.items():
+            if field == "code":
+                continue
             if field in {"non_field_errors", "detail", "message"}:
                 message = _first_message(value)
                 if message:
@@ -121,6 +123,27 @@ def _build_validation_message(field: str | None, message: str | None) -> str:
     if message:
         return message
     return "Revisa los datos enviados e intenta nuevamente."
+
+
+def _extract_custom_validation_code(detail: Any) -> str | None:
+    if not isinstance(detail, dict):
+        return None
+    raw = detail.get("code")
+    if isinstance(raw, str):
+        candidate = raw
+    else:
+        candidate = _first_message(raw) or ""
+    clean = str(candidate or "").strip().upper()
+    if not clean:
+        return None
+    valid_codes = {
+        value
+        for key, value in vars(ErrorCode).items()
+        if key.isupper() and isinstance(value, str)
+    }
+    if clean in valid_codes:
+        return clean
+    return None
 
 
 def ui_exception_handler(exc, context):
@@ -174,11 +197,13 @@ def ui_exception_handler(exc, context):
         return response
 
     if isinstance(exc, ValidationError):
-        field, first_message = _extract_validation_summary(response.data)
+        detail_payload = response.data
+        field, first_message = _extract_validation_summary(detail_payload)
+        custom_code = _extract_custom_validation_code(detail_payload)
         response.data = _error_payload(
-            code=ErrorCode.VALIDATION_ERROR,
+            code=custom_code or ErrorCode.VALIDATION_ERROR,
             message=_build_validation_message(field, first_message),
-            detail=response.data,
+            detail=detail_payload,
             field=field,
         )
         response.status_code = status.HTTP_400_BAD_REQUEST

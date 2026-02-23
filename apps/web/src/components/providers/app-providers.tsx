@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 
+import GlobalThemeToggle from "@/components/GlobalThemeToggle";
 import RoleThemeProvider from "@/components/providers/RoleThemeProvider";
 import { InstitutionProvider } from "@/context/institution-context";
 import { SystemThemeProvider } from "@/hooks/useSystemTheme";
@@ -16,7 +17,10 @@ export default function AppProviders({ children }: { children: React.ReactNode }
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem storageKey="sadi-theme" disableTransitionOnChange>
       <SystemThemeProvider>
         <InstitutionProvider>
-          <RoleThemeProvider>{children}</RoleThemeProvider>
+          <RoleThemeProvider>
+            <GlobalThemeToggle />
+            {children}
+          </RoleThemeProvider>
         </InstitutionProvider>
       </SystemThemeProvider>
     </ThemeProvider>

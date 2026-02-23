@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
 
 import { clearTokens } from "@/lib/auth";
 import { useMe } from "@/hooks/useMe";
@@ -11,7 +10,6 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { me, loadingMe } = useMe();
-  const { resolvedTheme, setTheme } = useTheme();
 
   function logout() {
     clearTokens();
@@ -71,15 +69,6 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-            className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-primary/10 hover:text-primary"
-            title="Cambiar tema"
-          >
-            Cambiar tema
-          </button>
-
           <div className="text-right leading-tight">
             <div className="text-sm font-semibold text-text">{loadingMe ? "Cargando..." : nombreBonito || "-"}</div>
             <div className="text-xs text-text/60">{loadingMe ? "" : me?.rol ?? ""}</div>

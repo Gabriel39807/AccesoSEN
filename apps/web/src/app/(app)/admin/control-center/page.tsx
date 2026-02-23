@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { normalizeApiErrors } from "@/lib/errors";
 import { useMe } from "@/hooks/useMe";
 
-type SectionKey = "sedes" | "roles" | "permisos" | "asignaciones" | "auditoria";
+type SectionKey = "sedes" | "roles" | "permisos" | "asignaciones" | "dominios" | "auditoria";
 
 type SedeRow = {
   id: number;
@@ -41,6 +41,22 @@ type AssignmentRow = {
   scope: "GLOBAL" | "SEDE" | "OWN";
 };
 
+type DomainScope = "GLOBAL" | "SEDE" | "ROLE" | "ROLE_SEDE";
+
+type DomainRuleRow = {
+  id: number;
+  domain: string;
+  scope: DomainScope;
+  role: string | null;
+  role_name?: string | null;
+  sede: string | null;
+  sede_name?: string | null;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_by?: string | null;
+};
+
 type AuditRow = {
   id: string;
   type: string;
@@ -67,6 +83,7 @@ const sections: Array<{ key: SectionKey; label: string }> = [
   { key: "roles", label: "Roles" },
   { key: "permisos", label: "Permisos" },
   { key: "asignaciones", label: "Asignaciones" },
+  { key: "dominios", label: "Dominios" },
   { key: "auditoria", label: "Auditoria" },
 ];
 
@@ -97,6 +114,7 @@ export default function SuperadminControlCenterPage() {
   const [roles, setRoles] = useState<RoleRow[]>([]);
   const [permissions, setPermissions] = useState<PermissionRow[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  const [domains, setDomains] = useState<DomainRuleRow[]>([]);
   const [auditRows, setAuditRows] = useState<AuditRow[]>([]);
 
   const [createSedeCode, setCreateSedeCode] = useState("");
@@ -116,6 +134,19 @@ export default function SuperadminControlCenterPage() {
   const [assignmentRole, setAssignmentRole] = useState("");
   const [assignmentPermission, setAssignmentPermission] = useState("");
   const [assignmentScope, setAssignmentScope] = useState<AssignmentRow["scope"]>("SEDE");
+
+  const [domainFilter, setDomainFilter] = useState("");
+  const [domainRoleFilter, setDomainRoleFilter] = useState("");
+  const [domainSedeFilter, setDomainSedeFilter] = useState("");
+  const [domainStatusFilter, setDomainStatusFilter] = useState<"" | "true" | "false">("");
+  const [domainScopeFilter, setDomainScopeFilter] = useState<"" | DomainScope>("");
+
+  const [domainFormId, setDomainFormId] = useState<number | null>(null);
+  const [domainFormValue, setDomainFormValue] = useState("");
+  const [domainFormScope, setDomainFormScope] = useState<DomainScope>("GLOBAL");
+  const [domainFormRole, setDomainFormRole] = useState("");
+  const [domainFormSede, setDomainFormSede] = useState("");
+  const [domainFormActive, setDomainFormActive] = useState(true);
 
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
@@ -163,6 +194,20 @@ export default function SuperadminControlCenterPage() {
     setAssignments(toRows(response.data));
   }
 
+  async function loadDomains() {
+    const params: Record<string, string> = {};
+    if (domainFilter.trim()) params.domain = domainFilter.trim();
+    if (domainRoleFilter) params.role = domainRoleFilter;
+    if (domainSedeFilter) params.sede = domainSedeFilter;
+    if (domainStatusFilter) params.is_active = domainStatusFilter;
+    if (domainScopeFilter) params.scope = domainScopeFilter;
+
+    const response = await api.get<DomainRuleRow[] | Paginated<DomainRuleRow>>("/api/dominios-email/", {
+      params,
+    });
+    setDomains(toRows(response.data));
+  }
+
   async function loadAudit() {
     const response = await api.get<AuditResponse>("/api/auditoria/eventos/");
     setAuditRows(response.data?.results ?? []);
@@ -172,7 +217,7 @@ export default function SuperadminControlCenterPage() {
     setLoading(true);
     clearErrors();
     try {
-      await Promise.all([loadSedes(), loadRoles(), loadPermissions(), loadAssignments(), loadAudit()]);
+      await Promise.all([loadSedes(), loadRoles(), loadPermissions(), loadAssignments(), loadDomains(), loadAudit()]);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -186,6 +231,14 @@ export default function SuperadminControlCenterPage() {
     loadControlCenter();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMe, me?.rol]);
+
+  useEffect(() => {
+    if (loadingMe) return;
+    if (me?.rol !== "superadmin") return;
+    if (activeSection !== "dominios") return;
+    loadDomains().catch(setApiErrors);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, domainFilter, domainRoleFilter, domainSedeFilter, domainStatusFilter, domainScopeFilter]);
 
   const sedesByCode = useMemo(() => new Map(sedes.map((sede) => [sede.code, sede.name])), [sedes]);
 
@@ -349,6 +402,125 @@ export default function SuperadminControlCenterPage() {
     try {
       await api.delete(`/api/asignaciones/${row.id}/`);
       await loadAssignments();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function resetDomainForm() {
+    setDomainFormId(null);
+    setDomainFormValue("");
+    setDomainFormScope("GLOBAL");
+    setDomainFormRole("");
+    setDomainFormSede("");
+    setDomainFormActive(true);
+  }
+
+  function applyDomainScopeDefaults(scope: DomainScope) {
+    setDomainFormScope(scope);
+    if (scope === "GLOBAL") {
+      setDomainFormRole("");
+      setDomainFormSede("");
+      return;
+    }
+    if (scope === "SEDE") {
+      setDomainFormRole("");
+      return;
+    }
+    if (scope === "ROLE") {
+      setDomainFormSede("");
+      return;
+    }
+  }
+
+  function openEditDomain(row: DomainRuleRow) {
+    clearErrors();
+    setDomainFormId(row.id);
+    setDomainFormValue(row.domain);
+    setDomainFormScope(row.scope);
+    setDomainFormRole(row.role || "");
+    setDomainFormSede(row.sede || "");
+    setDomainFormActive(row.is_active);
+  }
+
+  function buildDomainPayload() {
+    const domain = domainFormValue.trim().toLowerCase().replace("@", "");
+    if (!domain) {
+      setFormErrors(["Debes indicar un dominio, por ejemplo empresa.com."]);
+      return null;
+    }
+
+    const payload: Record<string, unknown> = {
+      domain,
+      is_active: domainFormActive,
+      role: null,
+      sede: null,
+    };
+
+    if (domainFormScope === "ROLE" || domainFormScope === "ROLE_SEDE") {
+      if (!domainFormRole) {
+        setFormErrors(["Selecciona un rol para el alcance elegido."]);
+        return null;
+      }
+      payload.role = domainFormRole;
+    }
+
+    if (domainFormScope === "SEDE" || domainFormScope === "ROLE_SEDE") {
+      if (!domainFormSede) {
+        setFormErrors(["Selecciona una sede para el alcance elegido."]);
+        return null;
+      }
+      payload.sede = domainFormSede;
+    }
+
+    return payload;
+  }
+
+  async function submitDomainRule() {
+    clearErrors();
+    const payload = buildDomainPayload();
+    if (!payload) return;
+
+    setBusy(true);
+    try {
+      if (domainFormId) {
+        await api.patch(`/api/dominios-email/${domainFormId}/`, payload);
+      } else {
+        await api.post("/api/dominios-email/", payload);
+      }
+      resetDomainForm();
+      await loadDomains();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleDomainRule(row: DomainRuleRow) {
+    clearErrors();
+    setBusy(true);
+    try {
+      await api.patch(`/api/dominios-email/${row.id}/`, { is_active: !row.is_active });
+      await loadDomains();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteDomainRule(row: DomainRuleRow) {
+    clearErrors();
+    setBusy(true);
+    try {
+      await api.delete(`/api/dominios-email/${row.id}/`);
+      if (domainFormId === row.id) {
+        resetDomainForm();
+      }
+      await loadDomains();
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -716,6 +888,229 @@ export default function SuperadminControlCenterPage() {
                 </table>
               </div>
             </>
+          ) : null}
+
+          {activeSection === "dominios" ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                Active domain rules are enforced across the entire product.
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-5">
+                <input
+                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                  placeholder="Buscar dominio"
+                  value={domainFilter}
+                  onChange={(event) => setDomainFilter(event.target.value)}
+                />
+                <select
+                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                  value={domainScopeFilter}
+                  onChange={(event) => setDomainScopeFilter(event.target.value as "" | DomainScope)}
+                >
+                  <option value="">Todos los scopes</option>
+                  <option value="GLOBAL">GLOBAL</option>
+                  <option value="SEDE">SEDE</option>
+                  <option value="ROLE">ROLE</option>
+                  <option value="ROLE_SEDE">ROLE_SEDE</option>
+                </select>
+                <select
+                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                  value={domainRoleFilter}
+                  onChange={(event) => setDomainRoleFilter(event.target.value)}
+                >
+                  <option value="">Todos los roles</option>
+                  {roles.map((row) => (
+                    <option key={row.id} value={row.code}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                  value={domainSedeFilter}
+                  onChange={(event) => setDomainSedeFilter(event.target.value)}
+                >
+                  <option value="">Todas las sedes</option>
+                  {sedes.map((row) => (
+                    <option key={row.id} value={row.code}>
+                      {row.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                  value={domainStatusFilter}
+                  onChange={(event) => setDomainStatusFilter(event.target.value as "" | "true" | "false")}
+                >
+                  <option value="">Todos los estados</option>
+                  <option value="true">Activos</option>
+                  <option value="false">Inactivos</option>
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-surface-border bg-surface p-4">
+                <h3 className="text-sm font-semibold text-text">
+                  {domainFormId ? `Editar regla #${domainFormId}` : "Nueva regla de dominio"}
+                </h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-text/70">Dominio</label>
+                    <input
+                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                      placeholder="empresa.com"
+                      value={domainFormValue}
+                      onChange={(event) => setDomainFormValue(event.target.value)}
+                    />
+                    {fieldError("domain") ? <p className="text-xs text-rose-600">{fieldError("domain")}</p> : null}
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-text/70">Scope</label>
+                    <select
+                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                      value={domainFormScope}
+                      onChange={(event) => applyDomainScopeDefaults(event.target.value as DomainScope)}
+                    >
+                      <option value="GLOBAL">GLOBAL</option>
+                      <option value="SEDE">SEDE</option>
+                      <option value="ROLE">ROLE</option>
+                      <option value="ROLE_SEDE">ROLE_SEDE</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-text/70">Rol</label>
+                    <select
+                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm disabled:opacity-60"
+                      value={domainFormRole}
+                      onChange={(event) => setDomainFormRole(event.target.value)}
+                      disabled={domainFormScope === "GLOBAL" || domainFormScope === "SEDE"}
+                    >
+                      <option value="">Sin rol</option>
+                      {roles.map((row) => (
+                        <option key={row.id} value={row.code}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-text/70">Sede</label>
+                    <select
+                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm disabled:opacity-60"
+                      value={domainFormSede}
+                      onChange={(event) => setDomainFormSede(event.target.value)}
+                      disabled={domainFormScope === "GLOBAL" || domainFormScope === "ROLE"}
+                    >
+                      <option value="">Sin sede</option>
+                      {sedes.map((row) => (
+                        <option key={row.id} value={row.code}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <label className="mt-3 inline-flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={domainFormActive}
+                    onChange={(event) => setDomainFormActive(event.target.checked)}
+                  />
+                  Regla activa
+                </label>
+
+                <div className="mt-3 flex justify-end gap-2">
+                  {domainFormId ? (
+                    <button
+                      type="button"
+                      onClick={resetDomainForm}
+                      className="rounded-xl border border-surface-border px-3 py-2 text-sm hover:bg-primary/10"
+                    >
+                      Cancelar edicion
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={submitDomainRule}
+                    disabled={busy}
+                    className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    {busy ? "Guardando..." : domainFormId ? "Guardar regla" : "Crear regla"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-surface-border">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-primary/10 text-primary">
+                    <tr className="text-left">
+                      <th className="px-3 py-2">Dominio</th>
+                      <th className="px-3 py-2">Scope</th>
+                      <th className="px-3 py-2">Rol</th>
+                      <th className="px-3 py-2">Sede</th>
+                      <th className="px-3 py-2">Estado</th>
+                      <th className="px-3 py-2">Actualizada</th>
+                      <th className="px-3 py-2 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {domains.length === 0 ? (
+                      <tr className="border-t border-surface-border">
+                        <td className="px-3 py-4 text-text/70" colSpan={7}>
+                          No hay reglas de dominios para los filtros seleccionados.
+                        </td>
+                      </tr>
+                    ) : (
+                      domains.map((row) => (
+                        <tr key={row.id} className="border-t border-surface-border">
+                          <td className="px-3 py-2 font-mono">{row.domain}</td>
+                          <td className="px-3 py-2">{row.scope}</td>
+                          <td className="px-3 py-2">{row.role_name || row.role || "-"}</td>
+                          <td className="px-3 py-2">{row.sede_name || row.sede || "-"}</td>
+                          <td className="px-3 py-2">
+                            {row.is_active ? (
+                              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">Activa</span>
+                            ) : (
+                              <span className="rounded-full bg-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-700">Inactiva</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{formatDate(row.updated_at || row.created_at)}</td>
+                          <td className="px-3 py-2 text-right">
+                            <div className="inline-flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEditDomain(row)}
+                                className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold hover:bg-primary/10"
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleDomainRule(row)}
+                                className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold hover:bg-primary/10"
+                              >
+                                {row.is_active ? "Desactivar" : "Activar"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteDomainRule(row)}
+                                className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           ) : null}
 
           {activeSection === "auditoria" ? (

@@ -1,153 +1,181 @@
-# AGENTS.md — Guía de trabajo para Agentes de IA (S.A.D.I)
+# SADI – Agents Architecture & Responsibility Guide
 
-## 0) Objetivo
-Mejorar el proyecto S.A.D.I para que sea **estable**, **bonito** y **funcional**, sin cambiar su esencia:
-- Control de acceso (personas + equipos)
-- Roles: Administrador / Aprendiz / Personal de Seguridad
-- Backend Django/DRF + PostgreSQL
-- Frontend Web React
-- App móvil React Native (Expo)
+## Overview
 
-El agente tiene libertad para proponer y aplicar mejoras, pero solo se aceptan cambios que cumplan los **criterios de aceptación**.
+SADI (Sistema de Acceso Digital Institucional) is a multi-tenant, multi-sede access and asset control system.
 
----
+The system enforces strict backend-driven RBAC and domain isolation.
 
-## 1) Principios no negociables (No tocar sin aprobación explícita)
-El agente NO puede cambiar sin aprobación previa:
+This document defines:
 
-1. Stack principal (Django/DRF, PostgreSQL, React, Expo)
-2. Modelo de roles y permisos (Administrador, Aprendiz, Guarda)
-3. Contratos API existentes (endpoints, campos, formatos) **salvo compatibilidad garantizada**
-4. Semántica del negocio:
-   - No permitir salida sin una entrada válida (si aplica la regla actual del negocio)
-   - No permitir inconsistencias de equipos vs accesos (equipo sale/entra sin correspondencia)  
-5. Estructura general del repo (no re-arquitecturas tipo “clean architecture” o microservicios)
+- System agents
+- Their permissions
+- Invariants
+- Security rules
+- Domain constraints
+- Non-negotiable backend guarantees
 
-Si el agente cree que debe tocar algo de esto:
-- Debe detenerse, etiquetar el cambio como **PROPUESTA ARQUITECTÓNICA** y pedir aprobación.
+This file serves as a contract between business logic and implementation.
 
 ---
 
-## 2) Libertad permitida (Con control)
-El agente PUEDE:
+# 1. Core Agents
 
-### 2.1 Estabilidad
-- Corregir bugs
-- Mejorar validaciones
-- Corregir flujos rotos
-- Manejo robusto de errores en frontend/móvil
+## 1.1 Superadmin
 
-### 2.2 Calidad de código
-- Refactors localizados (archivos grandes, duplicación, nombres, separación de responsabilidades)
-- Mejoras de legibilidad y consistencia
+Scope: Global
 
-### 2.3 Performance
-- Optimizar consultas ORM (select_related/prefetch_related, evitar N+1)
-- Paginación y filtros eficientes
-- Evitar renders/re-fetches innecesarios en React/RN
+Capabilities:
+- Full CRUD over all resources
+- Create / delete sedes
+- Assign roles
+- Approve or reject equipos
+- View and manage all accesos
+- Manage turnos globally
 
-### 2.4 UX/UI (Bonito pero sin “rediseñar todo”)
-- Mejorar consistencia visual
-- Mejor feedback (loading/error/empty states)
-- Accesibilidad básica (labels, contraste razonable, focus)
-- Componentización si reduce caos
+Restrictions:
+- Must not bypass audit logging
+- Critical destructive actions must be logged
 
-### 2.5 Seguridad
-- Endurecer permisos
-- Validar inputs
-- Evitar exposición de datos
-- Mejorar manejo de tokens/sesión
-- Rate limiting / protección contra abuso si es viable
+Security Requirements:
+- Must be protected by strict authentication
+- Should support optional 2FA (recommended)
 
 ---
 
-## 3) Criterios de aceptación (Gates)
-Ningún cambio se considera “listo” si no cumple:
+## 1.2 Admin_Sede
 
-### Backend
-- No rompe endpoints existentes
-- No rompe serialización esperada por frontend
-- Mantiene permisos correctos por rol
-- Incluye tests cuando se modifica lógica de negocio
-- No introduce migraciones peligrosas (no reescribir migraciones aplicadas)
+Scope: Single Sede
 
-### Frontend Web / Mobile
-- No rompe navegación principal
-- Manejo correcto de estados:
-  - loading
-  - error
-  - vacío
-  - éxito
-- No hardcodear URLs (usar env/config)
-- Sin logs de debug (console.log/print) en producción
+Capabilities:
+- Manage guardas and aprendices within own sede
+- Approve/reject equipos within own sede
+- View and manage accesos in own sede
+- Manage turnos within own sede
 
-### General
-- No introducir dependencias “porque sí”
-- Cambios deben ser explicables y auditables
+Restrictions:
+- Cannot create other admins
+- Cannot access data from other sedes
+- Cannot escalate privileges
+
+Backend Guarantees:
+- All queryset filtering must enforce sede isolation
+- No frontend-only enforcement allowed
 
 ---
 
-## 4) Trabajo por etapas (Obligatorio)
-El agente debe trabajar en este orden:
+## 1.3 Guarda (Mobile)
 
-1) **Diagnóstico**
-- Lista de fallos reales detectados (no supuestos)
-- Riesgo e impacto
+Scope: Active Turno + Assigned Sede
 
-2) **Plan**
-- Checklist de cambios, priorizado
+Capabilities:
+- Start turno
+- End turno
+- Scan QR codes
+- Register entrada/salida
+- Select associated equipo
 
-3) **Implementación**
-- Cambios en bloques pequeños y revisables
-- Cada bloque con explicación de qué y por qué
+Restrictions:
+- Cannot register access without active turno
+- Cannot operate outside turno.sede
+- Cannot modify historical accesos
 
-4) **Validación**
-- Cómo probar (pasos exactos)
-- Qué tests corrieron / se añadieron
-
----
-
-## 5) Breaking Changes (Regla estricta)
-Si un cambio rompe compatibilidad (API, DB, UI flow):
-- Debe marcarse como **BREAKING CHANGE**
-- Debe proponer alternativa compatible
-- No puede aplicarse sin aprobación explícita
+Critical Invariants:
+- Only one active turno per guarda
+- Turno must be explicitly closed or auto-expired
 
 ---
 
-## 6) Reporte obligatorio por cada entrega
-Cada PR/entrega debe incluir:
+## 1.4 Aprendiz (Web + Mobile)
 
-- Resumen (1–3 líneas)
-- Lista de cambios
-- Riesgos
-- Pasos para probar
-- Evidencia (tests/validaciones)
+Scope: Self
 
----
+Capabilities:
+- Manage up to 4 equipos
+- View own access history
+- Generate dynamic QR
+- Update profile (phone + email)
+- Change password
+- Verify email via OTP
 
-## 7) Política de suposiciones
-Prohibido asumir:
-- Campos que no existan
-- Endpoints que no existan
-- Reglas del negocio no confirmadas
+Restrictions:
+- Cannot access other users' data
+- Cannot exceed 4 equipos
+- Can edit/delete equipo only if status == PENDIENTE
 
-Si falta info:
-- El agente debe buscar en el código del repo y basarse en eso.
-- Si sigue incierto, debe proponer opciones y detenerse.
-
----
-
-## 8) Enfoque “Estable primero”
-Prioridad:
-1) Bugs y consistencia del negocio
-2) Seguridad y permisos
-3) Performance
-4) UX/UI (sin rediseño masivo)
-5) Refactors estéticos
+Security Requirements:
+- QR must be cryptographically signed
+- QR must expire
+- OTP must have rate limiting
+- Session handling must support multi-device securely
 
 ---
 
-## 9) Recordatorio final
-Libertad ≠ reescribir el proyecto.
-La meta es: **mejor sin sorpresas**.
+# 2. Domain Invariants (Non-Negotiable)
+
+1. Max 4 equipos per aprendiz (DB-level enforcement)
+2. Only 1 active turno per guarda
+3. No acceso without active turno
+4. Acceso.sede must match turno.sede
+5. Strict sede isolation
+6. No implicit permission defaults
+7. All role evaluation must use UserMembership as source of truth
+8. Soft-delete for critical historical entities (Acceso recommended)
+
+---
+
+# 3. Security Architecture
+
+## 3.1 Role System
+
+- UserMembership is the single source of truth
+- No legacy role fallback allowed
+- Permission evaluation must fail securely
+
+## 3.2 QR System
+
+QR must contain:
+- user_id
+- session_id or device_id
+- expiration timestamp
+- nonce
+- signature (HMAC or asymmetric)
+
+Replay attacks must be impossible.
+
+## 3.3 OTP
+
+- Expiration time
+- Max attempts
+- Rate limiting
+- Audit log of failures
+
+---
+
+# 4. Technical Standards
+
+- Fail securely by default
+- No permissive defaults
+- No implicit access
+- All business rules enforced in backend
+- DB constraints for critical invariants
+- Automated tests for privilege escalation attempts
+
+---
+
+# 5. Definition of “Production Ready”
+
+The system is considered production-ready when:
+
+- No cross-sede data leakage is possible
+- No privilege escalation is possible
+- All invariants are DB-enforced
+- All endpoints require explicit permission mapping
+- Critical operations are audited
+- QR replay is impossible
+- OTP brute-force is mitigated
+- Test coverage includes adversarial cases
+
+---
+
+End of document.

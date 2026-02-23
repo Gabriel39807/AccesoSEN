@@ -23,6 +23,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .api_responses import error_response, ok_response
 from .domain.services.authorization import AuthorizationService
+from .domain.services.email_domain_service import EmailDomainService
 from .error_codes import ErrorCode
 from .models import RefreshSession, Usuario
 from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, reset_counter
@@ -267,6 +268,22 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         User = get_user_model()
         user = _find_user_by_login_identifier(User, login_identifier) if login_identifier else None
         canonical_login = ((getattr(user, "username", "") or "").strip().lower() if user else login_identifier)
+
+        if "@" in login_identifier:
+            domain_check = EmailDomainService.validate(
+                email=login_identifier,
+                role_code=AuthorizationService.default_role_for_user(user) if user else None,
+                sede=getattr(user, "sede_principal", None) if user else None,
+            )
+            if not domain_check.allowed:
+                logger.info(
+                    "login_rejected_domain_policy login=%s ip=%s",
+                    canonical_login,
+                    ip,
+                )
+                raise AuthenticationFailed(
+                    {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."}
+                )
 
         if user and getattr(user, "username", None):
             attrs["username"] = user.username

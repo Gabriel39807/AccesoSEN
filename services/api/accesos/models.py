@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
@@ -212,7 +214,19 @@ class SedePolicy(models.Model):
 
 
 class AllowedEmailDomain(models.Model):
-    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="allowed_email_domains")
+    class Scope(models.TextChoices):
+        GLOBAL = "GLOBAL", "Global"
+        SEDE = "SEDE", "Sede"
+        ROLE = "ROLE", "Rol"
+        ROLE_SEDE = "ROLE_SEDE", "Rol + sede"
+
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.CASCADE,
+        related_name="allowed_email_domains",
+        null=True,
+        blank=True,
+    )
     sede = models.ForeignKey(
         Sede,
         on_delete=models.CASCADE,
@@ -223,23 +237,73 @@ class AllowedEmailDomain(models.Model):
     domain = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_allowed_email_domains",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
-        ordering = ["role__code", "sede__code", "domain"]
+        ordering = ["domain", "role__code", "sede__code"]
         constraints = [
             models.UniqueConstraint(
-                fields=["role", "sede", "domain"],
-                name="uniq_allowed_domain_role_sede_domain",
+                fields=["domain"],
+                condition=Q(role__isnull=True, sede__isnull=True),
+                name="uniq_allowed_domain_global",
+            ),
+            models.UniqueConstraint(
+                fields=["domain", "sede"],
+                condition=Q(role__isnull=True, sede__isnull=False),
+                name="uniq_allowed_domain_sede",
+            ),
+            models.UniqueConstraint(
+                fields=["domain", "role"],
+                condition=Q(role__isnull=False, sede__isnull=True),
+                name="uniq_allowed_domain_role",
+            ),
+            models.UniqueConstraint(
+                fields=["domain", "role", "sede"],
+                condition=Q(role__isnull=False, sede__isnull=False),
+                name="uniq_allowed_domain_role_sede",
             ),
         ]
 
+    def clean(self):
+        domain = (self.domain or "").strip().lower().replace("@", "")
+        domain_re = re.compile(
+            r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+        )
+        if not domain_re.fullmatch(domain):
+            raise ValidationError(
+                {
+                    "domain": (
+                        "Dominio invalido. Usa solo dominio sin @, por ejemplo: empresa.com."
+                    )
+                }
+            )
+        self.domain = domain
+
+    @property
+    def scope(self) -> str:
+        if self.role_id and self.sede_id:
+            return self.Scope.ROLE_SEDE
+        if self.role_id and not self.sede_id:
+            return self.Scope.ROLE
+        if not self.role_id and self.sede_id:
+            return self.Scope.SEDE
+        return self.Scope.GLOBAL
+
     def save(self, *args, **kwargs):
-        self.domain = (self.domain or "").strip().lower().replace("@", "")
+        self.clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
+        role_code = getattr(self.role, "code", None) or "GLOBAL"
         sede_code = getattr(self.sede, "code", None) or "GLOBAL"
-        return f"{self.role.code}:{sede_code}:{self.domain}"
+        return f"{role_code}:{sede_code}:{self.domain}"
 
 
 class Equipo(models.Model):

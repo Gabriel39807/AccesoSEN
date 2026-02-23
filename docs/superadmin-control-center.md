@@ -25,6 +25,7 @@ Centralizar la administracion de `Sedes` y `RBAC` (roles, permisos y asignacione
     - Roles
     - Permisos
     - Asignaciones
+    - Dominios
     - Auditoria
   - `AuthGuard` bloquea acceso a no-superadmin.
 

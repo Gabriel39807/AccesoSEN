@@ -267,7 +267,7 @@ def validate_excel(content) -> ImportValidationResult:
             errors.append(
                 {
                     "row": idx,
-                    "code": "INVALID_EMAIL_DOMAIN",
+                    "code": domain_check.code or ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED,
                     "message": domain_check.message or "El dominio del correo no esta permitido para esta sede.",
                     "field": "Correo",
                 }
@@ -323,6 +323,19 @@ def execute_aprendices_import(
                         message="Una o mas filas del archivo tienen sede invalida.",
                         field="sede_principal",
                         detail={"row": idx, "sede_principal": sede_code},
+                    )
+
+                domain_check = EmailDomainService.validate(
+                    email=str(row.get("email", "")).strip().lower(),
+                    role_code=Usuario.Rol.APRENDIZ,
+                    sede=sede_obj,
+                )
+                if not domain_check.allowed:
+                    raise ImportServiceError(
+                        code=domain_check.code or ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED,
+                        message=domain_check.message or "El dominio del correo no esta permitido para esta sede.",
+                        field="email",
+                        detail={"row": idx, "email": row.get("email", "")},
                     )
 
                 user = Usuario.objects.filter(documento=row["documento"]).first()
