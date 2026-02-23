@@ -17,6 +17,9 @@ class AccesosConfig(AppConfig):
 
     def ready(self):
         """Attach post_migrate signal for admin bootstrap."""
+        # Register model signals (membership sync, etc.)
+        from . import signals  # noqa: F401
+
         post_migrate.connect(ensure_superadmin_exists, sender=self)
 
 

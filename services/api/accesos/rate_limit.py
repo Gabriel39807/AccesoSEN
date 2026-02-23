@@ -22,7 +22,9 @@ def _now_ts() -> int:
 
 def _set_lock(lock_key: str, lock_sec: int) -> int:
     until_ts = _now_ts() + int(lock_sec)
-    cache.set(lock_key, until_ts, timeout=lock_sec)
+    # `add` avoids clobbering a lock set by a concurrent request.
+    if not cache.add(lock_key, until_ts, timeout=lock_sec):
+        cache.set(lock_key, until_ts, timeout=lock_sec)
     return until_ts
 
 
@@ -45,8 +47,16 @@ def bump_with_lock(prefix: str, key_parts: list[str], max_attempts: int, window_
     if remaining > 0:
         return {"locked": True, "attempts": max_attempts, "remaining_sec": remaining, "just_locked": False}
 
-    attempts = cache.get(key, 0) + 1
-    cache.set(key, attempts, timeout=window_sec)
+    # Atomic bump for distributed caches (Redis): add first, then incr.
+    if cache.add(key, 1, timeout=window_sec):
+        attempts = 1
+    else:
+        try:
+            attempts = int(cache.incr(key))
+        except Exception:
+            # Fallback for backends without atomic `incr`.
+            attempts = int(cache.get(key, 0) or 0) + 1
+            cache.set(key, attempts, timeout=window_sec)
 
     if attempts >= max_attempts:
         until_ts = _set_lock(lock_key, lock_sec)

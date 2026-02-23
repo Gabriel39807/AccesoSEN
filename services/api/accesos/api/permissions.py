@@ -17,6 +17,12 @@ class RequiresPermission(BasePermission):
     def _action(self, view) -> str:
         return str(getattr(view, "action", "") or "").strip()
 
+    def _allow_own_without_object(self, view, action: str) -> bool:
+        allowed = getattr(view, "allow_own_scope_actions", set())
+        if isinstance(allowed, (list, tuple, set)):
+            return action in allowed
+        return False
+
     def _perm_for_action(self, view, *, object_level: bool = False) -> str | None:
         action = self._action(view)
         if not action:
@@ -34,10 +40,15 @@ class RequiresPermission(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
+        action = self._action(view)
+        if not isinstance(getattr(view, "permission_map", None), dict):
+            # Fail secure: permission map is mandatory.
+            return False
         perm_code = self._perm_for_action(view, object_level=False)
         if not perm_code:
-            # If view does not declare a map for this action, default to authenticated.
-            return True
+            return False
+        if action and self._allow_own_without_object(view, action):
+            return AuthorizationService.has_perm(user, perm_code, obj=user)
         return AuthorizationService.has_perm(user, perm_code)
 
     def has_object_permission(self, request, view, obj) -> bool:
@@ -45,8 +56,9 @@ class RequiresPermission(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
+        if not isinstance(getattr(view, "permission_map", None), dict):
+            return False
         perm_code = self._perm_for_action(view, object_level=True)
         if not perm_code:
-            return True
+            return False
         return AuthorizationService.has_perm(user, perm_code, obj=obj)
-

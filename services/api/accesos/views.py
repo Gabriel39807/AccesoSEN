@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import re
 import secrets
 import time
@@ -18,7 +19,7 @@ from uuid import uuid4
 import qrcode
 from django.conf import settings
 from django.core.cache import cache
-from django.db import connection
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
@@ -31,6 +32,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .api_responses import error_response, ok_response
+from .api.permissions import RequiresPermission
 from .domain.services.authorization import AuthorizationService
 from .domain.services.email_domain_service import EmailDomainService
 from .domain.services.policy_service import PolicyService
@@ -110,6 +112,7 @@ GENERIC_SEDES = [
     {"code": "sede-3", "name": "Sede 3"},
     {"code": "sede-4", "name": "Sede 4"},
 ]
+logger = logging.getLogger(__name__)
 
 
 def _default_sede_rows():
@@ -155,6 +158,16 @@ def _scope_sede(user: Usuario) -> str | None:
 
 def _is_admin_full_access(user: Usuario) -> bool:
     return bool(user and is_admin_role(user) and not is_admin_sede(user))
+
+
+def _effective_role(user: Usuario | None) -> str:
+    return AuthorizationService.default_role_for_user(user) if user else ""
+
+
+def _has_role(user: Usuario | None, role_code: str) -> bool:
+    if not user:
+        return False
+    return role_code in AuthorizationService.role_codes(user)
 
 
 def _same_sede_or_superadmin(actor: Usuario, target_sede: str | None) -> bool:
@@ -209,10 +222,17 @@ def _guard_can_use_sede(user: Usuario, sede: Sede | None) -> bool:
 def _enforce_admin_sede_limit(target_sede_id: int | None, exclude_user_id: int | None = None) -> tuple[bool, int]:
     if not target_sede_id:
         return False, 0
-    qs = Usuario.objects.filter(rol=Usuario.Rol.ADMIN_SEDE, sede_principal_id=target_sede_id)
+    role_admin = Role.objects.filter(code=Usuario.Rol.ADMIN_SEDE).only("id").first()
+    if not role_admin:
+        return False, 0
+    qs = UserMembership.objects.filter(
+        role=role_admin,
+        sede_id=target_sede_id,
+        is_active=True,
+    ).values("user_id")
     if exclude_user_id:
-        qs = qs.exclude(id=exclude_user_id)
-    current = qs.count()
+        qs = qs.exclude(user_id=exclude_user_id)
+    current = qs.distinct().count()
     return current >= MAX_ADMINS_PER_SEDE, current
 
 
@@ -382,9 +402,12 @@ def _uniform_response_delay(start_ts: float, min_ms: int = 220):
         time.sleep(remaining_ms / 1000.0)
 
 
-def obtener_turno_activo(user):
+def _normalize_active_turnos(user: Usuario, *, lock_for_update: bool = False) -> list[Turno]:
     qs = Turno.objects.filter(guarda=user, activo=True).order_by("-inicio")
+    if lock_for_update:
+        qs = qs.select_for_update()
     now = timezone.now()
+    active_turnos: list[Turno] = []
     for t in qs[:10]:
         if t.fin is not None:
             t.activo = False
@@ -401,8 +424,13 @@ def obtener_turno_activo(user):
                 t.save(update_fields=["activo", "fin"])
             continue
 
-        return t
-    return None
+        active_turnos.append(t)
+    return active_turnos
+
+
+def obtener_turno_activo(user):
+    active_turnos = _normalize_active_turnos(user, lock_for_update=False)
+    return active_turnos[0] if active_turnos else None
 
 
 def _safe_fin(now, inicio):
@@ -411,10 +439,23 @@ def _safe_fin(now, inicio):
     return now
 
 
-def _build_aprendiz_qr_value(user: Usuario) -> tuple[str, str]:
+def _request_session_id(request) -> str | None:
+    auth = getattr(request, "auth", None)
+    if auth is None:
+        return None
+    if hasattr(auth, "get"):
+        sid = str(auth.get("sid") or "").strip()
+        return sid or None
+    sid = str(getattr(auth, "sid", "") or "").strip()
+    return sid or None
+
+
+def _build_aprendiz_qr_value(user: Usuario, *, request=None) -> tuple[str, str]:
     qr_value, mode = QRService.build_aprendiz_qr_value(
         str(user.documento or "").strip(),
         sede=getattr(user, "sede_principal", None),
+        session_id=_request_session_id(request) if request is not None else None,
+        user_id=getattr(user, "id", None),
     )
     return qr_value, mode
 
@@ -707,7 +748,7 @@ class AprendizEmailChangeConfirmView(APIView):
 
         domain_check = EmailDomainService.validate(
             email=new_email,
-            role_code=getattr(user, "rol", Usuario.Rol.APRENDIZ),
+            role_code=AuthorizationService.default_role_for_user(user) or Usuario.Rol.APRENDIZ,
             sede=getattr(user, "sede_principal", None),
         )
         if not domain_check.allowed:
@@ -779,7 +820,14 @@ class AprendizMiQRView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        qr_value, qr_mode = _build_aprendiz_qr_value(user)
+        try:
+            qr_value, qr_mode = _build_aprendiz_qr_value(user, request=request)
+        except QRParseError as exc:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc) or "No fue posible generar el QR en este momento.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         img = qrcode.make(qr_value)
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -806,7 +854,14 @@ class AprendizMiQRDownloadView(APIView):
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        qr_value, _ = _build_aprendiz_qr_value(user)
+        try:
+            qr_value, _ = _build_aprendiz_qr_value(user, request=request)
+        except QRParseError as exc:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc) or "No fue posible generar el QR en este momento.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         img = qrcode.make(qr_value)
         buffer = io.BytesIO()
         img.save(buffer, format="PNG")
@@ -1333,10 +1388,10 @@ class NotificacionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        rol = getattr(user, "rol", None)
+        role_codes = list(AuthorizationService.role_codes(user))
 
         qs_user = Notificacion.objects.filter(user=user)
-        qs_rol = Notificacion.objects.filter(user__isnull=True, rol_objetivo=rol)
+        qs_rol = Notificacion.objects.filter(user__isnull=True, rol_objetivo__in=role_codes)
         qs_global = Notificacion.objects.filter(user__isnull=True, rol_objetivo__isnull=True)
         qs = (qs_user | qs_rol | qs_global).distinct().order_by("-created_at")
         if is_admin_sede(user):
@@ -1541,7 +1596,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
         return self._update_as_aprendiz(request, partial=True)
 
     def create(self, request, *args, **kwargs):
-        if getattr(request.user, "rol", None) == Usuario.Rol.APRENDIZ:
+        if _has_role(request.user, Usuario.Rol.APRENDIZ):
             policy = PolicyService.get_policy(getattr(request.user, "sede_principal", None))
             max_equipos = int(policy.max_equipos_aprendiz or 4)
             total = Equipo.objects.filter(propietario=request.user).count()
@@ -1555,7 +1610,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        rol = getattr(user, "rol", None)
+        rol = _effective_role(user)
 
         if rol == Usuario.Rol.APRENDIZ:
             policy = PolicyService.get_policy(getattr(user, "sede_principal", None))
@@ -1563,7 +1618,10 @@ class EquipoViewSet(viewsets.ModelViewSet):
             total = Equipo.objects.filter(propietario=user).count()
             if total >= max_equipos:
                 raise ValidationError({"equipos": f"Solo puedes registrar hasta {max_equipos} equipos."})
-            serializer.save(propietario=user)
+            try:
+                serializer.save(propietario=user)
+            except IntegrityError:
+                raise ValidationError({"equipos": f"Solo puedes registrar hasta {max_equipos} equipos."})
             return
 
         propietario = serializer.validated_data.get("propietario", None)
@@ -1574,7 +1632,10 @@ class EquipoViewSet(viewsets.ModelViewSet):
             if not actor_sede or _scope_sede(propietario) != actor_sede:
                 raise ValidationError({"propietario": "Solo puedes registrar equipos para aprendices de tu sede."})
 
-        equipo = serializer.save(propietario=propietario)
+        try:
+            equipo = serializer.save(propietario=propietario)
+        except IntegrityError:
+            raise ValidationError({"equipos": "No se puede registrar mas de 4 equipos para este aprendiz."})
         equipo.estado = Equipo.Estado.APROBADO
         equipo.motivo_rechazo = None
         equipo.revisado_por = user
@@ -1585,7 +1646,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
         equipo = self.get_object()
         user = request.user
 
-        if getattr(user, "rol", None) == Usuario.Rol.APRENDIZ:
+        if _has_role(user, Usuario.Rol.APRENDIZ):
             if equipo.propietario_id != user.id:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
@@ -1732,23 +1793,33 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        turno_activo = obtener_turno_activo(request.user)
-        if turno_activo:
+        try:
+            with transaction.atomic():
+                active_turnos = _normalize_active_turnos(request.user, lock_for_update=True)
+                if active_turnos:
+                    return error_response(
+                        code=ErrorCode.TURNO_ALREADY_ACTIVE,
+                        message="Ya tienes un turno activo.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        extra={"turno": TurnoSerializer(active_turnos[0]).data},
+                    )
+
+                turno = Turno.objects.create(
+                    guarda=request.user,
+                    sede=selected_sede,
+                    jornada=s.validated_data["jornada"],
+                    inicio=timezone.now(),
+                    activo=True,
+                    fin=None,
+                )
+        except IntegrityError:
+            turno_activo = Turno.objects.filter(guarda=request.user, activo=True, fin__isnull=True).order_by("-inicio").first()
             return error_response(
                 code=ErrorCode.TURNO_ALREADY_ACTIVE,
                 message="Ya tienes un turno activo.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-                extra={"turno": TurnoSerializer(turno_activo).data},
+                status_code=status.HTTP_409_CONFLICT,
+                extra={"turno": TurnoSerializer(turno_activo).data if turno_activo else None},
             )
-
-        turno = Turno.objects.create(
-            guarda=request.user,
-            sede=selected_sede,
-            jornada=s.validated_data["jornada"],
-            inicio=timezone.now(),
-            activo=True,
-            fin=None,
-        )
         return ok_response({"turno": TurnoSerializer(turno).data}, status_code=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="reanudar")
@@ -1821,7 +1892,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     def resumen(self, request, pk=None):
         turno = self.get_object()
         user = request.user
-        rol = getattr(user, "rol", None)
+        rol = _effective_role(user)
 
         if rol == "guarda" and turno.guarda_id != user.id:
             return error_response(
@@ -1838,7 +1909,7 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
-        qs = Acceso.objects.filter(turno=turno)
+        qs = Acceso.objects.filter(turno=turno, is_deleted=False)
         ingresos = qs.filter(tipo=Acceso.Tipo.INGRESO).count()
         salidas = qs.filter(tipo=Acceso.Tipo.SALIDA).count()
 
@@ -1852,15 +1923,35 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AccesoViewSet(viewsets.ModelViewSet):
     serializer_class = AccesoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresPermission]
     queryset = Acceso.objects.all()
+    allow_own_scope_actions = {"mis_accesos", "estado"}
+    permission_map = {
+        "list": "acceso.read",
+        "retrieve": "acceso.read",
+        "create": "acceso.create",
+        "update": "acceso.delete",
+        "partial_update": "acceso.delete",
+        "destroy": "acceso.delete",
+        "validar_documento": "acceso.scan",
+        "registrar_por_documento": "acceso.scan",
+        "stats": "acceso.stats",
+        "mis_accesos": "acceso.read",
+        "estado": "acceso.read",
+    }
+    object_permission_map = {
+        "retrieve": "acceso.read",
+        "update": "acceso.delete",
+        "partial_update": "acceso.delete",
+        "destroy": "acceso.delete",
+    }
 
     def get_queryset(self):
         user = self.request.user
         qs = (
             AuthorizationService.scoped_queryset(
                 user,
-                Acceso.objects.all(),
+                Acceso.objects.filter(is_deleted=False),
                 resource="acceso",
             )
             .select_related("turno", "turno__guarda", "turno__sede", "usuario", "registrado_por", "sede")
@@ -1977,20 +2068,6 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 )
         return None
 
-    def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
-            if is_admin_role(self.request.user):
-                return [IsAuthenticated(), IsAdmin()]
-            return [IsAuthenticated(), IsGuarda()]
-
-        if self.action in ["validar_documento", "registrar_por_documento", "stats"]:
-            return [IsAuthenticated(), IsGuarda()]
-
-        if self.action in ["mis_accesos", "estado"]:
-            return [IsAuthenticated(), IsAprendiz()]
-
-        return [IsAuthenticated()]
-
     def _validar_equipos_ingreso(self, aprendiz: Usuario, equipos: list[Equipo]):
         for eq in equipos:
             if eq.propietario_id != aprendiz.id:
@@ -2018,7 +2095,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         request_user = request.user
-        rol = getattr(request_user, "rol", None)
+        rol = _effective_role(request_user)
 
         if rol not in [Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA]:
             return error_response(
@@ -2071,7 +2148,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
-        ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
+        ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
             return error_response(
@@ -2112,6 +2189,15 @@ class AccesoViewSet(viewsets.ModelViewSet):
         acceso = serializer.save(registrado_por=request_user, turno=turno, sede=sede)
         if equipos_enviados:
             acceso.equipos.set(list(equipos_enviados))
+        logger.info(
+            "audit_access_created actor_id=%s actor_role=%s acceso_id=%s aprendiz_id=%s tipo=%s sede_id=%s",
+            getattr(request_user, "id", None),
+            rol,
+            acceso.id,
+            getattr(aprendiz, "id", None),
+            tipo,
+            getattr(sede, "id", None),
+        )
 
         return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
 
@@ -2129,6 +2215,12 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="validar_documento")
     def validar_documento(self, request):
+        if not _has_role(request.user, Usuario.Rol.GUARDA):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No tienes permisos para validar documentos.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
         s = ValidarDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         turno = obtener_turno_activo(request.user)
@@ -2171,7 +2263,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        if getattr(aprendiz, "rol", None) != Usuario.Rol.APRENDIZ:
+        if not _has_role(aprendiz, Usuario.Rol.APRENDIZ):
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
                 message="El documento no pertenece a un aprendiz.",
@@ -2185,7 +2277,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
+        ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
         estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
         equipos_aprobados = Equipo.objects.filter(propietario=aprendiz, estado=Equipo.Estado.APROBADO).order_by("-creado_en")
 
@@ -2200,6 +2292,12 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="registrar_por_documento")
     def registrar_por_documento(self, request):
+        if not _has_role(request.user, Usuario.Rol.GUARDA):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No tienes permisos para registrar accesos por documento.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
         s = RegistrarAccesoDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
@@ -2246,14 +2344,14 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        if getattr(aprendiz, "rol", None) != Usuario.Rol.APRENDIZ:
+        if not _has_role(aprendiz, Usuario.Rol.APRENDIZ):
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
                 message="El documento no pertenece a un aprendiz.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        ultimo = Acceso.objects.filter(usuario=aprendiz).order_by("-fecha").first()
+        ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
             return error_response(
@@ -2291,11 +2389,25 @@ class AccesoViewSet(viewsets.ModelViewSet):
         )
         if equipos:
             acceso.equipos.set(list(equipos))
+        logger.info(
+            "audit_access_created_scan actor_id=%s acceso_id=%s aprendiz_id=%s tipo=%s sede_id=%s",
+            getattr(request.user, "id", None),
+            acceso.id,
+            getattr(aprendiz, "id", None),
+            tipo,
+            getattr(scan_sede, "id", None),
+        )
 
         return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
+        if not _has_role(request.user, Usuario.Rol.GUARDA):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="No tienes permisos para ver estadisticas de escaneo.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
         turno = obtener_turno_activo(request.user)
         default_sede = getattr(request.user, "sede_principal", None)
         policy = PolicyService.get_policy(turno.sede if turno else default_sede)
@@ -2314,7 +2426,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        qs = Acceso.objects.filter(turno=turno)
+        qs = Acceso.objects.filter(turno=turno, is_deleted=False)
         ingresos = qs.filter(tipo=Acceso.Tipo.INGRESO).count()
         salidas = qs.filter(tipo=Acceso.Tipo.SALIDA).count()
 
@@ -2327,12 +2439,24 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="mis_accesos")
     def mis_accesos(self, request):
-        qs = Acceso.objects.filter(usuario=request.user).order_by("-fecha")[:100]
+        if not _has_role(request.user, Usuario.Rol.APRENDIZ):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Este endpoint es exclusivo para aprendices.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        qs = Acceso.objects.filter(usuario=request.user, is_deleted=False).order_by("-fecha")[:100]
         return Response(AccesoSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path="estado")
     def estado(self, request):
-        ultimo = Acceso.objects.filter(usuario=request.user).order_by("-fecha").first()
+        if not _has_role(request.user, Usuario.Rol.APRENDIZ):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Este endpoint es exclusivo para aprendices.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+        ultimo = Acceso.objects.filter(usuario=request.user, is_deleted=False).order_by("-fecha").first()
         if not ultimo:
             return ok_response(
                 {
@@ -2350,6 +2474,19 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 "ultima_fecha": ultimo.fecha,
             }
         )
+
+    def destroy(self, request, *args, **kwargs):
+        acceso = self.get_object()
+        if acceso.is_deleted:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        acceso.soft_delete(by_user=request.user)
+        logger.warning(
+            "audit_access_soft_deleted actor_id=%s acceso_id=%s aprendiz_id=%s",
+            getattr(request.user, "id", None),
+            acceso.id,
+            getattr(acceso.usuario, "id", None),
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 def _role_allowed_for_expected(actual_role: str | None, expected_role: str | None) -> bool:
@@ -2805,7 +2942,7 @@ class PasskeyAuthVerifyView(APIView):
                 message="Debes recuperar la contrasena antes de volver a iniciar sesion.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
-        if not _role_allowed_for_expected(getattr(user, "rol", None), expected_role):
+        if not _role_allowed_for_expected(_effective_role(user), expected_role):
             return error_response(
                 code=ErrorCode.INVALID_CREDENTIALS,
                 message="Credenciales invalidas para este modulo.",

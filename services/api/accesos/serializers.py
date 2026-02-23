@@ -3,6 +3,7 @@ import secrets
 
 from rest_framework import serializers
 from accesos.domain.services.email_domain_service import EmailDomainService
+from accesos.domain.services.authorization import AuthorizationService
 from .models import ConfiguracionSistema, Sede, Usuario, Acceso, Equipo, Turno
 from .models import Notificacion
 
@@ -65,6 +66,12 @@ def is_numeric_document(value: str) -> bool:
 def is_signed_scan_token(value: str) -> bool:
     value = (value or "").strip().upper()
     return value.startswith("SADI1:") or value.startswith("SADI1B64:")
+
+
+def user_has_role(user: Usuario | None, role_code: str) -> bool:
+    if not user:
+        return False
+    return role_code in AuthorizationService.role_codes(user)
 
 # =========================
 # USUARIOS
@@ -246,7 +253,7 @@ class AprendizEmailChangeRequestSerializer(serializers.Serializer):
         if user and getattr(user, "is_authenticated", False):
             result = EmailDomainService.validate(
                 email=value,
-                role_code=getattr(user, "rol", Usuario.Rol.APRENDIZ),
+                role_code=AuthorizationService.default_role_for_user(user) or Usuario.Rol.APRENDIZ,
                 sede=getattr(user, "sede_principal", None),
             )
             if not result.allowed:
@@ -298,7 +305,7 @@ class EquipoSerializer(serializers.ModelSerializer):
         if value is None:
             return value
         # opcional: solo aprendices pueden ser propietarios
-        if getattr(value, "rol", None) != Usuario.Rol.APRENDIZ:
+        if not user_has_role(value, Usuario.Rol.APRENDIZ):
             raise serializers.ValidationError("El propietario del equipo debe ser un aprendiz.")
         return value
 
@@ -359,7 +366,7 @@ class AccesoSerializer(serializers.ModelSerializer):
         if usuario is None:
             raise serializers.ValidationError({"usuario": "Este campo es obligatorio."})
 
-        if getattr(usuario, "rol", None) != Usuario.Rol.APRENDIZ:
+        if not user_has_role(usuario, Usuario.Rol.APRENDIZ):
             raise serializers.ValidationError({"usuario": "Solo se pueden registrar accesos para aprendices."})
 
         ultimo = Acceso.objects.filter(usuario=usuario).order_by("-fecha").first()

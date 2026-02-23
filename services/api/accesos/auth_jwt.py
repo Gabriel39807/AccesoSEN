@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from .domain.services.authorization import AuthorizationService
 from .models import RefreshSession
 
 
@@ -21,10 +22,10 @@ class SadiJWTAuthentication(JWTAuthentication):
         if session:
             if session.revoked_at is not None or now >= session.expires_at:
                 raise AuthenticationFailed("Sesion invalida para este dispositivo.")
-        elif getattr(user, "rol", None) != "guarda":
+        elif "guarda" not in AuthorizationService.role_codes(user):
             raise AuthenticationFailed("Sesion invalida para este dispositivo.")
 
-        if getattr(user, "rol", None) == "guarda":
+        if "guarda" in AuthorizationService.role_codes(user):
             expected = str(user.active_session_id or "")
             if not sid or sid != expected:
                 raise AuthenticationFailed("Sesion invalida para este dispositivo.")

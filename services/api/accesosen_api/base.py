@@ -48,6 +48,40 @@ def env_list(name: str, default: list[str] | None = None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _build_cache_config() -> dict:
+    """Build cache backend settings.
+
+    Uses Redis when REDIS_URL is configured; otherwise falls back to LocMem for
+    local development/test.
+    """
+    redis_url = str(os.getenv("REDIS_URL", "") or "").strip()
+    if redis_url:
+        return {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": redis_url,
+            "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
+            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "sadi"),
+        }
+    return {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "sadi-cache",
+    }
+
+
+def enforce_production_security_guards(*, django_env: str, cache_backend: str, webauthn_mock: bool):
+    """Fail fast on insecure production runtime settings."""
+    env_name = str(django_env or "").strip().lower()
+    backend = str(cache_backend or "").strip()
+    if env_name == "production" and backend.endswith("LocMemCache"):
+        raise ImproperlyConfigured(
+            "Unsafe cache backend for production: LocMemCache is not allowed. Configure REDIS_URL."
+        )
+    if env_name == "production" and webauthn_mock:
+        raise ImproperlyConfigured(
+            "Unsafe WebAuthn setting for production: WEBAUTHN_MOCK must be false."
+        )
+
+
 def env_required(name: str, *, allow_generated_for_dev: bool = False) -> str:
     """Read a required environment variable.
 
@@ -173,7 +207,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ("accesos.auth_jwt.SadiJWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "accesos.pagination.SafePageNumberPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "accesos.exceptions.ui_exception_handler",
 }
@@ -188,12 +222,7 @@ SIMPLE_JWT = {
 REFRESH_TOKEN_PEPPER = str(os.getenv("REFRESH_TOKEN_PEPPER", "") or SECRET_KEY).strip()
 GUARDA_SINGLE_ACTIVE_SESSION = env_bool("GUARDA_SINGLE_ACTIVE_SESSION", True)
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "sadi-cache",
-    }
-}
+CACHES = {"default": _build_cache_config()}
 
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
@@ -233,6 +262,12 @@ WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "localhost")
 WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "SADI")
 WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "http://localhost:3000")
 WEBAUTHN_MOCK = env_bool("WEBAUTHN_MOCK", True)
+
+enforce_production_security_guards(
+    django_env=CURRENT_DJANGO_ENV,
+    cache_backend=CACHES["default"]["BACKEND"],
+    webauthn_mock=WEBAUTHN_MOCK,
+)
 
 # Security defaults; production overrides these to hardened values.
 SECURE_BROWSER_XSS_FILTER = True

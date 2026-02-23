@@ -22,6 +22,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .api_responses import error_response, ok_response
+from .domain.services.authorization import AuthorizationService
 from .error_codes import ErrorCode
 from .models import RefreshSession, Usuario
 from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, reset_counter
@@ -70,7 +71,7 @@ def _new_refresh_token() -> str:
 
 def _build_access_token(user: Usuario, sid) -> str:
     access = AccessToken.for_user(user)
-    access["rol"] = getattr(user, "rol", "")
+    access["rol"] = AuthorizationService.default_role_for_user(user)
     access["sid"] = str(sid)
     return str(access)
 
@@ -187,7 +188,7 @@ def _issue_session_tokens(
     refresh_hash = _hash_refresh_token(refresh_value)
 
     with transaction.atomic():
-        if rotate_guard_session and getattr(user, "rol", None) == Usuario.Rol.GUARDA and _guard_single_active_session():
+        if rotate_guard_session and Usuario.Rol.GUARDA in AuthorizationService.role_codes(user) and _guard_single_active_session():
             qs = _active_sessions_qs(user=user)
             if previous_session:
                 qs = qs.exclude(id=previous_session.id)
@@ -212,7 +213,7 @@ def _issue_session_tokens(
             previous_session.replaced_by = session
             previous_session.save(update_fields=["revoked_at", "last_used_at", "replaced_by"])
 
-        if getattr(user, "rol", None) == Usuario.Rol.GUARDA and rotate_guard_session:
+        if Usuario.Rol.GUARDA in AuthorizationService.role_codes(user) and rotate_guard_session:
             user.active_session_id = session.id
             user.last_guard_login_at = now
             user.save(update_fields=["active_session_id", "last_guard_login_at"])
@@ -245,7 +246,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        token["rol"] = user.rol
+        token["rol"] = AuthorizationService.default_role_for_user(user)
         token["sid"] = str(user.active_session_id or "")
         return token
 
@@ -333,7 +334,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
                 )
             raise AuthenticationFailed({"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."})
 
-        role = getattr(self.user, "rol", None)
+        role = AuthorizationService.default_role_for_user(self.user)
         if not _role_allowed_for_expected(role, expected_role):
             if canonical_login:
                 bump_with_lock("login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
@@ -522,7 +523,7 @@ class SadiLogoutView(APIView):
                     expires_at__gt=now,
                 ).update(revoked_at=now, last_used_at=now)
 
-            if getattr(user, "rol", None) == Usuario.Rol.GUARDA:
+            if Usuario.Rol.GUARDA in AuthorizationService.role_codes(user):
                 still_active = _active_sessions_qs(user).exists()
                 if not still_active and user.active_session_id is not None:
                     user.active_session_id = None
@@ -543,7 +544,7 @@ class SadiLogoutAllView(APIView):
             expires_at__gt=now,
         ).update(revoked_at=now, last_used_at=now)
 
-        if getattr(user, "rol", None) == Usuario.Rol.GUARDA and user.active_session_id is not None:
+        if Usuario.Rol.GUARDA in AuthorizationService.role_codes(user) and user.active_session_id is not None:
             user.active_session_id = None
             user.save(update_fields=["active_session_id"])
 

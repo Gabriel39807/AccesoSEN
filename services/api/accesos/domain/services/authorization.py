@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from django.db.models import Q, QuerySet
 
-from accesos.models import Permission, Role, RolePermission, UserMembership, Usuario
+from accesos.models import RolePermission, UserMembership, Usuario
 
 
 @dataclass(frozen=True)
@@ -14,29 +14,74 @@ class AuthorizationContext:
 
 
 class AuthorizationService:
-    """
-    Data-driven RBAC service.
+    """Data-driven RBAC service with fail-secure defaults.
 
-    - Source of truth: Role/Permission/RolePermission/UserMembership.
-    - Backward compatibility: falls back to Usuario.rol and sede_principal while
-      old clients still depend on that field.
+    Source of truth:
+    - UserMembership + RolePermission
+
+    Security posture:
+    - No runtime fallback to legacy `Usuario.rol` for authorization decisions.
+    - Deny by default if memberships/permissions are missing.
     """
 
     SUPERADMIN_CODE = "superadmin"
+    LEGACY_ADMIN_CODE = "admin"
+    ADMIN_SEDE_CODE = "admin_sede"
+
+    _RESOURCE_SCOPE_RULES = {
+        "usuario": {
+            "admin_sede": lambda user, sede_ids: Q(sede_principal_id__in=sede_ids),
+            "aprendiz": lambda user, sede_ids: Q(id=user.id),
+            "guarda": lambda user, sede_ids: Q(id=user.id),
+        },
+        "equipo": {
+            "admin_sede": lambda user, sede_ids: Q(propietario__sede_principal_id__in=sede_ids),
+            "guarda": lambda user, sede_ids: Q(propietario__sede_principal_id__in=sede_ids),
+            "aprendiz": lambda user, sede_ids: Q(propietario_id=user.id),
+        },
+        "turno": {
+            "admin_sede": lambda user, sede_ids: Q(sede_id__in=sede_ids),
+            "guarda": lambda user, sede_ids: Q(guarda_id=user.id),
+        },
+        "acceso": {
+            "admin_sede": lambda user, sede_ids: Q(sede_id__in=sede_ids),
+            "guarda": lambda user, sede_ids: Q(turno__guarda_id=user.id) | Q(sede_id__in=sede_ids),
+            "aprendiz": lambda user, sede_ids: Q(usuario_id=user.id),
+        },
+        "notificacion": {
+            "admin_sede": (
+                lambda user, sede_ids: Q(user__isnull=True)
+                | Q(user=user)
+                | Q(user__sede_principal_id__in=sede_ids)
+            ),
+            "guarda": lambda user, sede_ids: Q(user=user) | Q(user__isnull=True),
+            "aprendiz": lambda user, sede_ids: Q(user=user) | Q(user__isnull=True),
+        },
+    }
+
+    @classmethod
+    def _normalize_role_code(cls, role_code: str | None) -> str:
+        """Normalize role aliases to canonical runtime codes."""
+        raw = str(role_code or "").strip().lower()
+        if raw == cls.LEGACY_ADMIN_CODE:
+            return cls.ADMIN_SEDE_CODE
+        return raw
+
+    @classmethod
+    def _active_memberships_qs(cls, user: Usuario):
+        return UserMembership.objects.filter(user=user, is_active=True).select_related("role")
 
     @classmethod
     def role_codes(cls, user: Usuario) -> set[str]:
         if not user or not getattr(user, "is_authenticated", False):
             return set()
 
-        role_codes = set(
-            UserMembership.objects.filter(user=user, is_active=True).values_list("role__code", flat=True)
-        )
-        if getattr(user, "rol", None):
-            legacy = str(user.rol)
-            role_codes.add(legacy)
-            if legacy == "admin":
-                role_codes.add("admin_sede")
+        role_codes = {
+            cls._normalize_role_code(code)
+            for code in cls._active_memberships_qs(user).values_list("role__code", flat=True)
+        }
+        if getattr(user, "is_superuser", False):
+            role_codes.add(cls.SUPERADMIN_CODE)
         return role_codes
 
     @classmethod
@@ -48,15 +93,9 @@ class AuthorizationService:
             return set()
 
         membership_sede_ids = set(
-            UserMembership.objects.filter(user=user, is_active=True, sede__isnull=False).values_list("sede_id", flat=True)
+            cls._active_memberships_qs(user).filter(sede__isnull=False).values_list("sede_id", flat=True)
         )
-        if membership_sede_ids:
-            return membership_sede_ids
-
-        sede_ids: set[int] = set()
-        if getattr(user, "sede_principal_id", None):
-            sede_ids.add(int(user.sede_principal_id))
-        return sede_ids
+        return membership_sede_ids
 
     @classmethod
     def context(cls, user: Usuario) -> AuthorizationContext:
@@ -125,13 +164,18 @@ class AuthorizationService:
         for assignment in assignments:
             if assignment.scope == RolePermission.Scope.GLOBAL:
                 return True
-            if assignment.scope == RolePermission.Scope.SEDE and cls._matches_sede_scope(user, sede_id=sede_id, obj=obj):
-                return True
-            if assignment.scope == RolePermission.Scope.OWN:
-                if obj is None:
-                    # Create/list own resources is allowed by role-level assignment.
+            if assignment.scope == RolePermission.Scope.SEDE:
+                # Action-level checks (list/create) may not carry an object yet.
+                # In that case, allow the permission only when the actor has at
+                # least one active sede membership.
+                if obj is None and sede_id is None:
+                    if bool(cls.allowed_sede_ids(user)):
+                        return True
+                elif cls._matches_sede_scope(user, sede_id=sede_id, obj=obj):
                     return True
-                if cls._matches_own_scope(user, obj=obj):
+            if assignment.scope == RolePermission.Scope.OWN:
+                # OWN never grants implicit create/list without explicit object.
+                if obj is not None and cls._matches_own_scope(user, obj=obj):
                     return True
 
         return False
@@ -145,45 +189,25 @@ class AuthorizationService:
 
         roles = cls.role_codes(user)
         sede_ids = cls.allowed_sede_ids(user)
-
-        if resource == "usuario":
-            if "admin_sede" in roles:
-                return qs.filter(sede_principal_id__in=sede_ids)
-            return qs.filter(id=user.id)
-
-        if resource == "equipo":
-            if "admin_sede" in roles:
-                return qs.filter(propietario__sede_principal_id__in=sede_ids)
-            if "guarda" in roles:
-                return qs.filter(propietario__sede_principal_id__in=sede_ids)
-            return qs.filter(propietario_id=user.id)
-
-        if resource == "turno":
-            if "admin_sede" in roles:
-                return qs.filter(sede_id__in=sede_ids)
-            if "guarda" in roles:
-                return qs.filter(guarda_id=user.id)
+        resource_rules = cls._RESOURCE_SCOPE_RULES.get(resource, {})
+        if not resource_rules:
+            # Unknown resource -> fail secure.
             return qs.none()
 
-        if resource == "acceso":
-            if "admin_sede" in roles:
-                return qs.filter(sede_id__in=sede_ids)
-            if "guarda" in roles:
-                return qs.filter(Q(turno__guarda_id=user.id) | Q(sede_id__in=sede_ids))
-            return qs.filter(usuario_id=user.id)
+        predicates: list[Q] = []
+        for role_code in roles:
+            rule = resource_rules.get(role_code)
+            if not rule:
+                continue
+            predicates.append(rule(user, sede_ids))
 
-        if resource == "notificacion":
-            if "admin_sede" in roles:
-                return qs.filter(
-                    Q(user__isnull=True)
-                    | Q(user=user)
-                    | Q(user__sede_principal_id__in=sede_ids)
-                )
-            if "aprendiz" in roles or "guarda" in roles:
-                return qs.filter(Q(user=user) | Q(user__isnull=True))
-            return qs
+        if not predicates:
+            return qs.none()
 
-        return qs
+        combined = predicates[0]
+        for predicate in predicates[1:]:
+            combined |= predicate
+        return qs.filter(combined)
 
     @classmethod
     def can_manage_role(cls, actor: Usuario, target_role_code: str) -> bool:
@@ -196,19 +220,12 @@ class AuthorizationService:
     @classmethod
     def default_role_for_user(cls, user: Usuario) -> str:
         """
-        Returns the best current role code for login compatibility.
+        Returns the effective role code for login compatibility from memberships.
         """
         if not user:
             return ""
         roles = cls.role_codes(user)
-        if "superadmin" in roles:
-            return "superadmin"
-        if "admin_sede" in roles:
-            return "admin_sede"
-        if "admin" in roles:
-            return "admin_sede"
-        if "guarda" in roles:
-            return "guarda"
-        if "aprendiz" in roles:
-            return "aprendiz"
-        return str(getattr(user, "rol", "") or "")
+        for role_code in ("superadmin", "admin_sede", "guarda", "aprendiz"):
+            if role_code in roles:
+                return role_code
+        return ""

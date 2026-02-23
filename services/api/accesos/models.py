@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.db.models import Q, F
@@ -261,6 +262,34 @@ class Equipo(models.Model):
 
     creado_en = models.DateTimeField(auto_now_add=True)
 
+    _ALLOWED_STATE_TRANSITIONS = {
+        Estado.PENDIENTE: {Estado.PENDIENTE, Estado.APROBADO, Estado.RECHAZADO},
+        Estado.APROBADO: {Estado.APROBADO},
+        Estado.RECHAZADO: {Estado.RECHAZADO},
+    }
+
+    def clean(self):
+        if self.pk:
+            previous_estado = (
+                type(self).objects.filter(pk=self.pk).values_list("estado", flat=True).first()
+            )
+            if previous_estado:
+                allowed = self._ALLOWED_STATE_TRANSITIONS.get(previous_estado, {previous_estado})
+                if self.estado not in allowed:
+                    raise ValidationError(
+                        {"estado": "Transicion de estado no permitida para este equipo."}
+                    )
+
+        if self.estado == self.Estado.RECHAZADO and not (self.motivo_rechazo or "").strip():
+            raise ValidationError({"motivo_rechazo": "Debes indicar el motivo de rechazo."})
+
+        if self.estado != self.Estado.RECHAZADO:
+            self.motivo_rechazo = None
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.serial} - {self.marca} {self.modelo} ({self.estado})"
 
@@ -292,6 +321,11 @@ class Turno(models.Model):
                 condition=(Q(activo=True, fin__isnull=True) | Q(activo=False, fin__isnull=False)),
                 name="turno_activo_fin_coherente",
             ),
+            models.UniqueConstraint(
+                fields=["guarda"],
+                condition=Q(activo=True, fin__isnull=True),
+                name="unique_active_turno_per_guarda",
+            ),
         ]
 
     @property
@@ -322,6 +356,36 @@ class Acceso(models.Model):
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name="accesos")
 
     equipos = models.ManyToManyField(Equipo, blank=True, related_name="accesos")
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accesos_eliminados",
+    )
+
+    def clean(self):
+        if self.turno_id:
+            if self.turno and not self.turno.activo:
+                raise ValidationError({"turno": "El turno asociado no esta activo."})
+            if self.sede_id and self.turno and self.turno.sede_id != self.sede_id:
+                raise ValidationError({"sede": "La sede del acceso debe coincidir con la sede del turno."})
+
+    def save(self, *args, **kwargs):
+        if self.turno_id and not self.sede_id and self.turno:
+            self.sede = self.turno.sede
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def soft_delete(self, *, by_user: Usuario | None = None):
+        if self.is_deleted:
+            return
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.deleted_by = by_user
+        self.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
 
     def __str__(self):
         return f"{self.usuario.username} - {self.tipo} - {self.fecha}"
