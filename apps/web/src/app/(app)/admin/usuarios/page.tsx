@@ -9,6 +9,7 @@ import StatCard from "@/components/admin/StatCard";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { useInstitution } from "@/context/institution-context";
+import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -39,7 +40,6 @@ type ImportValidationError = {
 };
 
 const ROLES = ["admin", "guarda", "aprendiz"] as const;
-const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -174,6 +174,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
 export default function AdminUsuariosPage() {
   const { emailPlaceholder } = useInstitution();
+  const { sedes } = useSedes();
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [count, setCount] = useState<number>(0);
@@ -188,7 +189,7 @@ export default function AdminUsuariosPage() {
   const [q, setQ] = useState("");
   const [rolFilter, setRolFilter] = useState<"todos" | "admin" | "guarda" | "aprendiz">("todos");
   const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
-  const [sedeFilter, setSedeFilter] = useState<"todos" | (typeof SEDES)[number]>("todos");
+  const [sedeFilter, setSedeFilter] = useState<string>("todos");
 
   // debounce
   const dq = useDebounced(q, 450);
@@ -238,6 +239,13 @@ export default function AdminUsuariosPage() {
   const [importErrores, setImportErrores] = useState<ImportValidationError[]>([]);
 
   const requestIdRef = useRef(0);
+  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
+
+  function sedeLabelFromCode(code?: string | null): string {
+    const clean = String(code || "").trim();
+    if (!clean) return "-";
+    return sedesByCode.get(clean) || `Sede eliminada/inactiva (${clean})`;
+  }
 
   async function cargar(p = page) {
     const rid = ++requestIdRef.current;
@@ -611,12 +619,13 @@ export default function AdminUsuariosPage() {
         <select
           className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 md:col-span-2"
           value={sedeFilter}
-          onChange={(e) => setSedeFilter(e.target.value as "todos" | (typeof SEDES)[number])}
+          onChange={(e) => setSedeFilter(e.target.value)}
         >
           <option value="todos">Sede: Todas</option>
-          {SEDES.map((s) => (
-            <option key={s} value={s}>
-              {s}
+          {sedes.length === 0 ? <option value="todos" disabled>No tienes sedes asignadas</option> : null}
+          {sedes.map((s) => (
+            <option key={s.code} value={s.code}>
+              {s.name}
             </option>
           ))}
         </select>
@@ -705,7 +714,7 @@ export default function AdminUsuariosPage() {
                     </td>
 
                     <td className="p-3">{u.documento ?? "-"}</td>
-                    <td className="p-3">{u.sede_principal ?? "-"}</td>
+                    <td className="p-3">{sedeLabelFromCode(u.sede_principal)}</td>
                     <td className="p-3">{u.programa_formacion ?? "-"}</td>
 
                     <td className="p-3">
@@ -809,9 +818,12 @@ export default function AdminUsuariosPage() {
                     onChange={(e) => setSede(e.target.value)}
                   >
                     <option value="">(sin sede)</option>
-                    {SEDES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    {sede && !sedesByCode.has(sede) ? (
+                      <option value={sede}>{`Sede eliminada/inactiva (${sede})`}</option>
+                    ) : null}
+                    {sedes.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name}
                       </option>
                     ))}
                   </select>
@@ -949,9 +961,12 @@ export default function AdminUsuariosPage() {
                     onChange={(e) => setCSede(e.target.value)}
                   >
                     <option value="">(sin sede)</option>
-                    {SEDES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    {c_sede && !sedesByCode.has(c_sede) ? (
+                      <option value={c_sede}>{`Sede eliminada/inactiva (${c_sede})`}</option>
+                    ) : null}
+                    {sedes.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name}
                       </option>
                     ))}
                   </select>

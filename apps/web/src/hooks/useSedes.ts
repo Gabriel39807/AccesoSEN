@@ -17,15 +17,24 @@ type Paginated<T> = {
   results: T[];
 };
 
-export function useSedes() {
+type UseSedesOptions = {
+  includeInactive?: boolean;
+};
+
+export function useSedes(options?: UseSedesOptions) {
+  const includeInactive = Boolean(options?.includeInactive);
   const [sedes, setSedes] = useState<SedeItem[]>([]);
   const [loadingSedes, setLoadingSedes] = useState(true);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const reloadSedes = () => setReloadToken((v) => v + 1);
 
   useEffect(() => {
     let mounted = true;
     async function run() {
       try {
-        const res = await api.get<SedeItem[] | Paginated<SedeItem>>("/api/sedes/");
+        const params = includeInactive ? { include_inactive: "true" } : { active: "true" };
+        const res = await api.get<SedeItem[] | Paginated<SedeItem>>("/api/sedes/", { params });
         const rows = Array.isArray(res.data) ? res.data : (res.data as Paginated<SedeItem>).results ?? [];
         if (mounted) setSedes(rows);
       } catch {
@@ -35,10 +44,22 @@ export function useSedes() {
       }
     }
     run();
+
+    function onUpdated() {
+      if (!mounted) return;
+      setReloadToken((v) => v + 1);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("sedes:updated", onUpdated);
+    }
+
     return () => {
       mounted = false;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("sedes:updated", onUpdated);
+      }
     };
-  }, []);
+  }, [includeInactive, reloadToken]);
 
-  return { sedes, loadingSedes };
+  return { sedes, loadingSedes, reloadSedes };
 }

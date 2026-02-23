@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -19,7 +20,7 @@ type Usuario = {
 type Turno = {
   id: number;
   guarda: number;
-  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
+  sede: string;
   jornada: "MAÃ‘ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
@@ -40,7 +41,7 @@ type Acceso = {
   usuario: number;
   fecha: string;
   tipo: "ingreso" | "salida";
-  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA" | null;
+  sede: string | null;
   registrado_por: number | null;
   turno: number | null;
   equipos: number[];
@@ -52,8 +53,6 @@ type Paginated<T> = {
   previous: string | null;
   results: T[];
 };
-
-const SEDES: Array<NonNullable<Acceso["sede"]>> = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
 
 function clsBadge(variant: "green" | "red" | "blue" | "amber" | "gray") {
   const base = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
@@ -125,6 +124,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 }
 
 export default function AdminAccesosPage() {
+  const { sedes } = useSedes();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   // tabla paginada
@@ -140,7 +140,7 @@ export default function AdminAccesosPage() {
   // filtros (API)
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState<"" | Acceso["tipo"]>("");
-  const [sede, setSede] = useState<"" | NonNullable<Acceso["sede"]>>("");
+  const [sede, setSede] = useState("");
   const [aprendizId, setAprendizId] = useState<number | "">("");
   const [guardaId, setGuardaId] = useState<number | "">("");
   const [dateFrom, setDateFrom] = useState("");
@@ -171,6 +171,13 @@ export default function AdminAccesosPage() {
     usuarios.forEach((u) => m.set(u.id, u));
     return m;
   }, [usuarios]);
+  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
+
+  function sedeLabel(code?: string | null): string {
+    const clean = String(code || "").trim();
+    if (!clean) return "(sin sede)";
+    return sedesByCode.get(clean) || `Sede eliminada/inactiva (${clean})`;
+  }
 
   const aprendicesAll = useMemo(() => usuarios.filter((u) => u.rol === "aprendiz"), [usuarios]);
   const guardasAll = useMemo(() => usuarios.filter((u) => u.rol === "guarda"), [usuarios]);
@@ -411,12 +418,13 @@ export default function AdminAccesosPage() {
             <select
               className="md:col-span-2 w-full rounded-xl border px-3 py-2 text-sm bg-white"
               value={sede}
-              onChange={(e) => setSede(e.target.value as any)}
+              onChange={(e) => setSede(e.target.value)}
             >
               <option value="">Sede</option>
-              {SEDES.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace("_", " ")}
+              {sedes.length === 0 ? <option value="" disabled>No tienes sedes asignadas</option> : null}
+              {sedes.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
                 </option>
               ))}
             </select>
@@ -546,7 +554,7 @@ export default function AdminAccesosPage() {
                           {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                         </td>
                         <td className="px-4 py-3">
-                          {a.sede ? <Badge variant="blue" label={a.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
+                          {a.sede ? <Badge variant="blue" label={sedeLabel(a.sede)} /> : <Badge variant="gray" label="(sin sede)" />}
                         </td>
                         <td className="px-4 py-3">
                           <div className="font-semibold text-text">{nombreUsuario(aprendiz)}</div>
@@ -612,7 +620,7 @@ export default function AdminAccesosPage() {
                 <div className="rounded-xl border p-3">
                   <div className="text-xs text-text/70">Sede</div>
                   <div className="mt-1">
-                    {selected.sede ? <Badge variant="blue" label={selected.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
+                    {selected.sede ? <Badge variant="blue" label={sedeLabel(selected.sede)} /> : <Badge variant="gray" label="(sin sede)" />}
                   </div>
                 </div>
 

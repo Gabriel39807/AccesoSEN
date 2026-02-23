@@ -29,6 +29,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         const rol = me.data.usuario.rol;
 
         const isAdminRoute = pathname.startsWith("/admin");
+        const isControlCenterRoute = pathname.startsWith("/admin/control-center");
         const isAprendizRoute = pathname.startsWith("/aprendiz");
         const isPrimerAcceso = pathname.startsWith("/aprendiz/primer-acceso");
 
@@ -46,6 +47,10 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           router.replace("/aprendiz/inicio");
           return;
         }
+        if (isControlCenterRoute && rol !== "superadmin") {
+          router.replace("/admin/usuarios");
+          return;
+        }
         if (isAprendizRoute && rol !== "aprendiz") {
           router.replace("/admin/usuarios");
           return;
@@ -60,7 +65,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         }
 
         setLoading(false);
-      } catch (e) {
+      } catch {
         // no autenticado / token vencido
         clearTokens();
         router.replace("/login");

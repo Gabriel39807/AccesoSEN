@@ -30,6 +30,7 @@ export default function AdminTopNav() {
     { href: "/admin/equipos", label: "Equipos" },
     { href: "/admin/accesos", label: "Accesos" },
     { href: "/admin/turnos", label: "Turnos" },
+    ...(me?.rol === "superadmin" ? [{ href: "/admin/control-center", label: "Control Center" }] : []),
   ] as const;
 
   return (
