@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import BadgeChip from "@/components/admin/BadgeChip";
+import FilterBar from "@/components/admin/FilterBar";
+import PageHeader from "@/components/admin/PageHeader";
+import StatCard from "@/components/admin/StatCard";
+import DataTable from "@/components/dashboard/shared/DataTable";
+import EmptyState from "@/components/dashboard/shared/EmptyState";
+import Button from "@/components/dashboard/shared/Button";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 
@@ -58,28 +65,19 @@ function nombreUsuario(u?: Usuario | null) {
   return full || u.username;
 }
 
-function Badge({
-  variant,
-  label,
-}: {
-  variant: "green" | "red" | "amber" | "gray";
-  label: string;
-}) {
-  const base = "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
-  const cls =
-    variant === "green"
-      ? `${base} bg-emerald-100 text-emerald-800 border-emerald-200`
-      : variant === "red"
-      ? `${base} bg-rose-100 text-rose-800 border-rose-200`
-      : variant === "amber"
-      ? `${base} bg-amber-100 text-amber-800 border-amber-200`
-      : `${base} bg-gray-100 text-gray-800 border-gray-200`;
-
-  return <span className={cls}>{label}</span>;
-}
-
 function StatSkeleton() {
   return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
+}
+function FilterSkeleton() {
+  return (
+    <section className="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-7" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+      </div>
+    </section>
+  );
 }
 function TableSkeleton({ rows = 7 }: { rows?: number }) {
   return (
@@ -301,193 +299,155 @@ export default function AdminEquiposPage() {
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
-  return (
-    <div className="space-y-4">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-emerald-900">Admin / Equipos</h1>
-            <p className="text-sm text-gray-500">Paginación + debounce + skeleton loaders.</p>
-          </div>
+  const hasFilters = q.trim().length > 0 || estado !== "";
 
-          <div className="flex gap-2 items-center">
+  return (
+    <div className="space-y-6 pb-2">
+      <PageHeader
+        breadcrumb="ADMIN > EQUIPOS"
+        title="Equipos"
+        description="Revision y control de equipos registrados por los aprendices."
+        actions={
+          <>
             <select
-              className="rounded-xl border px-3 py-2 text-sm bg-white"
+              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/página
+                  {n}/pagina
                 </option>
               ))}
             </select>
-
-            <button
-              onClick={() => cargarEquipos(page)}
-              className="rounded-xl px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
-            >
+            <Button onClick={() => cargarEquipos(page)} variant="secondary">
               Recargar
-            </button>
-          </div>
-        </div>
+            </Button>
+          </>
+        }
+      />
 
-        {/* Stats */}
-        <div className="grid gap-3 sm:grid-cols-4">
-          {loading ? (
-            <>
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-              <StatSkeleton />
-            </>
-          ) : (
-            <>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">Total</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-              </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Pendientes</div>
-                <div className="text-2xl font-bold text-amber-700">{stats.pendientes}</div>
-              </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Aprobados</div>
-                <div className="text-2xl font-bold text-emerald-700">{stats.aprobados}</div>
-              </div>
-              <div className="rounded-2xl border bg-white shadow-sm p-4">
-                <div className="text-sm text-gray-500">En esta página: Rechazados</div>
-                <div className="text-2xl font-bold text-rose-700">{stats.rechazados}</div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <input
-              className="md:col-span-6 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              placeholder="Buscar por serial, marca, modelo, documento o username…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-
-            <select
-              className="md:col-span-3 w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={estado}
-              onChange={(e) => setEstado(e.target.value as any)}
-            >
-              <option value="">Estado (todos)</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="aprobado">Aprobado</option>
-              <option value="rechazado">Rechazado</option>
-            </select>
-
-            <div className="md:col-span-3 flex items-center gap-2">
-              <button
-                onClick={resetFiltros}
-                className="rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition"
-              >
-                Limpiar
-              </button>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">
-              {error}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Table */}
-        {loadingTable ? (
-          <TableSkeleton />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {loading ? (
+          <>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <div className="px-4 py-3 border-b">
-              <div className="text-sm text-gray-600">
-                Resultados: <span className="font-semibold">{count}</span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr className="text-left">
-                    <th className="px-4 py-3 font-semibold text-gray-700">Serial</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Marca / Modelo</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Propietario</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700">Motivo</th>
-                    <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {equipos.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
-                        Sin registros con estos filtros.
-                      </td>
-                    </tr>
-                  ) : null}
-
-                  {equipos.map((e) => {
-                    const owner = usuariosMap.get(e.propietario);
-                    const st = String(e.estado).toLowerCase();
-                    const badge =
-                      st === "aprobado" ? (
-                        <Badge variant="green" label="Aprobado" />
-                      ) : st === "rechazado" ? (
-                        <Badge variant="red" label="Rechazado" />
-                      ) : (
-                        <Badge variant="amber" label="Pendiente" />
-                      );
-
-                    return (
-                      <tr key={e.id} className="border-b hover:bg-emerald-50/30 transition">
-                        <td className="px-4 py-3 font-semibold text-gray-900">{e.serial}</td>
-                        <td className="px-4 py-3 text-gray-800">
-                          <div className="font-medium">{e.marca}</div>
-                          <div className="text-xs text-gray-500">{e.modelo}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="font-semibold text-gray-900">{nombreUsuario(owner)}</div>
-                          <div className="text-xs text-gray-500">{owner?.documento ?? "—"}</div>
-                        </td>
-                        <td className="px-4 py-3">{badge}</td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {st === "rechazado" ? (e.motivo_rechazo || "—") : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => abrirRevisar(e)}
-                            className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 transition"
-                          >
-                            Revisar
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="p-3">
-              <Pagination
-                page={page}
-                totalPages={totalPages}
-                totalCount={count}
-                pageSize={pageSize}
-                onPrev={() => setPage((p) => Math.max(1, p - 1))}
-                onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
-              />
-            </div>
-          </div>
+          <>
+            <StatCard label="Total" value={stats.total} />
+            <StatCard label="Pendientes" value={stats.pendientes} tone="warning" />
+            <StatCard label="Aprobados" value={stats.aprobados} tone="success" />
+            <StatCard label="Rechazados" value={stats.rechazados} tone="danger" />
+          </>
         )}
+      </div>
+
+      {loading ? (
+        <FilterSkeleton />
+      ) : (
+        <FilterBar
+          footer={
+            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+          }
+        >
+          <input
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-7"
+            placeholder="Buscar por serial, marca, modelo, documento o username..."
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-3"
+            value={estado}
+            onChange={(e) => setEstado(e.target.value as any)}
+          >
+            <option value="">Estado (todos)</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+
+          <Button
+            onClick={resetFiltros}
+            className="h-11 md:col-span-2"
+            variant="secondary"
+            disabled={!hasFilters}
+          >
+            Limpiar
+          </Button>
+        </FilterBar>
+      )}
+
+      <div className="space-y-4">
+        <DataTable
+          loading={loadingTable}
+          skeleton={<TableSkeleton />}
+          hasRows={equipos.length > 0}
+          tableClassName="min-w-[920px]"
+          headers={
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold">Serial</th>
+              <th className="px-4 py-3 font-semibold">Marca / Modelo</th>
+              <th className="px-4 py-3 font-semibold">Propietario</th>
+              <th className="px-4 py-3 font-semibold">Estado</th>
+              <th className="px-4 py-3 font-semibold">Motivo</th>
+              <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+            </tr>
+          }
+          emptyState={
+            <tr>
+              <td colSpan={6} className="px-4 py-10 text-center">
+                <div className="mx-auto max-w-md">
+                  <EmptyState title="Sin registros con estos filtros" description="Ajusta los filtros para continuar." />
+                </div>
+              </td>
+            </tr>
+          }
+        >
+          {equipos.map((e) => {
+            const owner = usuariosMap.get(e.propietario);
+            const st = String(e.estado).toLowerCase();
+
+            return (
+              <tr key={e.id} className="border-b transition hover:bg-sky-50/35">
+                <td className="px-4 py-3 font-semibold text-gray-900">{e.serial}</td>
+                <td className="px-4 py-3 text-gray-800">
+                  <div className="font-medium">{e.marca}</div>
+                  <div className="text-xs text-gray-500">{e.modelo}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-gray-900">{nombreUsuario(owner)}</div>
+                  <div className="text-xs text-gray-500">{owner?.documento ?? "—"}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <BadgeChip tone={st === "aprobado" ? "success" : st === "rechazado" ? "danger" : "warning"}>
+                    {st === "aprobado" ? "Aprobado" : st === "rechazado" ? "Rechazado" : "Pendiente"}
+                  </BadgeChip>
+                </td>
+                <td className="px-4 py-3 text-gray-700">{st === "rechazado" ? e.motivo_rechazo || "—" : "—"}</td>
+                <td className="px-4 py-3 text-right">
+                  <Button onClick={() => abrirRevisar(e)} variant="secondary" className="px-3 py-1.5 text-xs">
+                    Revisar
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={count}
+          pageSize={pageSize}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        />
+      </div>
 
         {/* Modal revisar */}
         <Modal
@@ -517,9 +477,9 @@ export default function AdminEquiposPage() {
                 </select>
                 <div className="pt-2">
                   {accion === "aprobado" ? (
-                    <Badge variant="green" label="Aprobado" />
+                    <BadgeChip tone="success">Aprobado</BadgeChip>
                   ) : (
-                    <Badge variant="red" label="Rechazado" />
+                    <BadgeChip tone="danger">Rechazado</BadgeChip>
                   )}
                 </div>
               </div>
@@ -555,7 +515,6 @@ export default function AdminEquiposPage() {
             </div>
           </div>
         </Modal>
-      </div>
     </div>
   );
 }

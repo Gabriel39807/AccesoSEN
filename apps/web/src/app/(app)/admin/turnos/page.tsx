@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+
+import FilterBar from "@/components/admin/FilterBar";
+import PageHeader from "@/components/admin/PageHeader";
+import StatCard from "@/components/admin/StatCard";
+import DataTable from "@/components/dashboard/shared/DataTable";
+import EmptyState from "@/components/dashboard/shared/EmptyState";
+import Button from "@/components/dashboard/shared/Button";
+import { IconClock } from "@/components/aprendiz/dashboard/DashboardIcons";
+import Modal from "@/components/ui/Modal";
+import Pagination from "@/components/ui/Pagination";
 import { api } from "@/lib/api";
 
 type Usuario = {
@@ -13,30 +23,32 @@ type Usuario = {
 
 type Turno = {
   id: number;
-  guarda: number; // en tu serializer viene como id del guarda
+  guarda: number;
   sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
-  jornada: "MAÑANA" | "TARDE" | "NOCHE";
+  jornada: "MANANA" | "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
 };
 
 const SEDES: Turno["sede"][] = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
-const JORNADAS: Turno["jornada"][] = ["MAÑANA", "TARDE", "NOCHE"];
+const JORNADAS: Turno["jornada"][] = ["MANANA", "MAÑANA", "TARDE", "NOCHE"];
 
 function badgeBase() {
-  return "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border";
+  return "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
 }
+
 function badgeEstado(turno: Turno) {
   const isActivo = turno.activo && !turno.fin;
   return isActivo
-    ? `${badgeBase()} bg-emerald-100 text-emerald-800 border-emerald-200`
-    : `${badgeBase()} bg-gray-100 text-gray-800 border-gray-200`;
+    ? `${badgeBase()} border-emerald-200 bg-emerald-100 text-emerald-800`
+    : `${badgeBase()} border-zinc-200 bg-zinc-100 text-zinc-700`;
 }
+
 function badgeJornada(j: Turno["jornada"]) {
-  if (j === "MAÑANA") return `${badgeBase()} bg-sky-100 text-sky-800 border-sky-200`;
-  if (j === "TARDE") return `${badgeBase()} bg-amber-100 text-amber-800 border-amber-200`;
-  return `${badgeBase()} bg-indigo-100 text-indigo-800 border-indigo-200`;
+  if (j === "MANANA" || j === "MAÑANA") return `${badgeBase()} border-sky-200 bg-sky-100 text-sky-800`;
+  if (j === "TARDE") return `${badgeBase()} border-amber-200 bg-amber-100 text-amber-800`;
+  return `${badgeBase()} border-indigo-200 bg-indigo-100 text-indigo-800`;
 }
 
 function nombreUsuario(u?: Usuario | null) {
@@ -58,6 +70,10 @@ function formatFecha(iso?: string | null) {
   }).format(d);
 }
 
+function normalizarJornada(j: Turno["jornada"]) {
+  return j === "MANANA" || j === "MAÑANA" ? "Mañana" : j === "TARDE" ? "Tarde" : "Noche";
+}
+
 function safeErrorMessage(e: any) {
   return (
     (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
@@ -71,28 +87,31 @@ function safeErrorMessage(e: any) {
   );
 }
 
-function Modal({
-  open,
-  title,
-  children,
-  onClose,
-}: {
-  open: boolean;
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
-  if (!open) return null;
+function StatSkeleton() {
+  return <div className="h-[92px] animate-pulse rounded-2xl border bg-white p-4 shadow-sm" />;
+}
+
+function FilterSkeleton() {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border overflow-hidden">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="px-3 py-1 rounded-lg border hover:bg-gray-50">
-            ✖
-          </button>
-        </div>
-        <div className="p-5">{children}</div>
+    <section className="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-3" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+      </div>
+    </section>
+  );
+}
+
+function TableSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <div className="rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
+      <div className="p-4 space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <div key={i} className="h-10 animate-pulse rounded-xl bg-zinc-100" />
+        ))}
       </div>
     </div>
   );
@@ -105,18 +124,16 @@ export default function AdminTurnosPage() {
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // filtros (API soporta sede/jornada/activo)
   const [sede, setSede] = useState<"" | Turno["sede"]>("");
   const [jornada, setJornada] = useState<"" | Turno["jornada"]>("");
   const [activo, setActivo] = useState<"" | "true" | "false">("");
-
-  // filtro extra (cliente)
   const [guardaId, setGuardaId] = useState<number | "">("");
 
-  // modal finalizar
   const [openFinalizar, setOpenFinalizar] = useState(false);
   const [turnoFinalizar, setTurnoFinalizar] = useState<Turno | null>(null);
   const [finalizando, setFinalizando] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   const usuariosMap = useMemo(() => {
     const m = new Map<number, Usuario>();
@@ -138,6 +155,10 @@ export default function AdminTurnosPage() {
     const finalizados = rows.filter((t) => !t.activo || !!t.fin).length;
     return { total, activos: activosCount, finalizados };
   }, [rows]);
+
+  const hasFilters = sede !== "" || jornada !== "" || activo !== "" || guardaId !== "";
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pagedRows = useMemo(() => rows.slice((page - 1) * pageSize, page * pageSize), [rows, page]);
 
   async function cargarUsuarios() {
     const res = await api.get("/api/usuarios/");
@@ -185,6 +206,7 @@ export default function AdminTurnosPage() {
     setJornada("");
     setActivo("");
     setGuardaId("");
+    setPage(1);
   }
 
   function abrirFinalizar(t: Turno) {
@@ -199,7 +221,6 @@ export default function AdminTurnosPage() {
 
     try {
       const res = await api.post(`/api/turnos/${turnoFinalizar.id}/finalizar_admin/`);
-      // respuesta UI-friendly: { permitido, motivo, turno }
       if (res?.data?.permitido === false) {
         alert(res?.data?.motivo ?? "No se pudo finalizar el turno.");
       }
@@ -207,8 +228,7 @@ export default function AdminTurnosPage() {
       setTurnoFinalizar(null);
       await cargarTurnos();
     } catch (e: any) {
-      const msg = safeErrorMessage(e) || "No se pudo finalizar el turno.";
-      alert(msg);
+      alert(safeErrorMessage(e) || "No se pudo finalizar el turno.");
       await cargarTurnos();
     } finally {
       setFinalizando(false);
@@ -220,264 +240,258 @@ export default function AdminTurnosPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   return (
-    <div className="space-y-4">
-      <div className="space-y-4">
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-emerald-900">Admin / Turnos</h1>
-            <p className="text-sm text-gray-500">
-              Lista de turnos por sede/jornada, con finalización manual por admin.
-            </p>
-          </div>
-
-          <button
-            onClick={refrescar}
-            disabled={reloading}
-            className="rounded-xl px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 shadow-sm transition"
-          >
+    <div className="space-y-7 pb-2">
+      <PageHeader
+        breadcrumb="ADMIN > TURNOS"
+        title="Turnos"
+        description="Control de turnos de guardas y finalizacion manual por administrador."
+        actions={
+          <Button onClick={refrescar} variant="secondary" disabled={reloading}>
             {reloading ? "Recargando..." : "Recargar"}
-          </button>
-        </div>
+          </Button>
+        }
+      />
 
-        {/* STATS */}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="text-left bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-2xl">📋</div>
-            <div className="text-sm text-gray-500">Total</div>
-            <div className="text-2xl font-bold text-emerald-900">{stats.total}</div>
-          </div>
-
-          <div className="text-left bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-2xl">🟢</div>
-            <div className="text-sm text-gray-500">Activos</div>
-            <div className="text-2xl font-bold text-emerald-700">{stats.activos}</div>
-            <div className="text-xs text-gray-500 mt-1">activo=true y sin fin</div>
-          </div>
-
-          <div className="text-left bg-white rounded-2xl shadow-sm border p-4">
-            <div className="text-2xl">✅</div>
-            <div className="text-sm text-gray-500">Finalizados</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.finalizados}</div>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-2xl shadow-sm border p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={sede}
-              onChange={(e) => setSede(e.target.value as any)}
-            >
-              <option value="">Sede</option>
-              {SEDES.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace("_", " ")}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={jornada}
-              onChange={(e) => setJornada(e.target.value as any)}
-            >
-              <option value="">Jornada</option>
-              {JORNADAS.map((j) => (
-                <option key={j} value={j}>
-                  {j === "MAÑANA" ? "Mañana" : j === "TARDE" ? "Tarde" : "Noche"}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={activo}
-              onChange={(e) => setActivo(e.target.value as any)}
-            >
-              <option value="">Activo (API)</option>
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
-
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-              value={guardaId}
-              onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
-            >
-              <option value="">Guarda (cliente)</option>
-              {guardas.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {nombreUsuario(g)}
-                </option>
-              ))}
-            </select>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => cargarTurnos().catch(() => setError("No se pudieron cargar los turnos."))}
-                className="w-full md:w-auto rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition"
-              >
-                Aplicar
-              </button>
-              <button
-                onClick={() => {
-                  resetFiltros();
-                  setTimeout(() => cargarTurnos().catch(() => {}), 0);
-                }}
-                className="w-full md:w-auto rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition"
-              >
-                Limpiar
-              </button>
-            </div>
-          </div>
-
-          {error ? (
-            <div className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
-              {error}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-          <div className="px-4 py-3 border-b flex items-center justify-between">
-            <div className="text-sm text-gray-600">{loading ? "Cargando..." : `${rows.length} turnos`}</div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr className="text-left">
-                  <th className="px-4 py-3 font-semibold text-gray-700">ID</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Guarda</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Sede</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Jornada</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Inicio</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Fin</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">Estado</th>
-                  <th className="px-4 py-3 font-semibold text-gray-700 text-right">Acciones</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {!loading && rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
-                      No hay turnos con los filtros actuales.
-                    </td>
-                  </tr>
-                ) : null}
-
-                {rows.map((t) => {
-                  const u = usuariosMap.get(t.guarda) ?? null;
-                  const isActivo = t.activo && !t.fin;
-
-                  return (
-                    <tr key={t.id} className="border-b hover:bg-emerald-50/30 transition">
-                      <td className="px-4 py-3 font-semibold text-gray-900">#{t.id}</td>
-                      <td className="px-4 py-3 text-gray-800">{nombreUsuario(u)}</td>
-                      <td className="px-4 py-3 text-gray-800">{t.sede.replace("_", " ")}</td>
-                      <td className="px-4 py-3">
-                        <span className={badgeJornada(t.jornada)}>
-                          {t.jornada === "MAÑANA" ? "Mañana" : t.jornada === "TARDE" ? "Tarde" : "Noche"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-800">{formatFecha(t.inicio)}</td>
-                      <td className="px-4 py-3 text-gray-800">{formatFecha(t.fin)}</td>
-                      <td className="px-4 py-3">
-                        <span className={badgeEstado(t)}>{isActivo ? "Activo" : "Finalizado"}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={() => abrirFinalizar(t)}
-                          disabled={!isActivo}
-                          className="rounded-xl px-3 py-2 text-xs font-semibold border bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                          title={isActivo ? "Finalizar turno (admin)" : "El turno ya está finalizado"}
-                        >
-                          ⛔ Finalizar
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Modal finalizar */}
-        <Modal
-          open={openFinalizar}
-          title="Finalizar turno (Admin)"
-          onClose={() => {
-            if (finalizando) return;
-            setOpenFinalizar(false);
-            setTurnoFinalizar(null);
-          }}
-        >
-          {turnoFinalizar ? (
-            <div className="space-y-4">
-              <div className="rounded-xl border bg-gray-50 p-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Turno:</span>{" "}
-                  <span className="font-semibold">#{turnoFinalizar.id}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">Guarda:</span>{" "}
-                  <span className="font-semibold">{nombreUsuario(usuariosMap.get(turnoFinalizar.guarda) ?? null)}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">Sede:</span>{" "}
-                  <span className="font-semibold">{turnoFinalizar.sede.replace("_", " ")}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">Jornada:</span>{" "}
-                  <span className="font-semibold">
-                    {turnoFinalizar.jornada === "MAÑANA"
-                      ? "Mañana"
-                      : turnoFinalizar.jornada === "TARDE"
-                      ? "Tarde"
-                      : "Noche"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-500">Inicio:</span>{" "}
-                  <span className="font-semibold">{formatFecha(turnoFinalizar.inicio)}</span>
-                </div>
-              </div>
-
-              <div className="text-sm text-gray-700">
-                Esto finalizará el turno inmediatamente. Úsalo solo si el guarda olvidó cerrar el turno.
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => {
-                    if (finalizando) return;
-                    setOpenFinalizar(false);
-                    setTurnoFinalizar(null);
-                  }}
-                  className="rounded-xl px-4 py-2 border bg-white hover:bg-gray-50 transition"
-                  disabled={finalizando}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  onClick={confirmarFinalizar}
-                  className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-60"
-                  disabled={finalizando}
-                >
-                  {finalizando ? "Finalizando..." : "Sí, finalizar"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </Modal>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {loading ? (
+          <>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </>
+        ) : (
+          <>
+            <StatCard label="Total" value={stats.total} />
+            <StatCard label="Activos" value={stats.activos} tone="success" />
+            <StatCard label="Finalizados" value={stats.finalizados} tone="neutral" />
+          </>
+        )}
       </div>
+
+      {loading ? (
+        <FilterSkeleton />
+      ) : (
+        <FilterBar
+          footer={
+            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+          }
+        >
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
+            value={sede}
+            onChange={(e) => setSede(e.target.value as any)}
+          >
+            <option value="">Sede</option>
+            {SEDES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
+            value={jornada}
+            onChange={(e) => setJornada(e.target.value as any)}
+          >
+            <option value="">Jornada</option>
+            {JORNADAS.map((j) => (
+              <option key={j} value={j}>
+                {normalizarJornada(j)}
+              </option>
+            ))}
+          </select>
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
+            value={activo}
+            onChange={(e) => setActivo(e.target.value as any)}
+          >
+            <option value="">Activo (API)</option>
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+
+          <select
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
+            value={guardaId}
+            onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
+          >
+            <option value="">Guarda</option>
+            {guardas.map((g) => (
+              <option key={g.id} value={g.id}>
+                {nombreUsuario(g)}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex items-center justify-end gap-2 md:col-span-6 lg:col-span-2">
+            <Button
+              onClick={() => {
+                setPage(1);
+                cargarTurnos().catch(() => setError("No se pudieron cargar los turnos."));
+              }}
+              variant="primary"
+            >
+              Aplicar
+            </Button>
+            <Button
+              onClick={() => {
+                resetFiltros();
+                setTimeout(() => cargarTurnos().catch(() => {}), 0);
+              }}
+              variant="secondary"
+              disabled={!hasFilters}
+            >
+              Limpiar
+            </Button>
+          </div>
+
+          <div className="flex h-11 items-center justify-end md:col-span-12 lg:col-span-2">
+            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
+              {rows.length} turnos
+            </span>
+          </div>
+        </FilterBar>
+      )}
+
+      <div className="space-y-4">
+        <DataTable
+          loading={loading}
+          skeleton={<TableSkeleton />}
+          hasRows={pagedRows.length > 0}
+          tableClassName="min-w-[980px]"
+          headers={
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold">ID</th>
+              <th className="px-4 py-3 font-semibold">Guarda</th>
+              <th className="px-4 py-3 font-semibold">Sede</th>
+              <th className="px-4 py-3 font-semibold">Jornada</th>
+              <th className="px-4 py-3 font-semibold">Inicio</th>
+              <th className="px-4 py-3 font-semibold">Fin</th>
+              <th className="px-4 py-3 font-semibold">Estado</th>
+              <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+            </tr>
+          }
+          emptyState={
+            <tr>
+              <td colSpan={8} className="px-4 py-10 text-center">
+                <div className="mx-auto max-w-md">
+                  <EmptyState
+                    title="No hay turnos con los filtros actuales"
+                    description="Ajusta filtros para ver resultados."
+                    icon={<IconClock className="h-5 w-5" />}
+                  />
+                </div>
+              </td>
+            </tr>
+          }
+        >
+          {pagedRows.map((t) => {
+            const u = usuariosMap.get(t.guarda) ?? null;
+            const isActivo = t.activo && !t.fin;
+
+            return (
+              <tr key={t.id} className="transition hover:bg-sky-50/35">
+                <td className="px-4 py-3 font-semibold text-gray-900">#{t.id}</td>
+                <td className="px-4 py-3 text-gray-800">{nombreUsuario(u)}</td>
+                <td className="px-4 py-3 text-gray-800">{t.sede.replace("_", " ")}</td>
+                <td className="px-4 py-3">
+                  <span className={badgeJornada(t.jornada)}>{normalizarJornada(t.jornada)}</span>
+                </td>
+                <td className="px-4 py-3 text-gray-800">{formatFecha(t.inicio)}</td>
+                <td className="px-4 py-3 text-gray-800">{formatFecha(t.fin)}</td>
+                <td className="px-4 py-3">
+                  <span className={badgeEstado(t)}>{isActivo ? "Activo" : "Finalizado"}</span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    onClick={() => abrirFinalizar(t)}
+                    disabled={!isActivo}
+                    variant="secondary"
+                    className="px-3 py-1.5 text-xs"
+                  >
+                    Finalizar
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
+        </DataTable>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={rows.length}
+          pageSize={pageSize}
+          onPrev={() => setPage((p) => Math.max(1, p - 1))}
+          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+        />
+      </div>
+
+      <Modal
+        open={openFinalizar}
+        title="Finalizar turno (Admin)"
+        onClose={() => {
+          if (finalizando) return;
+          setOpenFinalizar(false);
+          setTurnoFinalizar(null);
+        }}
+        closeDisabled={finalizando}
+      >
+        {turnoFinalizar ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border bg-zinc-50 p-4 text-sm">
+              <div>
+                <span className="text-gray-500">Turno:</span> <span className="font-semibold">#{turnoFinalizar.id}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Guarda:</span>{" "}
+                <span className="font-semibold">{nombreUsuario(usuariosMap.get(turnoFinalizar.guarda) ?? null)}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Sede:</span>{" "}
+                <span className="font-semibold">{turnoFinalizar.sede.replace("_", " ")}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Jornada:</span>{" "}
+                <span className="font-semibold">{normalizarJornada(turnoFinalizar.jornada)}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Inicio:</span>{" "}
+                <span className="font-semibold">{formatFecha(turnoFinalizar.inicio)}</span>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-700">
+              Esto finalizara el turno inmediatamente. Usalo solo si el guarda olvido cerrar el turno.
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                onClick={() => {
+                  if (finalizando) return;
+                  setOpenFinalizar(false);
+                  setTurnoFinalizar(null);
+                }}
+                variant="secondary"
+                disabled={finalizando}
+              >
+                Cancelar
+              </Button>
+
+              <Button onClick={confirmarFinalizar} variant="primary" disabled={finalizando}>
+                {finalizando ? "Finalizando..." : "Si, finalizar"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

@@ -1,7 +1,4 @@
-export default function SkeletonBlock({
-  className,
-}: {
-  className?: string;
-}) {
-  return <div className={`sadi-skeleton rounded-xl ${className ?? "h-4 w-full"}`} />;
-}
+import SharedSkeletonBlock from "@/components/dashboard/shared/SkeletonBlock";
+
+export default SharedSkeletonBlock;
+
