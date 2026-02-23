@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import IntegrityError, connection
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient
 from rest_framework.test import APITestCase
+from rest_framework.test import force_authenticate
 
 from accesos.domain.services.qr_service import QRParseError, QRService
+from accesos.api.permissions import RequiresPermission
+from accesos.api.viewsets import TurnoViewSet
 from .exceptions import ui_exception_handler
 from .import_services import ImportServiceError, execute_aprendices_import
 from .models import (
@@ -29,6 +36,7 @@ from .models import (
     SedePolicy,
     Turno,
     UserMembership,
+    Usuario,
     WebAuthnCredential,
 )
 from .otp_services import hash_code
@@ -1106,7 +1114,22 @@ class DataDrivenRBACAndPolicyTests(BaseApiTest):
         policy.qr_mode = "SIGNED"
         policy.save(update_fields=["qr_mode"])
 
-        signed_value, mode = QRService.build_aprendiz_qr_value("1234567893", sede=sede_1)
+        aprendiz = self.create_user(
+            username="qr_signed_user",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1234567893",
+            email="qr.signed@sadi.test",
+            sede_principal="sede-1",
+        )
+        session = RefreshSession.objects.create(
+            user=aprendiz,
+            device_id="qr-test-device",
+            refresh_token_hash=uuid4().hex,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+        signed_value, mode = QRService.build_aprendiz_qr_value("1234567893", sede=sede_1, session_id=str(session.id))
         self.assertEqual(mode, "SIGNED")
 
         parsed = QRService.parse_document(signed_value, sede=sede_1)
@@ -1115,6 +1138,218 @@ class DataDrivenRBACAndPolicyTests(BaseApiTest):
 
         with self.assertRaises(QRParseError):
             QRService.parse_document("1234567893", sede=sede_1)
+
+
+class SecurityHardeningTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.sede_1 = self.sede("sede-1")
+        self.guarda = self.create_user(
+            username="hardening_guarda",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="7777777777",
+            email="hardening.guarda@sadi.test",
+            sede_principal="sede-1",
+        )
+        self.aprendiz = self.create_user(
+            username="hardening_aprendiz",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="8888888888",
+            email="hardening.aprendiz@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def test_requires_permission_denies_when_permission_map_missing(self):
+        factory = APIRequestFactory()
+        request = factory.get("/api/secure/")
+        request.user = self.guarda
+
+        class DummyView:
+            action = "list"
+
+        permission = RequiresPermission()
+        self.assertFalse(permission.has_permission(request, DummyView()))
+
+    def test_prevent_multiple_active_turnos_for_same_guard(self):
+        Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede_1,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+            fin=None,
+        )
+        with self.assertRaises(IntegrityError):
+            Turno.objects.create(
+                guarda=self.guarda,
+                sede=self.sede_1,
+                jornada=Turno.Jornada.TARDE,
+                activo=True,
+                fin=None,
+            )
+
+    def test_qr_signed_replay_attempt_is_blocked(self):
+        session = RefreshSession.objects.create(
+            user=self.aprendiz,
+            device_id="qr-replay-device",
+            refresh_token_hash=uuid4().hex,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        qr_value, _ = QRService.build_aprendiz_qr_value(
+            self.aprendiz.documento,
+            sede=self.sede_1,
+            session_id=str(session.id),
+        )
+
+        first = QRService.parse_document(qr_value, sede=self.sede_1)
+        self.assertEqual(first.documento, self.aprendiz.documento)
+
+        with self.assertRaises(QRParseError) as replay_exc:
+            QRService.parse_document(qr_value, sede=self.sede_1)
+        self.assertEqual(getattr(replay_exc.exception, "code", ""), "replay")
+
+    def test_register_access_without_active_turno_is_rejected_for_guarda(self):
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        response = self.client.post(
+            "/api/accesos/",
+            {"usuario": self.aprendiz.id, "tipo": Acceso.Tipo.INGRESO},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertEqual(response.data.get("code"), "TURNO_REQUIRED")
+
+    def test_password_reset_verify_blocks_bruteforce_after_max_attempts(self):
+        salt = "hardening-otp-salt"
+        PasswordResetOTP.objects.create(
+            user=self.aprendiz,
+            salt=salt,
+            code_hash=hash_code(salt, "12345"),
+            expires_at=timezone.now() + timedelta(minutes=5),
+            channel=PasswordResetOTP.Channel.EMAIL,
+        )
+
+        for _ in range(5):
+            wrong = self.client.post(
+                "/api/auth/password-reset/verify/",
+                {"email": self.aprendiz.email, "otp": "99999"},
+                format="json",
+            )
+            self.assertEqual(wrong.status_code, status.HTTP_400_BAD_REQUEST, wrong.data)
+
+        blocked = self.client.post(
+            "/api/auth/password-reset/verify/",
+            {"email": self.aprendiz.email, "otp": "99999"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS, blocked.data)
+        self.assertEqual(blocked.data.get("code"), "OTP_TOO_MANY_ATTEMPTS")
+
+    def test_guarda_cannot_delete_acceso_log(self):
+        acceso = Acceso.objects.create(
+            usuario=self.aprendiz,
+            tipo=Acceso.Tipo.INGRESO,
+            sede=self.sede_1,
+            registrado_por=self.guarda,
+        )
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        response = self.client.delete(f"/api/accesos/{acceso.id}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.data)
+        acceso.refresh_from_db()
+        self.assertFalse(acceso.is_deleted)
+
+
+class TurnoConcurrencySafetyTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.guarda = self.create_user(
+            username="6161616161",
+            password="Passw0rd!",
+            rol="guarda",
+            documento="6161616161",
+            email="turno.concurrente@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def test_parallel_turno_start_returns_one_success_and_one_controlled_conflict(self):
+        payload = {"sede": "sede-1", "jornada": Turno.Jornada.TARDE}
+        if connection.vendor == "sqlite":
+            # SQLite test DB serializes writes aggressively and does not model
+            # real concurrent row-level locks. Run a deterministic two-step
+            # assertion and keep true parallel coverage for non-sqlite engines.
+            self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+            first = self.client.post("/api/turnos/iniciar/", payload, format="json")
+            second = self.client.post("/api/turnos/iniciar/", payload, format="json")
+            self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+            self.assertIn(second.status_code, {status.HTTP_400_BAD_REQUEST, status.HTTP_409_CONFLICT}, second.data)
+            self.assertEqual(second.data.get("code"), "TURNO_ALREADY_ACTIVE")
+            self.assertEqual(Turno.objects.filter(guarda=self.guarda, activo=True, fin__isnull=True).count(), 1)
+            return
+
+        factory = APIRequestFactory()
+        view = TurnoViewSet.as_view({"post": "iniciar"})
+
+        def call_start():
+            request = factory.post("/api/turnos/iniciar/", payload, format="json")
+            force_authenticate(request, user=self.guarda)
+            result = view(request)
+            return result.status_code, getattr(result, "data", {})
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(lambda _: call_start(), [1, 2]))
+
+        status_codes = sorted(code for code, _ in outcomes)
+        self.assertIn(status.HTTP_201_CREATED, status_codes)
+        self.assertTrue(
+            status.HTTP_400_BAD_REQUEST in status_codes or status.HTTP_409_CONFLICT in status_codes,
+            outcomes,
+        )
+        conflict_payload = next((body for code, body in outcomes if code in {400, 409}), {})
+        self.assertEqual(conflict_payload.get("code"), "TURNO_ALREADY_ACTIVE")
+        self.assertEqual(Turno.objects.filter(guarda=self.guarda, activo=True, fin__isnull=True).count(), 1)
+
+
+class LegacyRolePrecedenceTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user(
+            username="7373737373",
+            password="Passw0rd!",
+            rol="superadmin",
+            documento="7373737373",
+            email="legacy.role@sadi.test",
+            is_superuser=False,
+            is_staff=False,
+            sede_principal="sede-1",
+        )
+        role_guard = Role.objects.get(code="guarda")
+        UserMembership.objects.filter(user=self.user).update(is_active=False, is_primary=False)
+        UserMembership.objects.create(
+            user=self.user,
+            role=role_guard,
+            sede=self.sede("sede-1"),
+            is_active=True,
+            is_primary=True,
+        )
+        # Legacy field kept as superadmin, but runtime role must come from membership.
+        Usuario.objects.filter(id=self.user.id).update(rol=Usuario.Rol.SUPERADMIN)
+        self.user.refresh_from_db()
+
+    def test_membership_role_overrides_legacy_role_field_at_login(self):
+        guard_login = self.client.post(
+            "/api/token/",
+            {"username": self.user.documento, "password": "Passw0rd!", "expected_role": "guarda"},
+            format="json",
+        )
+        self.assertEqual(guard_login.status_code, status.HTTP_200_OK, guard_login.data)
+
+        admin_login = self.client.post(
+            "/api/token/",
+            {"username": self.user.documento, "password": "Passw0rd!", "expected_role": "admin"},
+            format="json",
+        )
+        self.assertEqual(admin_login.status_code, status.HTTP_401_UNAUTHORIZED, admin_login.data)
+        self.assertEqual(admin_login.data.get("code"), "INVALID_CREDENTIALS")
 
 
 class EmailChangeOtpTests(BaseApiTest):
