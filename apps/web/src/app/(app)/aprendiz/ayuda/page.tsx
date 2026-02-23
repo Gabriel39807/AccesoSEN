@@ -35,7 +35,7 @@ export default function AprendizAyudaPage() {
 
   const mailto = useMemo(() => {
     const to = "soporte@sena.edu.co";
-    const subject = encodeURIComponent(`[AccesoSEN] ${motivo}: ${asunto}`.trim());
+    const subject = encodeURIComponent(`[SADI] ${motivo}: ${asunto}`.trim());
     const body = encodeURIComponent(mensaje);
     return `mailto:${to}?subject=${subject}&body=${body}`;
   }, [asunto, mensaje, motivo]);

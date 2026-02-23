@@ -40,7 +40,7 @@ export default function LoginPage() {
             badge: "Acceso administrador",
           }
         : {
-            title: "Ingreso de aprendices SENA",
+            title: "Ingreso de aprendices SADI",
             subtitle:
               "Valida tu identidad para consultar tus accesos y mantener la credencial activa en el sistema.",
             field: "Documento de identidad",
@@ -100,7 +100,7 @@ export default function LoginPage() {
             className="rounded-full border border-white/70 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-slate-600"
             style={{ background: "var(--auth-accent-soft)" }}
           >
-            SENA
+            SADI
           </span>
         </div>
 
