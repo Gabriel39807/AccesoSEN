@@ -28,6 +28,11 @@ class IsAdmin(BasePermission):
         return is_admin_role(request.user)
 
 
+class IsSuperAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return is_superadmin(request.user)
+
+
 class IsGuarda(BasePermission):
     def has_permission(self, request, view):
         user = getattr(request, "user", None)

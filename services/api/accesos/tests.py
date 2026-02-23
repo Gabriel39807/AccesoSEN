@@ -30,6 +30,7 @@ from .models import (
     EmailChangeOTP,
     Equipo,
     PasswordResetOTP,
+    Permission as RbacPermission,
     RefreshSession,
     Role,
     Sede,
@@ -1612,6 +1613,21 @@ class FrontendContractSmokeTests(BaseApiTest):
         self.assertIn("/api/auth/passkeys/auth/options/", login)
         self.assertIn("/api/auth/passkeys/auth/verify/", login)
 
+    def test_admin_pages_use_dynamic_sedes_api_not_hardcoded_constants(self):
+        root = Path(__file__).resolve().parents[3]
+        files = [
+            root / "apps" / "web" / "src" / "app" / "(app)" / "admin" / "usuarios" / "page.tsx",
+            root / "apps" / "web" / "src" / "app" / "(app)" / "admin" / "accesos" / "page.tsx",
+            root / "apps" / "web" / "src" / "app" / "(app)" / "admin" / "turnos" / "page.tsx",
+        ]
+        for file_path in files:
+            content = file_path.read_text(encoding="utf-8")
+            self.assertNotIn("CEGAFE", content)
+            self.assertNotIn("SANTA_CLARA", content)
+            self.assertNotIn("ITEDRIS", content)
+            self.assertNotIn("GASTRONOMIA", content)
+            self.assertIn("useSedes", content)
+
 
 class ExceptionHandlerSafetyTests(BaseApiTest):
     def test_unhandled_api_exception_returns_safe_json_payload(self):
@@ -1705,15 +1721,111 @@ class InstitutionalDecouplingTests(BaseApiTest):
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
 
 
-class SedeBootstrapTests(BaseApiTest):
-    def test_sedes_endpoint_bootstraps_defaults_when_table_is_empty(self):
+class SedeEndpointIntegrityTests(BaseApiTest):
+    def test_sedes_endpoint_returns_exact_db_rows_without_bootstrap(self):
         Sede.objects.all().delete()
+        Sede.objects.create(code="campus-a", name="Campus A", is_active=True)
+        Sede.objects.create(code="campus-b", name="Campus B", is_active=True)
+
+        r = self.client.get("/api/sedes/?active=true")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        codes = {item.get("code") for item in rows}
+        self.assertSetEqual(codes, {"campus-a", "campus-b"})
+
+    def test_admin_sede_only_gets_its_membership_sedes(self):
+        Sede.objects.get_or_create(code="north", defaults={"name": "North", "is_active": True})
+        Sede.objects.get_or_create(code="south", defaults={"name": "South", "is_active": True})
+
+        admin = self.create_user(
+            username="admin_sedes_scope",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="admin.scope@sadi.test",
+            sede_principal="north",
+        )
+        self.auth(admin.username, "Passw0rd!", expected_role="admin")
+
         r = self.client.get("/api/sedes/")
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         rows = r.data.get("results", r.data)
-        self.assertGreaterEqual(len(rows), 4)
         codes = {item.get("code") for item in rows}
-        self.assertTrue({"sede-1", "sede-2", "sede-3", "sede-4"}.issubset(codes))
+        self.assertSetEqual(codes, {"north"})
+
+
+class SuperadminControlCenterPermissionTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="center_super",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="center.super@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+        self.admin_sede = self.create_user(
+            username="center_admin",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="center.admin@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def test_non_superadmin_cannot_manage_control_center_resources(self):
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+
+        endpoints = [
+            ("/api/sedes/", {"code": "campus-x", "name": "Campus X"}),
+            ("/api/roles/", {"code": "auditor", "name": "Auditor"}),
+            ("/api/permisos/", {"code": "audit.read", "name": "Ver auditoria"}),
+            ("/api/asignaciones/", {"role": "admin_sede", "permission": "user.read", "scope": "SEDE"}),
+        ]
+        for url, payload in endpoints:
+            r = self.client.post(url, payload, format="json")
+            self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+
+        sede = Sede.objects.filter(code="sede-1").first()
+        role = Role.objects.filter(code="admin_sede").first()
+        permission = RbacPermission.objects.filter(code="user.read").first()
+        self.assertIsNotNone(sede)
+        self.assertIsNotNone(role)
+        self.assertIsNotNone(permission)
+
+        patch_sede = self.client.patch(f"/api/sedes/{sede.id}/", {"name": "Cambio ilegal"}, format="json")
+        self.assertEqual(patch_sede.status_code, status.HTTP_403_FORBIDDEN, patch_sede.data)
+        delete_sede = self.client.delete(f"/api/sedes/{sede.id}/")
+        self.assertEqual(delete_sede.status_code, status.HTTP_403_FORBIDDEN, delete_sede.data)
+
+        patch_role = self.client.patch(f"/api/roles/{role.id}/", {"name": "Cambio ilegal"}, format="json")
+        self.assertEqual(patch_role.status_code, status.HTTP_403_FORBIDDEN, patch_role.data)
+        delete_role = self.client.delete(f"/api/roles/{role.id}/")
+        self.assertEqual(delete_role.status_code, status.HTTP_403_FORBIDDEN, delete_role.data)
+
+        patch_permission = self.client.patch(
+            f"/api/permisos/{permission.id}/",
+            {"name": "Cambio ilegal"},
+            format="json",
+        )
+        self.assertEqual(patch_permission.status_code, status.HTTP_403_FORBIDDEN, patch_permission.data)
+        delete_permission = self.client.delete(f"/api/permisos/{permission.id}/")
+        self.assertEqual(delete_permission.status_code, status.HTTP_403_FORBIDDEN, delete_permission.data)
+
+        denied_audit = self.client.get("/api/auditoria/eventos/")
+        self.assertEqual(denied_audit.status_code, status.HTTP_403_FORBIDDEN, denied_audit.data)
+
+    def test_superadmin_can_create_and_deactivate_sede(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+
+        created = self.client.post("/api/sedes/", {"code": "campus-z", "name": "Campus Z"}, format="json")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        sede_id = created.data.get("id")
+        self.assertIsNotNone(sede_id)
+
+        deleted = self.client.delete(f"/api/sedes/{sede_id}/")
+        self.assertEqual(deleted.status_code, status.HTTP_200_OK, deleted.data)
+        self.assertFalse(Sede.objects.get(id=sede_id).is_active)
 
 
 class ImportAtomicityTests(BaseApiTest):

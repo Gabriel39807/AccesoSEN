@@ -4,8 +4,20 @@ import secrets
 from rest_framework import serializers
 from accesos.domain.services.email_domain_service import EmailDomainService
 from accesos.domain.services.authorization import AuthorizationService
-from .models import ConfiguracionSistema, Sede, Usuario, Acceso, Equipo, Turno
-from .models import Notificacion
+from .models import (
+    Acceso,
+    AllowedEmailDomain,
+    ConfiguracionSistema,
+    Equipo,
+    Notificacion,
+    Permission as RbacPermission,
+    Role,
+    RolePermission,
+    Sede,
+    SedePolicy,
+    Turno,
+    Usuario,
+)
 
 
 def password_policy_errors(password: str) -> list[str]:
@@ -81,6 +93,88 @@ class SedeSerializer(serializers.ModelSerializer):
         model = Sede
         fields = ["id", "code", "name", "is_active", "metadata", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ["id", "code", "name", "is_system", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_code(self, value):
+        clean = (value or "").strip().lower()
+        if not clean:
+            raise serializers.ValidationError("Debes indicar el codigo del rol.")
+        return clean
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RbacPermission
+        fields = ["id", "code", "name", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_code(self, value):
+        clean = (value or "").strip().lower()
+        if not clean:
+            raise serializers.ValidationError("Debes indicar el codigo del permiso.")
+        return clean
+
+
+class RolePermissionSerializer(serializers.ModelSerializer):
+    role = serializers.SlugRelatedField(slug_field="code", queryset=Role.objects.all())
+    permission = serializers.SlugRelatedField(slug_field="code", queryset=RbacPermission.objects.all())
+    role_name = serializers.CharField(source="role.name", read_only=True)
+    permission_name = serializers.CharField(source="permission.name", read_only=True)
+
+    class Meta:
+        model = RolePermission
+        fields = ["id", "role", "role_name", "permission", "permission_name", "scope", "created_at"]
+        read_only_fields = ["id", "created_at", "role_name", "permission_name"]
+
+
+class AllowedEmailDomainSerializer(serializers.ModelSerializer):
+    role = serializers.SlugRelatedField(slug_field="code", queryset=Role.objects.all())
+    sede = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=Sede.objects.all(),
+        allow_null=True,
+        required=False,
+    )
+    role_name = serializers.CharField(source="role.name", read_only=True)
+    sede_name = serializers.CharField(source="sede.name", read_only=True, allow_null=True)
+
+    class Meta:
+        model = AllowedEmailDomain
+        fields = ["id", "role", "role_name", "sede", "sede_name", "domain", "is_active", "created_at"]
+        read_only_fields = ["id", "created_at", "role_name", "sede_name"]
+
+    def validate_domain(self, value):
+        clean = (value or "").strip().lower().replace("@", "")
+        if "." not in clean:
+            raise serializers.ValidationError("Debes indicar un dominio valido, por ejemplo gmail.com.")
+        return clean
+
+
+class SedePolicySerializer(serializers.ModelSerializer):
+    sede = serializers.SlugRelatedField(slug_field="code", queryset=Sede.objects.all())
+    sede_name = serializers.CharField(source="sede.name", read_only=True)
+
+    class Meta:
+        model = SedePolicy
+        fields = [
+            "id",
+            "sede",
+            "sede_name",
+            "max_equipos_aprendiz",
+            "guards_can_switch_sede",
+            "qr_mode",
+            "require_equipo_approval",
+            "access_requires_active_turno",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at", "sede_name"]
 
 
 class ConfiguracionSistemaSerializer(serializers.ModelSerializer):

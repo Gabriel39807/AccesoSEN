@@ -48,13 +48,18 @@ from .import_services import (
 from .jwt_views import issue_tokens_for_user
 from .models import (
     Acceso,
+    AllowedEmailDomain,
     ConfiguracionSistema,
     EmailChangeOTP,
     Equipo,
     Notificacion,
+    Permission as RbacPermission,
     PasswordResetOTP,
+    RefreshSession,
     Role,
+    RolePermission,
     Sede,
+    SedePolicy,
     Turno,
     UserMembership,
     Usuario,
@@ -70,10 +75,11 @@ from .otp_services import (
     hash_code,
     send_password_reset_email,
 )
-from .permissions import IsAdmin, IsAprendiz, IsGuarda, is_admin_role, is_admin_sede, is_superadmin
+from .permissions import IsAdmin, IsAprendiz, IsGuarda, IsSuperAdmin, is_admin_role, is_admin_sede, is_superadmin
 from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, is_locked
 from .serializers import (
     AccesoSerializer,
+    AllowedEmailDomainSerializer,
     AprendizEmailChangeConfirmSerializer,
     AprendizEmailChangeRequestSerializer,
     AprendizPerfilSerializer,
@@ -85,6 +91,7 @@ from .serializers import (
     ImportAprendicesConfirmSerializer,
     ImportAprendicesValidateSerializer,
     NotificacionSerializer,
+    PermissionSerializer,
     PasskeyAuthOptionsSerializer,
     PasskeyAuthVerifySerializer,
     PasskeyRegisterOptionsSerializer,
@@ -93,7 +100,10 @@ from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
     RegistrarAccesoDocumentoSerializer,
+    RolePermissionSerializer,
+    RoleSerializer,
     SedeSerializer,
+    SedePolicySerializer,
     TurnoIniciarSerializer,
     TurnoSerializer,
     UsuarioSerializer,
@@ -105,28 +115,7 @@ PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
 MAX_ADMINS_PER_SEDE = 4
 FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
 TURNO_AUTO_CLOSE_OBSERVATION = "Cierre por tiempo limite alcanzado"
-
-GENERIC_SEDES = [
-    {"code": "sede-1", "name": "Sede 1"},
-    {"code": "sede-2", "name": "Sede 2"},
-    {"code": "sede-3", "name": "Sede 3"},
-    {"code": "sede-4", "name": "Sede 4"},
-]
 logger = logging.getLogger(__name__)
-
-
-def _default_sede_rows():
-    return GENERIC_SEDES
-
-
-def _ensure_default_sedes_if_empty():
-    if Sede.objects.exists():
-        return
-    for row in _default_sede_rows():
-        Sede.objects.get_or_create(
-            code=row["code"],
-            defaults={"name": row["name"], "is_active": True},
-        )
 
 
 def _webauthn_register_cache_key(user_id: int, request_id: str) -> str:
@@ -1048,7 +1037,7 @@ class LegacyPasswordResetConfirmView(APIView):
         return ok_response()
 
 
-class SedeViewSet(viewsets.ReadOnlyModelViewSet):
+class SedeViewSet(viewsets.ModelViewSet):
     serializer_class = SedeSerializer
     queryset = Sede.objects.all().order_by("name")
     permission_classes = [AllowAny]
@@ -1056,16 +1045,178 @@ class SedeViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]
-        return [IsAuthenticated(), IsAdmin()]
+        return [IsAuthenticated(), IsSuperAdmin()]
 
     def get_queryset(self):
-        _ensure_default_sedes_if_empty()
         qs = Sede.objects.all().order_by("name")
-        raw = str(self.request.query_params.get("include_inactive", "") or "").strip().lower()
-        include_inactive = raw in {"1", "true", "yes", "on"}
-        if include_inactive and is_admin_role(getattr(self.request, "user", None)):
-            return qs
-        return qs.filter(is_active=True)
+        user = getattr(self.request, "user", None)
+        raw_include_inactive = str(self.request.query_params.get("include_inactive", "") or "").strip().lower()
+        include_inactive = raw_include_inactive in {"1", "true", "yes", "on"}
+
+        raw_active = self.request.query_params.get("active", None)
+        active_filter = None
+        if raw_active is not None:
+            raw_active_clean = str(raw_active).strip().lower()
+            if raw_active_clean not in {"true", "false"}:
+                raise ValidationError({"active": "Valor invalido. Usa true o false."})
+            active_filter = raw_active_clean == "true"
+
+        if not user or not getattr(user, "is_authenticated", False):
+            if active_filter is False:
+                return qs.none()
+            return qs.filter(is_active=True)
+
+        if is_superadmin(user):
+            if include_inactive:
+                return qs
+            if active_filter is None:
+                return qs.filter(is_active=True)
+            return qs.filter(is_active=active_filter)
+
+        allowed_sede_ids = AuthorizationService.allowed_sede_ids(user)
+        if not allowed_sede_ids:
+            return qs.none()
+        scoped = qs.filter(id__in=allowed_sede_ids)
+        if active_filter is False or include_inactive:
+            return scoped.filter(is_active=True)
+        return scoped.filter(is_active=True)
+
+    def destroy(self, request, *args, **kwargs):
+        sede = self.get_object()
+        if not sede.is_active:
+            return ok_response({"sede": self.get_serializer(sede).data, "mensaje": "La sede ya estaba inactiva."})
+        sede.is_active = False
+        sede.save(update_fields=["is_active"])
+        return ok_response({"sede": self.get_serializer(sede).data, "mensaje": "Sede desactivada correctamente."})
+
+
+class RoleViewSet(viewsets.ModelViewSet):
+    serializer_class = RoleSerializer
+    queryset = Role.objects.all().order_by("code")
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def destroy(self, request, *args, **kwargs):
+        role = self.get_object()
+        if role.is_system:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="No se puede eliminar un rol del sistema.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="role",
+            )
+        if role.memberships.exists():
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="No se puede eliminar un rol con membresias activas.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="role",
+            )
+        role.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PermissionViewSet(viewsets.ModelViewSet):
+    serializer_class = PermissionSerializer
+    queryset = RbacPermission.objects.all().order_by("code")
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def destroy(self, request, *args, **kwargs):
+        permission_obj = self.get_object()
+        if permission_obj.role_permissions.exists():
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="No se puede eliminar un permiso ya asignado a roles.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="permission",
+            )
+        permission_obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RolePermissionViewSet(viewsets.ModelViewSet):
+    serializer_class = RolePermissionSerializer
+    queryset = RolePermission.objects.select_related("role", "permission").all().order_by("role__code", "permission__code", "scope")
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+
+class SedePolicyViewSet(viewsets.ModelViewSet):
+    serializer_class = SedePolicySerializer
+    queryset = SedePolicy.objects.select_related("sede").all().order_by("sede__name")
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+
+class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
+    serializer_class = AllowedEmailDomainSerializer
+    queryset = AllowedEmailDomain.objects.select_related("role", "sede").all().order_by("role__code", "sede__code", "domain")
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+
+class AuditEventsView(APIView):
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        events: list[dict] = []
+
+        for acceso in (
+            Acceso.objects.filter(is_deleted=True, deleted_at__isnull=False)
+            .select_related("deleted_by", "usuario", "sede")
+            .order_by("-deleted_at")[:30]
+        ):
+            events.append(
+                {
+                    "id": f"acceso-soft-delete-{acceso.id}",
+                    "type": "acceso.soft_delete",
+                    "timestamp": acceso.deleted_at,
+                    "actor": getattr(getattr(acceso, "deleted_by", None), "username", None),
+                    "detail": f"Acceso #{acceso.id} de {getattr(acceso.usuario, 'username', acceso.usuario_id)}",
+                    "sede": getattr(getattr(acceso, "sede", None), "code", None),
+                }
+            )
+
+        for turno in (
+            Turno.objects.exclude(cierre_observacion="")
+            .select_related("guarda", "sede")
+            .order_by("-fin", "-inicio")[:30]
+        ):
+            events.append(
+                {
+                    "id": f"turno-close-{turno.id}",
+                    "type": "turno.closed",
+                    "timestamp": turno.fin or turno.inicio,
+                    "actor": getattr(getattr(turno, "guarda", None), "username", None),
+                    "detail": f"Turno #{turno.id} cerrado: {turno.cierre_observacion}",
+                    "sede": getattr(getattr(turno, "sede", None), "code", None),
+                }
+            )
+
+        for session in (
+            RefreshSession.objects.filter(revoked_at__isnull=False)
+            .select_related("user")
+            .order_by("-revoked_at")[:30]
+        ):
+            events.append(
+                {
+                    "id": f"session-revoked-{session.id}",
+                    "type": "auth.session_revoked",
+                    "timestamp": session.revoked_at,
+                    "actor": getattr(getattr(session, "user", None), "username", None),
+                    "detail": f"Sesion revocada para dispositivo {session.device_id}",
+                    "sede": None,
+                }
+            )
+
+        events.sort(key=lambda item: (item.get("timestamp") is not None, item.get("timestamp")), reverse=True)
+        serialized_events = []
+        for event in events[:100]:
+            timestamp = event.get("timestamp")
+            serialized_events.append(
+                {
+                    **event,
+                    "timestamp": timestamp.isoformat() if timestamp else None,
+                }
+            )
+
+        return ok_response({"results": serialized_events, "count": len(serialized_events)})
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):

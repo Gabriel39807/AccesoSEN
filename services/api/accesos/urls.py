@@ -8,7 +8,19 @@ Responsibility:
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from accesos.api.viewsets import AccesoViewSet, EquipoViewSet, NotificacionViewSet, SedeViewSet, TurnoViewSet, UsuarioViewSet
+from accesos.api.viewsets import (
+    AccesoViewSet,
+    AllowedEmailDomainViewSet,
+    EquipoViewSet,
+    NotificacionViewSet,
+    PermissionViewSet,
+    RolePermissionViewSet,
+    RoleViewSet,
+    SedePolicyViewSet,
+    SedeViewSet,
+    TurnoViewSet,
+    UsuarioViewSet,
+)
 from accesos.api.viewsets.auth import (
     AprendizEmailChangeConfirmView,
     AprendizEmailChangeRequestView,
@@ -28,11 +40,17 @@ from accesos.api.viewsets.auth import (
     PasswordResetRequestView,
     PasswordResetVerifyView,
 )
+from accesos.views import AuditEventsView
 from .jwt_views import SadiLogoutAllView, SadiLogoutView, SadiTokenObtainPairView, SadiTokenRefreshView
 
 router = DefaultRouter()
 router.register(r"sedes", SedeViewSet, basename="sedes")
 router.register(r"usuarios", UsuarioViewSet, basename="usuarios")
+router.register(r"roles", RoleViewSet, basename="roles")
+router.register(r"permisos", PermissionViewSet, basename="permisos")
+router.register(r"asignaciones", RolePermissionViewSet, basename="asignaciones")
+router.register(r"politicas-sede", SedePolicyViewSet, basename="politicas-sede")
+router.register(r"dominios-email", AllowedEmailDomainViewSet, basename="dominios-email")
 router.register(r"accesos", AccesoViewSet, basename="accesos")
 router.register(r"equipos", EquipoViewSet, basename="equipos")
 router.register(r"turnos", TurnoViewSet, basename="turnos")
@@ -57,6 +75,7 @@ urlpatterns = [
     path("auth/passkeys/register/verify/", PasskeyRegisterVerifyView.as_view(), name="passkey-register-verify"),
     path("auth/passkeys/auth/options/", PasskeyAuthOptionsView.as_view(), name="passkey-auth-options"),
     path("auth/passkeys/auth/verify/", PasskeyAuthVerifyView.as_view(), name="passkey-auth-verify"),
+    path("auditoria/eventos/", AuditEventsView.as_view(), name="auditoria-eventos"),
 
     # Password reset OTP
     path("auth/password-reset/request/", PasswordResetRequestView.as_view(), name="password-reset-request"),
