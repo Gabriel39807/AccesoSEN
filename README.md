@@ -1,5 +1,7 @@
 # SADI Monorepo
 
+[![CI](https://github.com/Gabriel39807/S.A.D.I/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Gabriel39807/S.A.D.I/actions/workflows/ci.yml)
+
 Sistema de control de accesos institucional con:
 - Backend: Django + DRF (`services/api`)
 - Frontend web: Next.js (`apps/web`)
@@ -10,6 +12,14 @@ Sistema de control de accesos institucional con:
 - Access JWT corto + refresh token por dispositivo (hash en backend, rotacion y revocacion).
 - Flujos OTP por correo para recuperacion/cambio de correo.
 - Roles principales: `superadmin`, `admin_sede`, `guarda`, `aprendiz`.
+
+Diagrama textual:
+```
+[Web Next.js] ------\
+                     >---- [Django + DRF API] ---- [PostgreSQL]
+[Mobile Expo RN] ---/              |
+                                   +---- [Redis cache/rate-limit]
+```
 
 ## Quickstart local (sin Docker)
 ### 1) API
@@ -51,6 +61,12 @@ docker compose up -d
 API: `http://localhost:8000`  
 Web: `http://localhost:3000`
 
+Migraciones y superusuario (contenedor API):
+```bash
+docker compose exec api python manage.py migrate
+docker compose exec api python manage.py createsuperuser
+```
+
 ## Produccion (resumen)
 1. Configurar `services/api/.env` con `DJANGO_ENV=production` y secretos reales.
 2. Build + up:
@@ -79,6 +95,11 @@ Guia completa: `docs/deploy-production.md`
 - `REFRESH_TOKEN_PEPPER`
 - `GUARDA_SINGLE_ACTIVE_SESSION`
 
+Perfiles sugeridos:
+- `development`: `DJANGO_DEBUG=true`, SQLite o Postgres local, `WEBAUTHN_MOCK=true`.
+- `test`: SQLite temporal + `DJANGO_SECRET_KEY` efimera (usado por pytest/CI).
+- `production`: `DJANGO_DEBUG=false`, Postgres obligatorio, `REDIS_URL` configurado, `WEBAUTHN_MOCK=false`.
+
 ### Web (`apps/web/.env`)
 - `NEXT_PUBLIC_API_URL`
 
@@ -92,6 +113,33 @@ cmd /c check.cmd
 o
 ```bash
 bash ./check.sh
+```
+
+Comandos granulares:
+```bash
+# Backend (Windows)
+cd services/api
+.\.venv\Scripts\python.exe -m ruff check accesos accesosen_api
+.\.venv\Scripts\python.exe -m black --check accesos/auth_jwt.py accesos/jwt_views.py accesos/rate_limit.py accesos/otp_services.py
+.\.venv\Scripts\python.exe manage.py check
+.\.venv\Scripts\python.exe -m pytest --cov=accesos --cov-report=term-missing --cov-fail-under=30
+```
+
+```bash
+# Web
+cd apps/web
+npm ci
+npm run lint
+npm run typecheck
+npm run build
+```
+
+```bash
+# Mobile
+cd apps/mobile-rn
+npm ci
+npm run lint
+npm run typecheck
 ```
 
 ## Troubleshooting

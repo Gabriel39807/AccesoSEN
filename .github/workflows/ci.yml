@@ -30,6 +30,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Ruff (backend lint)
+        run: python -m ruff check accesos accesosen_api
+      - name: Black (format check)
+        run: python -m black --check accesos/auth_jwt.py accesos/jwt_views.py accesos/rate_limit.py accesos/otp_services.py
       - name: Django checks
         run: python manage.py check
       - name: Tests with coverage
@@ -53,7 +57,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Lint
-        run: npm run lint -- --rule "@typescript-eslint/no-explicit-any: off"
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
       - name: Build
         run: npm run build
 
@@ -74,3 +80,5 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
