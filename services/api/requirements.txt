@@ -7,7 +7,7 @@ django-filter==25.2
 djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 drf-yasg==1.21.14
-gunicorn==25.0.3
+gunicorn==25.1.0
 inflection==0.5.1
 packaging==26.0
 pillow==12.1.0
