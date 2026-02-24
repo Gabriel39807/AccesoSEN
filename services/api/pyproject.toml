@@ -1,0 +1,25 @@
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+include = "\\.pyi?$"
+extend-exclude = '''
+(
+  migrations
+)
+'''
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = [
+  ".venv",
+  "venv",
+  "migrations",
+]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501", "F405"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["accesos", "accesosen_api", "core"]

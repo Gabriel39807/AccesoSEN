@@ -189,7 +189,11 @@ def _issue_session_tokens(
     refresh_hash = _hash_refresh_token(refresh_value)
 
     with transaction.atomic():
-        if rotate_guard_session and Usuario.Rol.GUARDA in AuthorizationService.role_codes(user) and _guard_single_active_session():
+        if (
+            rotate_guard_session
+            and Usuario.Rol.GUARDA in AuthorizationService.role_codes(user)
+            and _guard_single_active_session()
+        ):
             qs = _active_sessions_qs(user=user)
             if previous_session:
                 qs = qs.exclude(id=previous_session.id)
@@ -267,7 +271,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         User = get_user_model()
         user = _find_user_by_login_identifier(User, login_identifier) if login_identifier else None
-        canonical_login = ((getattr(user, "username", "") or "").strip().lower() if user else login_identifier)
+        canonical_login = (getattr(user, "username", "") or "").strip().lower() if user else login_identifier
 
         if "@" in login_identifier:
             domain_check = EmailDomainService.validate(
@@ -322,7 +326,9 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         except Exception:
             lock_user = {"locked": False, "remaining_sec": 0, "just_locked": False}
             if canonical_login:
-                lock_user = bump_with_lock("login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
+                lock_user = bump_with_lock(
+                    "login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC
+                )
             lock_ip = bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
 
             if user and lock_user.get("just_locked"):
@@ -349,14 +355,18 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
                         },
                     }
                 )
-            raise AuthenticationFailed({"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."})
+            raise AuthenticationFailed(
+                {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."}
+            )
 
         role = AuthorizationService.default_role_for_user(self.user)
         if not _role_allowed_for_expected(role, expected_role):
             if canonical_login:
                 bump_with_lock("login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
             bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
-            raise AuthenticationFailed({"code": ErrorCode.INVALID_CREDENTIALS, "message": "Credenciales invalidas para este modulo."})
+            raise AuthenticationFailed(
+                {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Credenciales invalidas para este modulo."}
+            )
 
         if canonical_login:
             reset_counter("login-user", [canonical_login])
@@ -442,12 +452,16 @@ class SadiTokenRefreshView(APIView):
             )
 
             if not session or not hmac.compare_digest(session.refresh_token_hash, token_hash):
-                limit_ip = bump_with_lock("refresh-ip", [ip], REFRESH_MAX_ATTEMPTS_IP, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC)
+                limit_ip = bump_with_lock(
+                    "refresh-ip", [ip], REFRESH_MAX_ATTEMPTS_IP, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC
+                )
                 limit_device = bump_with_lock(
                     "refresh-device", [device_key], REFRESH_MAX_ATTEMPTS_DEVICE, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC
                 )
                 if limit_ip["locked"] or limit_device["locked"]:
-                    lock_remaining = max(int(limit_ip.get("remaining_sec", 0)), int(limit_device.get("remaining_sec", 0)))
+                    lock_remaining = max(
+                        int(limit_ip.get("remaining_sec", 0)), int(limit_device.get("remaining_sec", 0))
+                    )
                     return error_response(
                         code=ErrorCode.ACCOUNT_LOCKED_15MIN,
                         message="Demasiados intentos de renovacion. Intenta mas tarde.",
@@ -462,7 +476,9 @@ class SadiTokenRefreshView(APIView):
 
             if explicit_device_id and session.device_id != explicit_device_id:
                 bump_with_lock("refresh-ip", [ip], REFRESH_MAX_ATTEMPTS_IP, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC)
-                bump_with_lock("refresh-device", [device_key], REFRESH_MAX_ATTEMPTS_DEVICE, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC)
+                bump_with_lock(
+                    "refresh-device", [device_key], REFRESH_MAX_ATTEMPTS_DEVICE, REFRESH_WINDOW_SEC, REFRESH_LOCK_SEC
+                )
                 return error_response(
                     code=ErrorCode.NOT_AUTHENTICATED,
                     message="Sesion invalida o expirada. Inicia sesion nuevamente.",

@@ -13,9 +13,9 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
-from rest_framework.test import APIClient
 from rest_framework.test import APITestCase
 from rest_framework.test import force_authenticate
+from rest_framework_simplejwt.tokens import AccessToken
 
 from accesos.domain.services.qr_service import QRParseError, QRService
 from accesos.api.permissions import RequiresPermission
@@ -512,6 +512,19 @@ class PasswordResetOtpTests(BaseApiTest):
         self.user.refresh_from_db()
         self.assertFalse(self.user.force_password_reset)
         self.assertTrue(self.user.check_password("NewPassw0rd!"))
+
+    def test_verify_rejects_expired_otp(self):
+        otp = self._seed_otp(code="12345")
+        otp.expires_at = timezone.now() - timedelta(seconds=1)
+        otp.save(update_fields=["expires_at"])
+
+        vr = self.client.post(
+            "/api/auth/password-reset/verify/",
+            {"email": "recover@sadi.test", "otp": "12345"},
+            format="json",
+        )
+        self.assertEqual(vr.status_code, status.HTTP_400_BAD_REQUEST, vr.data)
+        self.assertEqual(vr.data.get("code"), "OTP_EXPIRED")
 
 
 class EquipoRulesTests(BaseApiTest):
@@ -1219,6 +1232,53 @@ class SecurityHardeningTests(BaseApiTest):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
         self.assertEqual(response.data.get("code"), "TURNO_REQUIRED")
+
+    def test_register_salida_without_ingreso_previo_is_rejected(self):
+        Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede_1,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+            fin=None,
+        )
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        response = self.client.post(
+            "/api/accesos/",
+            {"usuario": self.aprendiz.id, "tipo": Acceso.Tipo.SALIDA},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertIn(response.data.get("code"), {"ACCESO_INCONSISTENTE_EQUIPO", "VALIDATION_ERROR"})
+
+    def test_access_token_with_invalid_sid_is_rejected(self):
+        login = self.client.post(
+            "/api/token/",
+            {"username": self.guarda.documento, "password": "Passw0rd!", "expected_role": "guarda"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        self.guarda.refresh_from_db()
+        self.assertIsNotNone(self.guarda.active_session_id)
+
+        forged = AccessToken.for_user(self.guarda)
+        forged["rol"] = Usuario.Rol.GUARDA
+        forged["sid"] = str(uuid4())
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(forged)}")
+        denied = self.client.get("/api/guardia/estado-actual/")
+        self.assertEqual(denied.status_code, status.HTTP_401_UNAUTHORIZED, denied.data)
+
+    def test_turno_fin_before_inicio_fails_db_constraint(self):
+        inicio = timezone.now()
+        with self.assertRaises(IntegrityError):
+            Turno.objects.create(
+                guarda=self.guarda,
+                sede=self.sede_1,
+                jornada=Turno.Jornada.TARDE,
+                inicio=inicio,
+                fin=inicio - timedelta(minutes=1),
+                activo=False,
+            )
 
     def test_password_reset_verify_blocks_bruteforce_after_max_attempts(self):
         salt = "hardening-otp-salt"

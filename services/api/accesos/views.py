@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 import io
 import logging
-import re
 import secrets
 import time
 from datetime import date
