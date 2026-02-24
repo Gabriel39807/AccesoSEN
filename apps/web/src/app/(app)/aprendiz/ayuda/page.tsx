@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useInstitution } from "@/context/institution-context";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -29,16 +30,19 @@ function FaqItem({
 }
 
 export default function AprendizAyudaPage() {
+  const { emailPlaceholder } = useInstitution();
+  const supportEmail = (process.env.NEXT_PUBLIC_SUPPORT_EMAIL || `soporte@${emailPlaceholder.split("@")[1]}`).trim();
+
   const [asunto, setAsunto] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [motivo, setMotivo] = useState("Otro motivo");
 
   const mailto = useMemo(() => {
-    const to = "soporte@sena.edu.co";
+    const to = supportEmail;
     const subject = encodeURIComponent(`[SADI] ${motivo}: ${asunto}`.trim());
     const body = encodeURIComponent(mensaje);
     return `mailto:${to}?subject=${subject}&body=${body}`;
-  }, [asunto, mensaje, motivo]);
+  }, [asunto, mensaje, motivo, supportEmail]);
 
   const canSend = asunto.trim().length > 0 && mensaje.trim().length > 0;
   const charsLeft = Math.max(0, 500 - mensaje.length);
@@ -149,7 +153,7 @@ export default function AprendizAyudaPage() {
                 <span className="font-semibold">Linea de atencion:</span> (000) 000 0000
               </div>
               <div>
-                <span className="font-semibold">Correo:</span> soporte@sena.edu.co
+                <span className="font-semibold">Correo:</span> {supportEmail}
               </div>
             </div>
           </div>
@@ -158,4 +162,3 @@ export default function AprendizAyudaPage() {
     </div>
   );
 }
-

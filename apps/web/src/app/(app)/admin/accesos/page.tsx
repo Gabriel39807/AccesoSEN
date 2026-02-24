@@ -12,6 +12,7 @@ import { IconHistory } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { api } from "@/lib/api";
+import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -27,7 +28,7 @@ type Usuario = {
 type Turno = {
   id: number;
   guarda: number;
-  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
+  sede: string;
   jornada: "MANANA" | "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
@@ -48,7 +49,7 @@ type Acceso = {
   usuario: number;
   fecha: string;
   tipo: "ingreso" | "salida";
-  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA" | null;
+  sede: string | null;
   registrado_por: number | null;
   turno: number | null;
   equipos: number[];
@@ -60,8 +61,6 @@ type Paginated<T> = {
   previous: string | null;
   results: T[];
 };
-
-const SEDES: Array<NonNullable<Acceso["sede"]>> = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
 
 function clsBadge(variant: "green" | "red" | "blue" | "amber" | "gray") {
   const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
@@ -156,6 +155,9 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 }
 
 export default function AdminAccesosPage() {
+  const { sedes } = useSedes();
+  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
+
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [accesos, setAccesos] = useState<Acceso[]>([]);
   const [count, setCount] = useState(0);
@@ -168,7 +170,7 @@ export default function AdminAccesosPage() {
 
   const [q, setQ] = useState("");
   const [tipo, setTipo] = useState<"" | Acceso["tipo"]>("");
-  const [sede, setSede] = useState<"" | NonNullable<Acceso["sede"]>>("");
+  const [sede, setSede] = useState<string>("");
   const [aprendizId, setAprendizId] = useState<number | "">("");
   const [guardaId, setGuardaId] = useState<number | "">("");
   const [dateFrom, setDateFrom] = useState("");
@@ -399,9 +401,9 @@ export default function AdminAccesosPage() {
             onChange={(e) => setSede(e.target.value as any)}
           >
             <option value="">Sede</option>
-            {SEDES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace("_", " ")}
+            {sedes.map((item) => (
+              <option key={item.id} value={item.code}>
+                {item.name}
               </option>
             ))}
           </select>
@@ -509,7 +511,11 @@ export default function AdminAccesosPage() {
                   {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </td>
                 <td className="px-4 py-3">
-                  {a.sede ? <Badge variant="blue" label={a.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
+                  {a.sede ? (
+                    <Badge variant="blue" label={sedesByCode.get(a.sede) || a.sede} />
+                  ) : (
+                    <Badge variant="gray" label="(sin sede)" />
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-gray-900">{nombreUsuario(aprendiz)}</div>
@@ -567,7 +573,11 @@ export default function AdminAccesosPage() {
               <div className="rounded-xl border p-3">
                 <div className="text-xs text-gray-500">Sede</div>
                 <div className="mt-1">
-                  {selected.sede ? <Badge variant="blue" label={selected.sede.replace("_", " ")} /> : <Badge variant="gray" label="(sin sede)" />}
+                  {selected.sede ? (
+                    <Badge variant="blue" label={sedesByCode.get(selected.sede) || selected.sede} />
+                  ) : (
+                    <Badge variant="gray" label="(sin sede)" />
+                  )}
                 </div>
               </div>
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 
 /**
@@ -9,16 +8,11 @@ import { useTheme } from "next-themes";
  */
 export default function GlobalThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const isDark = resolvedTheme === "dark";
-  const label = mounted ? (isDark ? "Modo claro" : "Modo oscuro") : "Cambiar tema";
-  const title = mounted ? (isDark ? "Activar modo claro" : "Activar modo oscuro") : "Cambiar tema";
-  const ariaLabel = mounted ? (isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro") : "Cambiar tema";
+  const label = isDark ? "Modo claro" : "Modo oscuro";
+  const title = isDark ? "Activar modo claro" : "Activar modo oscuro";
+  const ariaLabel = isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
 
   return (
     <button

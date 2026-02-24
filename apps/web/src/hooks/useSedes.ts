@@ -49,14 +49,24 @@ export function useSedes(options?: UseSedesOptions) {
       if (!mounted) return;
       setReloadToken((v) => v + 1);
     }
+    function onVisibilityChange() {
+      if (!mounted) return;
+      if (document.visibilityState === "visible") {
+        setReloadToken((v) => v + 1);
+      }
+    }
     if (typeof window !== "undefined") {
       window.addEventListener("sedes:updated", onUpdated);
+      window.addEventListener("focus", onUpdated);
+      document.addEventListener("visibilitychange", onVisibilityChange);
     }
 
     return () => {
       mounted = false;
       if (typeof window !== "undefined") {
         window.removeEventListener("sedes:updated", onUpdated);
+        window.removeEventListener("focus", onUpdated);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
       }
     };
   }, [includeInactive, reloadToken]);

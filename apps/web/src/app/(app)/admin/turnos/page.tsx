@@ -12,6 +12,7 @@ import { IconClock } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { api } from "@/lib/api";
+import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -24,14 +25,13 @@ type Usuario = {
 type Turno = {
   id: number;
   guarda: number;
-  sede: "CEGAFE" | "SANTA_CLARA" | "ITEDRIS" | "GASTRONOMIA";
+  sede: string;
   jornada: "MANANA" | "MAÑANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
 };
 
-const SEDES: Turno["sede"][] = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"];
 const JORNADAS: Turno["jornada"][] = ["MANANA", "MAÑANA", "TARDE", "NOCHE"];
 
 function badgeBase() {
@@ -118,13 +118,16 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 }
 
 export default function AdminTurnosPage() {
+  const { sedes } = useSedes();
+  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
+
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [sede, setSede] = useState<"" | Turno["sede"]>("");
+  const [sede, setSede] = useState<string>("");
   const [jornada, setJornada] = useState<"" | Turno["jornada"]>("");
   const [activo, setActivo] = useState<"" | "true" | "false">("");
   const [guardaId, setGuardaId] = useState<number | "">("");
@@ -287,9 +290,9 @@ export default function AdminTurnosPage() {
             onChange={(e) => setSede(e.target.value as any)}
           >
             <option value="">Sede</option>
-            {SEDES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace("_", " ")}
+            {sedes.map((item) => (
+              <option key={item.id} value={item.code}>
+                {item.name}
               </option>
             ))}
           </select>
@@ -400,7 +403,7 @@ export default function AdminTurnosPage() {
               <tr key={t.id} className="transition hover:bg-sky-50/35">
                 <td className="px-4 py-3 font-semibold text-gray-900">#{t.id}</td>
                 <td className="px-4 py-3 text-gray-800">{nombreUsuario(u)}</td>
-                <td className="px-4 py-3 text-gray-800">{t.sede.replace("_", " ")}</td>
+                <td className="px-4 py-3 text-gray-800">{sedesByCode.get(t.sede) || t.sede}</td>
                 <td className="px-4 py-3">
                   <span className={badgeJornada(t.jornada)}>{normalizarJornada(t.jornada)}</span>
                 </td>
@@ -456,7 +459,7 @@ export default function AdminTurnosPage() {
               </div>
               <div>
                 <span className="text-gray-500">Sede:</span>{" "}
-                <span className="font-semibold">{turnoFinalizar.sede.replace("_", " ")}</span>
+                <span className="font-semibold">{sedesByCode.get(turnoFinalizar.sede) || turnoFinalizar.sede}</span>
               </div>
               <div>
                 <span className="text-gray-500">Jornada:</span>{" "}

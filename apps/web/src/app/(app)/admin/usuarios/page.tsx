@@ -12,6 +12,8 @@ import Button from "@/components/dashboard/shared/Button";
 import { IconBell, IconShield, IconUser, IconClock, IconHistory, IconLaptop } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { useSedes } from "@/hooks/useSedes";
+import { useInstitution } from "@/context/institution-context";
 
 type Usuario = {
   id: number;
@@ -42,7 +44,6 @@ type ImportValidationError = {
 };
 
 const ROLES = ["admin", "guarda", "aprendiz"] as const;
-const SEDES = ["CEGAFE", "SANTA_CLARA", "ITEDRIS", "GASTRONOMIA"] as const;
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -191,6 +192,10 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 
 
 export default function AdminUsuariosPage() {
+  const { sedes } = useSedes();
+  const { emailPlaceholder } = useInstitution();
+  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
+
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [count, setCount] = useState<number>(0);
@@ -205,7 +210,7 @@ export default function AdminUsuariosPage() {
   const [q, setQ] = useState("");
   const [rolFilter, setRolFilter] = useState<"todos" | "admin" | "guarda" | "aprendiz">("todos");
   const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
-  const [sedeFilter, setSedeFilter] = useState<"todos" | (typeof SEDES)[number]>("todos");
+  const [sedeFilter, setSedeFilter] = useState<string>("todos");
 
   // debounce
   const dq = useDebounced(q, 450);
@@ -626,12 +631,12 @@ export default function AdminUsuariosPage() {
           <select
             className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
             value={sedeFilter}
-            onChange={(e) => setSedeFilter(e.target.value as "todos" | (typeof SEDES)[number])}
+            onChange={(e) => setSedeFilter(e.target.value)}
           >
             <option value="todos">Sede: Todas</option>
-            {SEDES.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {sedes.map((item) => (
+              <option key={item.id} value={item.code}>
+                {item.name}
               </option>
             ))}
           </select>
@@ -738,7 +743,11 @@ export default function AdminUsuariosPage() {
               </td>
 
               <td className="p-3"><div className="max-w-[130px] truncate">{u.documento ?? "-"}</div></td>
-              <td className="p-3"><div className="max-w-[110px] truncate">{u.sede_principal ?? "-"}</div></td>
+              <td className="p-3">
+                <div className="max-w-[110px] truncate">
+                  {u.sede_principal ? sedesByCode.get(u.sede_principal) || u.sede_principal : "-"}
+                </div>
+              </td>
               <td className="p-3"><div className="max-w-[170px] truncate">{u.programa_formacion ?? "-"}</div></td>
 
               <td className="p-3 text-right">
@@ -803,7 +812,7 @@ export default function AdminUsuariosPage() {
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="usuario@sena.edu.co"
+                    placeholder={emailPlaceholder}
                   />
                 </label>
 
@@ -826,9 +835,12 @@ export default function AdminUsuariosPage() {
                     onChange={(e) => setSede(e.target.value)}
                   >
                     <option value="">(sin sede)</option>
-                    {SEDES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    {sede && !sedesByCode.has(sede) ? (
+                      <option value={sede}>{`Sede eliminada/inactiva (${sede})`}</option>
+                    ) : null}
+                    {sedes.map((item) => (
+                      <option key={item.id} value={item.code}>
+                        {item.name}
                       </option>
                     ))}
                   </select>
@@ -917,7 +929,7 @@ export default function AdminUsuariosPage() {
                     className="w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                     value={c_email}
                     onChange={(e) => setCEmail(e.target.value)}
-                    placeholder="usuario@sena.edu.co"
+                    placeholder={emailPlaceholder}
                   />
                 </label>
 
@@ -966,9 +978,12 @@ export default function AdminUsuariosPage() {
                     onChange={(e) => setCSede(e.target.value)}
                   >
                     <option value="">(sin sede)</option>
-                    {SEDES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    {c_sede && !sedesByCode.has(c_sede) ? (
+                      <option value={c_sede}>{`Sede eliminada/inactiva (${c_sede})`}</option>
+                    ) : null}
+                    {sedes.map((item) => (
+                      <option key={item.id} value={item.code}>
+                        {item.name}
                       </option>
                     ))}
                   </select>
@@ -1093,4 +1108,3 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
-
