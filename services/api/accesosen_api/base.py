@@ -173,6 +173,9 @@ if DATABASE_ENGINE == "django.db.backends.postgresql":
             "PASSWORD": env_required("DATABASE_PASSWORD"),
             "HOST": env_required("DATABASE_HOST"),
             "PORT": env_required("DATABASE_PORT"),
+            "OPTIONS": {
+                "sslmode": "require",
+            },
             "CONN_MAX_AGE": int(os.getenv("DATABASE_CONN_MAX_AGE", "60")),
         }
     }

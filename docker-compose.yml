@@ -9,11 +9,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-accesosen}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-accesosen}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,24 +38,24 @@ services:
       - ./services/api/.env
     environment:
       DJANGO_ENV: ${DJANGO_ENV:-development}
-      DATABASE_ENGINE: django.db.backends.postgresql
-      DATABASE_NAME: ${POSTGRES_DB:-accesosen}
-      DATABASE_USER: ${POSTGRES_USER:-postgres}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DATABASE_HOST: db
-      DATABASE_PORT: 5432
+      #      DATABASE_ENGINE: django.db.backends.postgresql
+      #      DATABASE_NAME: ${DATABASE_NAME:-postgres}
+      #      DATABASE_USER: ${DATABASE_USER:-postgres}
+      #      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-postgres}
+      #      DATABASE_HOST: ${DATABASE_HOST:-db}
+      #      DATABASE_PORT: ${DATABASE_PORT:-5432}
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       CSRF_TRUSTED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     ports:
       - "8000:8000"
     depends_on:
-      db:
-        condition: service_healthy
+      # db:
+      #   condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python manage.py check --deploy || exit 1"]
+      test: [ "CMD-SHELL", "python manage.py check --deploy || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
