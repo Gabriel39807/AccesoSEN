@@ -1,4 +1,4 @@
-# SADI Monorepo
+# SADI "Sistema De Acceso Digital Institucional"
 
 [![CI](https://github.com/Gabriel39807/S.A.D.I/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/Gabriel39807/S.A.D.I/actions/workflows/ci.yml)
 
