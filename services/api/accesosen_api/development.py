@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import socket
 
 from .base import *  # noqa: F401,F403
@@ -35,7 +36,7 @@ def _detect_local_ipv4_addresses() -> list[str]:
 DEFAULT_DEV_ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0", "10.0.2.2"]
 ALLOWED_HOSTS = sorted(set(env_list("DJANGO_ALLOWED_HOSTS", default=DEFAULT_DEV_ALLOWED_HOSTS) + _detect_local_ipv4_addresses()))
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", False)
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
     default=[
@@ -54,4 +55,6 @@ CSRF_TRUSTED_ORIGINS = env_list(
     ],
 )
 
-WEBAUTHN_MOCK = True
+WEBAUTHN_MOCK = env_bool("WEBAUTHN_MOCK", True)
+WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "localhost")
+WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "http://localhost:3000")

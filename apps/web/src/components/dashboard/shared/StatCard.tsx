@@ -1,3 +1,6 @@
+"use client";
+import { motion } from "framer-motion";
+
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
@@ -27,7 +30,11 @@ export default function StatCard({
 }) {
   const t = normalizeTone(tone);
   const body = (
-    <article className="group relative overflow-hidden rounded-2xl border border-white/90 bg-white/80 p-4 shadow-[0_8px_24px_rgba(2,6,23,0.05)] backdrop-blur-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_rgba(2,6,23,0.08)]">
+    <motion.article
+      whileHover={{ y: -4, scale: 1.01 }}
+      transition={{ type: "spring", stiffness: 300 }}
+      className="group relative overflow-hidden rounded-2xl border border-white/90 bg-white/80 p-4 shadow-[0_8px_24px_rgba(2,6,23,0.05)] backdrop-blur-sm hover:shadow-[0_10px_30px_rgba(2,6,23,0.08)]"
+    >
       <div
         className={cx(
           "absolute inset-x-0 top-0 h-1",
@@ -60,7 +67,7 @@ export default function StatCard({
           </span>
         ) : null}
       </div>
-    </article>
+    </motion.article>
   );
 
   if (!onClick) return body;

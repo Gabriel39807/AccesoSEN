@@ -11,7 +11,50 @@ import axios, { AxiosHeaders } from "axios";
 import { z } from "zod";
 import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./auth";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
+const ENFORCE_DEPLOY_API_URL_GUARD =
+  IS_PRODUCTION_BUILD &&
+  (process.env.VERCEL === "1" || process.env.CI === "true" || process.env.STRICT_PUBLIC_API_URL === "true");
+
+function normalizeApiBaseUrl(value: string): string {
+  const trimmed = (value || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("/")) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isLoopbackHost(value: string): boolean {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value, "https://placeholder.invalid");
+    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname);
+  } catch {
+    return /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(value);
+  }
+}
+
+function isSupabaseProjectUrl(value: string): boolean {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value, "https://placeholder.invalid");
+    return parsed.hostname.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
+}
+
+const API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
+
+if (ENFORCE_DEPLOY_API_URL_GUARD && !API_BASE) {
+  throw new Error("Missing NEXT_PUBLIC_API_URL for production build.");
+}
+if (ENFORCE_DEPLOY_API_URL_GUARD && isLoopbackHost(API_BASE)) {
+  throw new Error("Invalid NEXT_PUBLIC_API_URL for production: localhost/loopback is not allowed.");
+}
+if (ENFORCE_DEPLOY_API_URL_GUARD && isSupabaseProjectUrl(API_BASE)) {
+  throw new Error("Invalid NEXT_PUBLIC_API_URL: it must point to your Django API, not directly to *.supabase.co.");
+}
 
 export const api = axios.create({
   baseURL: API_BASE || undefined,
@@ -170,7 +213,7 @@ function extractPath(url: unknown): string {
   if (!raw) return "";
 
   try {
-    const parsed = new URL(raw, API_BASE || "http://localhost");
+    const parsed = new URL(raw, API_BASE || "http://placeholder.invalid");
     return parsed.pathname;
   } catch {
     return raw.split("?")[0] || "";

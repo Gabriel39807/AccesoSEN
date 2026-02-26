@@ -1,4 +1,7 @@
+"use client";
+
 import type { CSSProperties } from "react";
+import { motion } from "framer-motion";
 import type { AuthRole } from "./RoleSwitch";
 import SplineHeroRobot from "./SplineHeroRobot";
 import styles from "./auth.module.css";
@@ -18,23 +21,68 @@ export default function HeroVisual({ role, tx, ty }: Props) {
 
   return (
     <div className={styles.hvRoot} aria-hidden>
-      <div className={styles.hvBackgroundLayer} style={shift(tx, ty, -0.1, -0.1)} />
-      <div className={styles.hvGlowA} style={shift(tx, ty, -0.26, -0.24)} />
-      <div className={styles.hvGlowB} style={shift(tx, ty, 0.22, 0.2)} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 1.2, ease: "easeOut" }}
+        className={styles.hvBackgroundLayer}
+        style={shift(tx, ty, -0.1, -0.1)}
+      />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.4, delay: 0.3 }}
+        className={styles.hvGlowA}
+        style={shift(tx, ty, -0.26, -0.24)}
+      />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.4, delay: 0.5 }}
+        className={styles.hvGlowB}
+        style={shift(tx, ty, 0.22, 0.2)}
+      />
 
-      <div className={styles.hvWordMain}>CONTROL</div>
-      <div className={styles.hvWordAccent}>SEGURO..</div>
+      <motion.div
+        initial={{ opacity: 0, x: -30 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className={styles.hvWordMain}
+      >
+        CONTROL
+      </motion.div>
+      <motion.div
+        initial={{ opacity: 0, x: 30 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8, delay: 0.4 }}
+        className={styles.hvWordAccent}
+      >
+        SEGURO..
+      </motion.div>
 
-      <div className={styles.hvStatusCard} style={shift(tx, ty, 0.22, -0.05)}>
+      <motion.div
+        initial={{ opacity: 0, y: -20, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6, delay: 0.6, type: "spring" as const, stiffness: 200 }}
+        className={styles.hvStatusCard}
+        style={shift(tx, ty, 0.22, -0.05)}
+      >
         <span className={styles.hvStatusIcon} aria-hidden>
           <svg viewBox="0 0 20 20">
             <path d="M5.2 10.1 8.2 13l6.6-6.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
         <span className={styles.hvStatusText}>S.A.D.I</span>
-      </div>
+      </motion.div>
 
-      <div className={styles.hvRoleMark} style={shift(tx, ty, 0.18, 0.14)} aria-hidden>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.6 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.7, delay: 0.8, type: "spring" as const, stiffness: 180 }}
+        className={styles.hvRoleMark}
+        style={shift(tx, ty, 0.18, 0.14)}
+        aria-hidden
+      >
         {admin ? (
           <svg viewBox="0 0 120 120" className={styles.hvRoleMarkSvg}>
             <path d="M60 10 98 26v36c0 28-18 42-38 48-20-6-38-20-38-48V26L60 10Z" fill="rgba(16,185,129,0.14)" stroke="rgba(16,185,129,0.85)" strokeWidth="4" />
@@ -70,16 +118,27 @@ export default function HeroVisual({ role, tx, ty }: Props) {
             </g>
           </svg>
         )}
-      </div>
+      </motion.div>
 
-      <div className={styles.hvStage} style={shift(tx, ty, 0.1, 0.08)}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8, delay: 0.4 }}
+        className={styles.hvStage}
+        style={shift(tx, ty, 0.1, 0.08)}
+      >
         <div className={styles.hvStageRing} />
-      </div>
+      </motion.div>
 
       <div className={styles.hero3Wrap}>
-        <div className={styles.hero3LayerMid}>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.9, delay: 0.3, ease: "easeOut" }}
+          className={styles.hero3LayerMid}
+        >
           <SplineHeroRobot role={role} tx={tx} ty={ty} />
-        </div>
+        </motion.div>
       </div>
     </div>
   );

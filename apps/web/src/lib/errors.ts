@@ -195,6 +195,8 @@ export function normalizeApiErrors(
       addUnique(out.formErrors, "Conflicto de datos (409). Verifica duplicados e intenta nuevamente.");
     } else if (status === 422) {
       addUnique(out.formErrors, "Hay errores de validacion. Revisa los campos e intenta nuevamente.");
+    } else if (status === 423) {
+      addUnique(out.formErrors, "Cuenta bloqueada temporalmente. Intenta nuevamente en unos minutos.");
     } else if (status === 429) {
       addUnique(out.formErrors, "Demasiadas solicitudes, intenta en unos minutos.");
     } else if (status >= 500) {

@@ -125,6 +125,41 @@ def _webauthn_auth_cache_key(request_id: str) -> str:
     return f"sadi:webauthn:auth:{request_id}"
 
 
+def _request_host_without_port(request) -> str:
+    if request is None:
+        return ""
+    host = str(request.get_host() or "").strip()
+    if not host:
+        return ""
+    return host.split(":")[0].strip()
+
+
+def _request_origin(request) -> str:
+    if request is None:
+        return ""
+    host = str(request.get_host() or "").strip()
+    if not host:
+        return ""
+    proto = str(request.META.get("HTTP_X_FORWARDED_PROTO", "") or "").split(",")[0].strip().lower()
+    if proto not in {"http", "https"}:
+        proto = str(getattr(request, "scheme", "http") or "http").lower()
+    return f"{proto}://{host}"
+
+
+def _resolve_webauthn_rp_id(request) -> str:
+    configured = str(getattr(settings, "WEBAUTHN_RP_ID", "") or "").strip()
+    if configured:
+        return configured
+    return _request_host_without_port(request)
+
+
+def _resolve_webauthn_origin(request) -> str:
+    configured = str(getattr(settings, "WEBAUTHN_ORIGIN", "") or "").strip()
+    if configured:
+        return configured
+    return _request_origin(request)
+
+
 def _scope_sede_id(user: Usuario) -> int | None:
     if not user:
         return None
@@ -1581,8 +1616,23 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 field=exc.field,
             )
 
+        parts = []
+        if result.created_count:
+            parts.append(f"{result.created_count} creados")
+        if result.updated_count:
+            parts.append(f"{result.updated_count} actualizados")
+        if result.errors_count:
+            parts.append(f"{result.errors_count} con errores")
+        resumen = ", ".join(parts) if parts else "Sin cambios"
+        mensaje = (
+            f"Importacion completada: {resumen}."
+            if not result.errors_count
+            else f"Importacion parcial: {resumen}. Revisa los detalles de errores."
+        )
+
         return ok_response(
             {
+                "mensaje": mensaje,
                 "created": result.created_count,
                 "updated": result.updated_count,
                 "errors": result.errors_count,
@@ -2986,7 +3036,8 @@ class PasskeyRegisterOptionsView(APIView):
         payload = {
             "request_id": request_id,
             "challenge": challenge,
-            "rp": {"name": getattr(settings, "WEBAUTHN_RP_NAME", "SADI"), "id": getattr(settings, "WEBAUTHN_RP_ID", "localhost")},
+            "rp": {"name": getattr(settings, "WEBAUTHN_RP_NAME", "SADI"), "id": _resolve_webauthn_rp_id(request)},
+            "origin": _resolve_webauthn_origin(request),
             "user": {"id": str(user.id), "name": user.username, "displayName": f"{user.first_name} {user.last_name}".strip() or user.username},
             "timeout": 60000,
             "attestation": "none",
@@ -3082,7 +3133,7 @@ class PasskeyAuthOptionsView(APIView):
             {
                 "request_id": request_id,
                 "challenge": challenge,
-                "rp_id": getattr(settings, "WEBAUTHN_RP_ID", "localhost"),
+                "rp_id": _resolve_webauthn_rp_id(request),
                 "timeout": 60000,
                 "allow_credentials": allow_credentials,
                 "mock": bool(getattr(settings, "WEBAUTHN_MOCK", True)),
@@ -3164,5 +3215,3 @@ class PasskeyAuthVerifyView(APIView):
         cache.delete(key)
         tokens = issue_tokens_for_user(user, request=request, rotate_guard_session=True)
         return Response(tokens, status=status.HTTP_200_OK)
-
-

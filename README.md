@@ -102,9 +102,15 @@ Perfiles sugeridos:
 
 ### Web (`apps/web/.env`)
 - `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_SUPABASE_URL` (opcional, si usas `supabase-js`)
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (opcional, nunca `service_role`)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (opcional, fallback legacy)
 
 ### Mobile (`apps/mobile-rn/.env`)
 - `EXPO_PUBLIC_API_URL`
+- `EXPO_PUBLIC_SUPABASE_URL` (opcional, si usas `supabase-js`)
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (opcional, nunca `service_role`)
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` (opcional, fallback legacy)
 
 ## Calidad y chequeos
 ```bash
@@ -145,6 +151,8 @@ npm run typecheck
 ## Troubleshooting
 - Error de conexion desde mobile:
   - revisa `EXPO_PUBLIC_API_URL` con la IP real de tu maquina.
+- Login falla fuera de tu red:
+  - verifica que `NEXT_PUBLIC_API_URL` y `EXPO_PUBLIC_API_URL` apunten al backend publico, no a `localhost` ni directo a `*.supabase.co`.
 - 401/423 en login:
   - valida bloqueo temporal/rate limits y expiracion JWT.
 - Sesion biometrica no disponible en mobile:

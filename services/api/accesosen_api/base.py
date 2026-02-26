@@ -12,6 +12,7 @@ import os
 import secrets
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
@@ -48,20 +49,87 @@ def env_list(name: str, default: list[str] | None = None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _parse_postgres_database_url(url: str) -> dict[str, object]:
+    """Parse PostgreSQL DATABASE_URL into Django DB settings parts.
+
+    Supported schemes:
+    - postgresql://
+    - postgres://
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in {"postgresql", "postgres"}:
+        raise ImproperlyConfigured("DATABASE_URL must use postgres/postgresql scheme.")
+
+    name = (parsed.path or "").lstrip("/")
+    if not name:
+        raise ImproperlyConfigured("DATABASE_URL must include database name in path.")
+
+    query = parse_qs(parsed.query or "")
+    sslmode = (query.get("sslmode") or [None])[0]
+    pgbouncer_raw = str((query.get("pgbouncer") or ["false"])[0]).strip().lower()
+
+    return {
+        "NAME": unquote(name),
+        "USER": unquote(parsed.username or ""),
+        "PASSWORD": unquote(parsed.password or ""),
+        "HOST": parsed.hostname or "",
+        "PORT": str(parsed.port or ""),
+        "SSLMODE": str(sslmode or "").strip(),
+        "PGBOUNCER": pgbouncer_raw in {"1", "true", "yes", "on"},
+    }
+
+
 def _build_cache_config() -> dict:
     """Build cache backend settings.
 
-    Uses Redis when REDIS_URL is configured; otherwise falls back to LocMem for
-    local development/test.
+    Priority:
+    1) Explicit CACHE_BACKEND=redis/database/locmem.
+    2) REDIS_URL when present.
+    3) Optional database-backed cache fallback on PostgreSQL.
+    4) LocMem for local-only development/test.
     """
+    selected_backend = str(os.getenv("CACHE_BACKEND", "auto") or "auto").strip().lower()
     redis_url = str(os.getenv("REDIS_URL", "") or "").strip()
-    if redis_url:
+    timeout = int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300"))
+    key_prefix = os.getenv("CACHE_KEY_PREFIX", "sadi")
+    database_engine = str(os.getenv("DATABASE_ENGINE", "django.db.backends.sqlite3") or "").strip().lower()
+    use_database_fallback = env_bool("CACHE_USE_DATABASE_FALLBACK", True)
+
+    if selected_backend == "redis":
+        if not redis_url:
+            raise ImproperlyConfigured("CACHE_BACKEND=redis requires REDIS_URL.")
         return {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": redis_url,
-            "TIMEOUT": int(os.getenv("CACHE_DEFAULT_TIMEOUT", "300")),
-            "KEY_PREFIX": os.getenv("CACHE_KEY_PREFIX", "sadi"),
+            "TIMEOUT": timeout,
+            "KEY_PREFIX": key_prefix,
         }
+
+    if redis_url and selected_backend in {"auto", "redis"}:
+        return {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": redis_url,
+            "TIMEOUT": timeout,
+            "KEY_PREFIX": key_prefix,
+        }
+
+    if selected_backend == "database" or (
+        selected_backend == "auto"
+        and use_database_fallback
+        and database_engine == "django.db.backends.postgresql"
+    ):
+        return {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": os.getenv("CACHE_TABLE", "django_cache"),
+            "TIMEOUT": timeout,
+            "KEY_PREFIX": key_prefix,
+        }
+
+    if selected_backend not in {"auto", "locmem"}:
+        raise ImproperlyConfigured(
+            "CACHE_BACKEND must be one of: auto, redis, database, locmem."
+        )
+
     return {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "sadi-cache",
@@ -164,7 +232,32 @@ ASGI_APPLICATION = "accesosen_api.asgi.application"
 # Database
 # Para PostgreSQL se exigen credenciales por entorno (sin hardcodes de secretos).
 DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "django.db.backends.sqlite3")
-if DATABASE_ENGINE == "django.db.backends.postgresql":
+DATABASE_URL = str(os.getenv("DATABASE_URL", "") or "").strip()
+DATABASE_SSLMODE = str(os.getenv("DATABASE_SSLMODE", "require") or "require").strip() or "require"
+
+if DATABASE_URL:
+    db_url = _parse_postgres_database_url(DATABASE_URL)
+    db_sslmode = str(db_url.get("SSLMODE") or DATABASE_SSLMODE).strip() or "require"
+    db_use_pgbouncer = env_bool("DATABASE_USE_PGBOUNCER", bool(db_url.get("PGBOUNCER")))
+    default_conn_max_age = "0" if db_use_pgbouncer else "60"
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": str(db_url["NAME"]),
+            "USER": str(db_url["USER"]),
+            "PASSWORD": str(db_url["PASSWORD"]),
+            "HOST": str(db_url["HOST"]),
+            "PORT": str(db_url["PORT"]),
+            "OPTIONS": {
+                "sslmode": db_sslmode,
+            },
+            "CONN_MAX_AGE": int(os.getenv("DATABASE_CONN_MAX_AGE", default_conn_max_age)),
+            "DISABLE_SERVER_SIDE_CURSORS": db_use_pgbouncer,
+        }
+    }
+elif DATABASE_ENGINE == "django.db.backends.postgresql":
+    db_use_pgbouncer = env_bool("DATABASE_USE_PGBOUNCER", False)
+    default_conn_max_age = "0" if db_use_pgbouncer else "60"
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -174,9 +267,10 @@ if DATABASE_ENGINE == "django.db.backends.postgresql":
             "HOST": env_required("DATABASE_HOST"),
             "PORT": env_required("DATABASE_PORT"),
             "OPTIONS": {
-                "sslmode": "require",
+                "sslmode": DATABASE_SSLMODE,
             },
-            "CONN_MAX_AGE": int(os.getenv("DATABASE_CONN_MAX_AGE", "60")),
+            "CONN_MAX_AGE": int(os.getenv("DATABASE_CONN_MAX_AGE", default_conn_max_age)),
+            "DISABLE_SERVER_SIDE_CURSORS": db_use_pgbouncer,
         }
     }
 else:
@@ -213,6 +307,14 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "accesos.pagination.SafePageNumberPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "accesos.exceptions.ui_exception_handler",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": os.getenv("THROTTLE_ANON_RATE", "30/minute"),
+        "user": os.getenv("THROTTLE_USER_RATE", "120/minute"),
+    },
 }
 
 SIMPLE_JWT = {
@@ -237,21 +339,10 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@sadi.local")
 
-CORS_ALLOWED_ORIGINS = env_list(
-    "CORS_ALLOWED_ORIGINS",
-    default=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8081",
-        "http://127.0.0.1:8081",
-    ],
-)
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", False)
 
-CSRF_TRUSTED_ORIGINS = env_list(
-    "CSRF_TRUSTED_ORIGINS",
-    default=["http://localhost:3000", "http://127.0.0.1:3000"],
-)
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", default=[])
 
 DEFAULT_SUPERADMIN_USERNAME = os.getenv("DEFAULT_SUPERADMIN_USERNAME", "superadmin")
 DEFAULT_SUPERADMIN_EMAIL = os.getenv("DEFAULT_SUPERADMIN_EMAIL", "superadmin@sadi.local")
@@ -262,9 +353,9 @@ if DEFAULT_SUPERADMIN_AUTO_CREATE and not DEFAULT_SUPERADMIN_PASSWORD:
         "DEFAULT_SUPERADMIN_PASSWORD is required when DEFAULT_SUPERADMIN_AUTO_CREATE=true."
     )
 
-WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "localhost")
+WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "")
 WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "SADI")
-WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "http://localhost:3000")
+WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "")
 WEBAUTHN_MOCK = env_bool("WEBAUTHN_MOCK", True)
 
 enforce_production_security_guards(

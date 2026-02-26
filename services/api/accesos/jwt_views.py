@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 import re
 import secrets
 from datetime import timedelta
@@ -28,21 +29,53 @@ from .error_codes import ErrorCode
 from .models import RefreshSession, Usuario
 from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, reset_counter
 
-LOGIN_MAX_ATTEMPTS = 5
-LOGIN_WINDOW_SEC = 15 * 60
-LOGIN_LOCK_SEC = 15 * 60
-
-REPEATED_LOCKOUT_THRESHOLD = 3
-REPEATED_LOCKOUT_WINDOW = timedelta(hours=24)
-
-REFRESH_MAX_ATTEMPTS_DEVICE = 12
-REFRESH_MAX_ATTEMPTS_IP = 24
-REFRESH_WINDOW_SEC = 10 * 60
-REFRESH_LOCK_SEC = 15 * 60
-
 DEVICE_ID_MAX_LEN = 128
 DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 logger = logging.getLogger(__name__)
+
+
+def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
+    raw = str(os.getenv(name, str(default)) or "").strip()
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = default
+    return max(min_value, value)
+
+
+def _env_int_list(name: str, default: str) -> list[int]:
+    raw = str(os.getenv(name, default) or "").strip()
+    values: list[int] = []
+    for item in raw.split(","):
+        token = item.strip()
+        if not token:
+            continue
+        try:
+            parsed = int(token)
+        except ValueError:
+            continue
+        if parsed > 0:
+            values.append(parsed)
+    if values:
+        return values
+    return [60, 180, 300, 900, 1800]
+
+
+LOGIN_MAX_ATTEMPTS = _env_int("LOGIN_MAX_ATTEMPTS", 5, min_value=1)
+LOGIN_WINDOW_SEC = _env_int("LOGIN_WINDOW_SEC", 15 * 60, min_value=30)
+LOGIN_IP_LOCK_SEC = _env_int("LOGIN_IP_LOCK_SEC", 60, min_value=30)
+LOGIN_PROGRESSIVE_LOCKOUT_SECONDS = _env_int_list(
+    "LOGIN_PROGRESSIVE_LOCKOUT_SECONDS",
+    "60,180,300,900,1800",
+)
+
+REPEATED_LOCKOUT_THRESHOLD = _env_int("REPEATED_LOCKOUT_THRESHOLD", 5, min_value=2)
+REPEATED_LOCKOUT_WINDOW = timedelta(hours=_env_int("REPEATED_LOCKOUT_WINDOW_HOURS", 24, min_value=1))
+
+REFRESH_MAX_ATTEMPTS_DEVICE = _env_int("REFRESH_MAX_ATTEMPTS_DEVICE", 12, min_value=1)
+REFRESH_MAX_ATTEMPTS_IP = _env_int("REFRESH_MAX_ATTEMPTS_IP", 24, min_value=1)
+REFRESH_WINDOW_SEC = _env_int("REFRESH_WINDOW_SEC", 10 * 60, min_value=30)
+REFRESH_LOCK_SEC = _env_int("REFRESH_LOCK_SEC", 15 * 60, min_value=30)
 
 
 def _refresh_token_lifetime() -> timedelta:
@@ -119,6 +152,24 @@ def _active_sessions_qs(user: Usuario, device_id: str | None = None):
 def _revoke_sessions(qs, *, when=None):
     when = when or timezone.now()
     return qs.update(revoked_at=when, last_used_at=when)
+
+
+def _current_lockout_count(user) -> int:
+    if not user:
+        return 0
+    first = getattr(user, "first_lockout_at", None)
+    count = int(getattr(user, "failed_lockouts_count", 0) or 0)
+    if not first or count <= 0:
+        return 0
+    if (timezone.now() - first) > REPEATED_LOCKOUT_WINDOW:
+        return 0
+    return count
+
+
+def _next_lockout_seconds(user) -> int:
+    prior_lockouts = _current_lockout_count(user)
+    idx = min(prior_lockouts, len(LOGIN_PROGRESSIVE_LOCKOUT_SECONDS) - 1)
+    return int(LOGIN_PROGRESSIVE_LOCKOUT_SECONDS[idx])
 
 
 def _register_lockout_event(user):
@@ -324,12 +375,18 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         try:
             data = super().validate(attrs)
         except Exception:
+            user_lock_sec = _next_lockout_seconds(user)
+            ip_lock_sec = max(LOGIN_IP_LOCK_SEC, user_lock_sec)
             lock_user = {"locked": False, "remaining_sec": 0, "just_locked": False}
             if canonical_login:
                 lock_user = bump_with_lock(
-                    "login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC
+                    "login-user",
+                    [canonical_login],
+                    LOGIN_MAX_ATTEMPTS,
+                    LOGIN_WINDOW_SEC,
+                    user_lock_sec,
                 )
-            lock_ip = bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
+            lock_ip = bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, ip_lock_sec)
 
             if user and lock_user.get("just_locked"):
                 _register_lockout_event(user)
@@ -361,9 +418,17 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         role = AuthorizationService.default_role_for_user(self.user)
         if not _role_allowed_for_expected(role, expected_role):
+            user_lock_sec = _next_lockout_seconds(self.user)
+            ip_lock_sec = max(LOGIN_IP_LOCK_SEC, user_lock_sec)
             if canonical_login:
-                bump_with_lock("login-user", [canonical_login], LOGIN_MAX_ATTEMPTS, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
-            bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, LOGIN_LOCK_SEC)
+                bump_with_lock(
+                    "login-user",
+                    [canonical_login],
+                    LOGIN_MAX_ATTEMPTS,
+                    LOGIN_WINDOW_SEC,
+                    user_lock_sec,
+                )
+            bump_with_lock("login-ip", [ip], LOGIN_MAX_ATTEMPTS * 2, LOGIN_WINDOW_SEC, ip_lock_sec)
             raise AuthenticationFailed(
                 {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Credenciales invalidas para este modulo."}
             )

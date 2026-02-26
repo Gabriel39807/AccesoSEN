@@ -8,10 +8,11 @@ from uuid import uuid4
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import IntegrityError, connection
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import Throttled, ValidationError
 from rest_framework.test import APIRequestFactory
 from rest_framework.test import APITestCase
 from rest_framework.test import force_authenticate
@@ -166,6 +167,18 @@ class LoginAndLockTests(BaseApiTest):
             email="aprendiz.lock@sadi.test",
         )
 
+    def _clear_login_rate_limit(self):
+        login_key = (self.aprendiz.username or "").strip().lower()
+        ip_key = "127.0.0.1"
+        keys = [
+            f"sadi:login-user:{login_key}",
+            f"sadi:login-user:{login_key}:lock",
+            f"sadi:login-ip:{ip_key}",
+            f"sadi:login-ip:{ip_key}:lock",
+        ]
+        for key in keys:
+            cache.delete(key)
+
     def test_lock_response_contains_countdown(self):
         for _ in range(4):
             r = self.client.post(
@@ -182,7 +195,35 @@ class LoginAndLockTests(BaseApiTest):
         )
         self.assertEqual(r.status_code, status.HTTP_423_LOCKED, r.data)
         self.assertEqual(r.data["code"], "ACCOUNT_LOCKED_15MIN")
-        self.assertGreater(int(r.data.get("detail", {}).get("seconds_remaining", 0)), 0)
+        seconds = int(r.data.get("detail", {}).get("seconds_remaining", 0))
+        self.assertGreater(seconds, 0)
+        self.assertLessEqual(seconds, 60)
+
+    def test_fifth_temporal_lock_forces_password_recovery(self):
+        self.aprendiz.failed_lockouts_count = 4
+        self.aprendiz.first_lockout_at = timezone.now()
+        self.aprendiz.force_password_reset = False
+        self.aprendiz.save(update_fields=["failed_lockouts_count", "first_lockout_at", "force_password_reset"])
+        self._clear_login_rate_limit()
+
+        for _ in range(4):
+            r = self.client.post(
+                reverse("token_obtain_pair"),
+                {"username": self.aprendiz.username, "password": "bad-pass", "expected_role": "aprendiz"},
+                format="json",
+            )
+            self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        r = self.client.post(
+            reverse("token_obtain_pair"),
+            {"username": self.aprendiz.username, "password": "bad-pass", "expected_role": "aprendiz"},
+            format="json",
+        )
+        self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN, r.data)
+        self.assertEqual(r.data["code"], "PASSWORD_RESET_REQUIRED")
+
+        self.aprendiz.refresh_from_db()
+        self.assertTrue(self.aprendiz.force_password_reset)
 
     def test_force_password_reset_blocks_login(self):
         self.aprendiz.force_password_reset = True
@@ -1870,6 +1911,36 @@ class PasskeyEndpointTests(BaseApiTest):
         self.assertIn("access", auth_verify.data)
         self.assertIn("refresh", auth_verify.data)
 
+    @override_settings(
+        WEBAUTHN_RP_ID="",
+        WEBAUTHN_ORIGIN="",
+        ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1", "api.sadi.test"],
+    )
+    def test_passkey_options_fallback_to_request_host_when_settings_are_empty(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+
+        options = self.client.post(
+            "/api/auth/passkeys/register/options/",
+            {"nickname": "Fallback passkey"},
+            format="json",
+            HTTP_HOST="api.sadi.test",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        self.assertEqual(options.status_code, status.HTTP_200_OK, options.data)
+        self.assertEqual(options.data["rp"]["id"], "api.sadi.test")
+        self.assertEqual(options.data["origin"], "https://api.sadi.test")
+
+        self.client.credentials()
+        auth_options = self.client.post(
+            "/api/auth/passkeys/auth/options/",
+            {"username": self.aprendiz.username, "expected_role": "aprendiz"},
+            format="json",
+            HTTP_HOST="api.sadi.test",
+            HTTP_X_FORWARDED_PROTO="https",
+        )
+        self.assertEqual(auth_options.status_code, status.HTTP_200_OK, auth_options.data)
+        self.assertEqual(auth_options.data["rp_id"], "api.sadi.test")
+
 
 class AprendizEstadoEndpointTests(BaseApiTest):
     def setUp(self):
@@ -1953,6 +2024,15 @@ class ExceptionHandlerSafetyTests(BaseApiTest):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("nombre de usuario", str(response.data.get("message", "")).lower())
         self.assertIn("obligatorio", str(response.data.get("message", "")).lower())
+
+    def test_throttled_exception_returns_spanish_payload_with_wait_hint(self):
+        request = APIRequestFactory().post("/api/usuarios/", {}, format="json")
+        response = ui_exception_handler(Throttled(wait=12), {"request": request})
+        self.assertIsNotNone(response)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(response.data.get("code"), "VALIDATION_ERROR")
+        self.assertIn("12", str(response.data.get("message", "")))
+        self.assertEqual(response.data.get("detail", {}).get("seconds_remaining"), 12)
 
 
 class InstitutionalDecouplingTests(BaseApiTest):

@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, PermissionDenied, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, NotAuthenticated, PermissionDenied, Throttled, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -209,10 +209,40 @@ def ui_exception_handler(exc, context):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response
 
+    if isinstance(exc, Throttled):
+        wait_raw = getattr(exc, "wait", 0) or 0
+        wait = int(wait_raw) if isinstance(wait_raw, (int, float)) else 0
+        message = (
+            f"Demasiadas solicitudes. Intenta nuevamente en {wait}s."
+            if wait > 0
+            else "Demasiadas solicitudes. Intenta mas tarde."
+        )
+        detail_payload = response.data
+        if wait > 0:
+            detail_payload = {"seconds_remaining": wait, "raw": response.data}
+        response.data = _error_payload(
+            code=ErrorCode.VALIDATION_ERROR,
+            message=message,
+            detail=detail_payload,
+        )
+        response.status_code = status.HTTP_429_TOO_MANY_REQUESTS
+        return response
+
     detail = response.data
-    message = "Ocurrio un error inesperado. Intenta nuevamente."
-    if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
-        message = detail["detail"]
+
+    # Translate known HTTP statuses to Spanish before the generic fallback.
+    _STATUS_MESSAGES = {
+        404: "El recurso solicitado no fue encontrado.",
+        405: "Metodo no permitido para este recurso.",
+        423: "Cuenta bloqueada temporalmente por seguridad.",
+        429: "Demasiadas solicitudes. Intenta mas tarde.",
+    }
+    message = _STATUS_MESSAGES.get(response.status_code, "")
+    if not message:
+        message = "Ocurrio un error inesperado. Intenta nuevamente."
+        if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
+            message = detail["detail"]
+
     response.data = _error_payload(
         code=ErrorCode.SERVER_ERROR if response.status_code >= 500 else ErrorCode.VALIDATION_ERROR,
         message=message,

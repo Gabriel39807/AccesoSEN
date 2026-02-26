@@ -48,17 +48,17 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           return;
         }
         if (isControlCenterRoute && rol !== "superadmin") {
-          router.replace("/admin/usuarios");
+          router.replace("/admin/inicio");
           return;
         }
         if (isAprendizRoute && rol !== "aprendiz") {
-          router.replace("/admin/usuarios");
+          router.replace("/admin/inicio");
           return;
         }
 
         // Si está en login y ya está autenticado, redirige
         if (pathname === "/login") {
-          if (["superadmin", "admin_sede"].includes(rol)) router.replace("/admin/usuarios");
+          if (["superadmin", "admin_sede"].includes(rol)) router.replace("/admin/inicio");
           else if (rol === "aprendiz") router.replace("/aprendiz/inicio");
           else router.replace("/login");
           return;
