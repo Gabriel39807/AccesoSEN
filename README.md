@@ -95,6 +95,9 @@ Guia completa: `docs/deploy-production.md`
 - `REFRESH_TOKEN_PEPPER`
 - `GUARDA_SINGLE_ACTIVE_SESSION`
 
+Template listo para produccion con Supabase (DB):
+- `services/api/env.supabase.production.example`
+
 Perfiles sugeridos:
 - `development`: `DJANGO_DEBUG=true`, SQLite o Postgres local, `WEBAUTHN_MOCK=true`.
 - `test`: SQLite temporal + `DJANGO_SECRET_KEY` efimera (usado por pytest/CI).
