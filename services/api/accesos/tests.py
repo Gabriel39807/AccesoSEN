@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
@@ -475,6 +476,58 @@ class RefreshSessionFlowTests(BaseApiTest):
         self.assertEqual(old_1.status_code, status.HTTP_401_UNAUTHORIZED, old_1.data)
         self.assertEqual(old_2.status_code, status.HTTP_401_UNAUTHORIZED, old_2.data)
 
+    def test_cookie_transport_sets_cookie_and_refresh_works_without_body_token(self):
+        login = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": self.aprendiz.username,
+                "password": "Passw0rd!",
+                "expected_role": "aprendiz",
+                "device_id": "device-cookie-001",
+                "auth_transport": "cookie",
+            },
+            format="json",
+            HTTP_X_AUTH_TRANSPORT="cookie",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        self.assertIn("sadi_refresh", login.cookies)
+        self.assertIn("access", login.data)
+
+        refresh = self.client.post(
+            "/api/auth/refresh/",
+            {"device_id": "device-cookie-001", "auth_transport": "cookie"},
+            format="json",
+            HTTP_X_AUTH_TRANSPORT="cookie",
+        )
+        self.assertEqual(refresh.status_code, status.HTTP_200_OK, refresh.data)
+        self.assertIn("access", refresh.data)
+        self.assertIn("sadi_refresh", refresh.cookies)
+
+    def test_cookie_transport_logout_all_clears_refresh_cookie(self):
+        login = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": self.aprendiz.username,
+                "password": "Passw0rd!",
+                "expected_role": "aprendiz",
+                "device_id": "device-cookie-logout",
+                "auth_transport": "cookie",
+            },
+            format="json",
+            HTTP_X_AUTH_TRANSPORT="cookie",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        logout_all = self.client.post(
+            "/api/auth/logout-all/",
+            {"auth_transport": "cookie"},
+            format="json",
+            HTTP_X_AUTH_TRANSPORT="cookie",
+        )
+        self.assertEqual(logout_all.status_code, status.HTTP_200_OK, logout_all.data)
+        self.assertIn("sadi_refresh", logout_all.cookies)
+
     def test_guarda_new_device_revokes_previous_session(self):
         first = self._auth_login(
             user=self.guarda.username,
@@ -612,8 +665,12 @@ class EquipoRulesTests(BaseApiTest):
         self.assertEqual(r5.data["code"], "EQUIPO_LIMIT_REACHED")
 
     def test_aprendiz_only_deletes_pending(self):
-        pending = Equipo.objects.create(propietario=self.aprendiz, serial="PEND-1", marca="HP", modelo="1", estado=Equipo.Estado.PENDIENTE)
-        approved = Equipo.objects.create(propietario=self.aprendiz, serial="APP-1", marca="HP", modelo="2", estado=Equipo.Estado.APROBADO)
+        pending = Equipo.objects.create(
+            propietario=self.aprendiz, serial="PEND-1", marca="HP", modelo="1", estado=Equipo.Estado.PENDIENTE
+        )
+        approved = Equipo.objects.create(
+            propietario=self.aprendiz, serial="APP-1", marca="HP", modelo="2", estado=Equipo.Estado.APROBADO
+        )
 
         self._auth_aprendiz()
         r1 = self.client.delete(f"/api/equipos/{pending.id}/")
@@ -624,13 +681,17 @@ class EquipoRulesTests(BaseApiTest):
         self.assertEqual(r2.data["code"], "PERMISSION_DENIED")
 
     def test_admin_can_delete_approved(self):
-        approved = Equipo.objects.create(propietario=self.aprendiz, serial="APP-2", marca="HP", modelo="3", estado=Equipo.Estado.APROBADO)
+        approved = Equipo.objects.create(
+            propietario=self.aprendiz, serial="APP-2", marca="HP", modelo="3", estado=Equipo.Estado.APROBADO
+        )
         self._auth_superadmin()
         r = self.client.delete(f"/api/equipos/{approved.id}/")
         self.assertEqual(r.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_aprendiz_can_update_own_pending_equipment(self):
-        pending = Equipo.objects.create(propietario=self.aprendiz, serial="P-UPD-1", marca="HP", modelo="14", estado=Equipo.Estado.PENDIENTE)
+        pending = Equipo.objects.create(
+            propietario=self.aprendiz, serial="P-UPD-1", marca="HP", modelo="14", estado=Equipo.Estado.PENDIENTE
+        )
         self._auth_aprendiz()
 
         r = self.client.patch(
@@ -645,7 +706,9 @@ class EquipoRulesTests(BaseApiTest):
         self.assertEqual(pending.modelo, "ThinkPad")
 
     def test_aprendiz_cannot_update_non_pending_equipment(self):
-        approved = Equipo.objects.create(propietario=self.aprendiz, serial="APP-UPD-1", marca="HP", modelo="15", estado=Equipo.Estado.APROBADO)
+        approved = Equipo.objects.create(
+            propietario=self.aprendiz, serial="APP-UPD-1", marca="HP", modelo="15", estado=Equipo.Estado.APROBADO
+        )
         self._auth_aprendiz()
 
         r = self.client.patch(
@@ -1291,6 +1354,62 @@ class SecurityHardeningTests(BaseApiTest):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
         self.assertIn(response.data.get("code"), {"ACCESO_INCONSISTENTE_EQUIPO", "VALIDATION_ERROR"})
 
+    def test_create_access_is_idempotent_with_header(self):
+        Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede_1,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+            fin=None,
+        )
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        payload = {"usuario": self.aprendiz.id, "tipo": Acceso.Tipo.INGRESO}
+
+        first = self.client.post(
+            "/api/accesos/",
+            payload,
+            format="json",
+            HTTP_X_IDEMPOTENCY_KEY="idem-create-001",
+        )
+        second = self.client.post(
+            "/api/accesos/",
+            payload,
+            format="json",
+            HTTP_X_IDEMPOTENCY_KEY="idem-create-001",
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
+        self.assertEqual(first.data["acceso"]["id"], second.data["acceso"]["id"])
+        self.assertEqual(Acceso.objects.filter(usuario=self.aprendiz, tipo=Acceso.Tipo.INGRESO).count(), 1)
+
+    def test_scan_access_is_idempotent_with_header(self):
+        Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede_1,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+            fin=None,
+        )
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        payload = {"documento": self.aprendiz.documento, "tipo": Acceso.Tipo.INGRESO}
+
+        first = self.client.post(
+            "/api/accesos/registrar_por_documento/",
+            payload,
+            format="json",
+            HTTP_X_IDEMPOTENCY_KEY="idem-scan-001",
+        )
+        second = self.client.post(
+            "/api/accesos/registrar_por_documento/",
+            payload,
+            format="json",
+            HTTP_X_IDEMPOTENCY_KEY="idem-scan-001",
+        )
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, second.data)
+        self.assertEqual(first.data["acceso"]["id"], second.data["acceso"]["id"])
+        self.assertEqual(Acceso.objects.filter(usuario=self.aprendiz, tipo=Acceso.Tipo.INGRESO).count(), 1)
+
     def test_access_token_with_invalid_sid_is_rejected(self):
         login = self.client.post(
             "/api/token/",
@@ -1359,6 +1478,87 @@ class SecurityHardeningTests(BaseApiTest):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.data)
         acceso.refresh_from_db()
         self.assertFalse(acceso.is_deleted)
+
+    def test_sensitive_tables_enable_rls_and_remove_anon_grants(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("RLS verification applies only to PostgreSQL environments.")
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT c.relrowsecurity
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public' AND c.relname = 'accesos_usuario';
+                """
+            )
+            row = cursor.fetchone()
+            self.assertIsNotNone(row)
+            self.assertTrue(bool(row[0]))
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.role_table_grants
+                WHERE table_schema = 'public'
+                  AND table_name = 'accesos_usuario'
+                  AND grantee IN ('anon', 'authenticated');
+                """
+            )
+            grant_count = int(cursor.fetchone()[0] or 0)
+            self.assertEqual(grant_count, 0)
+
+
+class GeminiStubEndpointTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.aprendiz = self.create_user(
+            username="7878787878",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="7878787878",
+            email="gemini.aprendiz@sadi.test",
+        )
+
+    @override_settings(GEMINI_ENABLED=False)
+    def test_stub_rejects_when_feature_is_disabled(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        r = self.client.post("/api/ai/gemini/stub/", {"prompt": "hola"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_503_SERVICE_UNAVAILABLE, r.data)
+        self.assertEqual(r.data.get("code"), "AI_FEATURE_DISABLED")
+
+    @override_settings(GEMINI_ENABLED=True)
+    def test_stub_returns_simulated_payload(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        r = self.client.post("/api/ai/gemini/stub/", {"prompt": "resume este texto"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        self.assertTrue(r.data.get("stub"))
+        self.assertIn("output", r.data)
+
+    @override_settings(
+        GEMINI_ENABLED=True,
+        GEMINI_RATE_LIMIT_ATTEMPTS=2,
+        GEMINI_RATE_LIMIT_WINDOW_SEC=60,
+        GEMINI_RATE_LIMIT_LOCK_SEC=60,
+    )
+    def test_stub_rate_limit_blocks_after_threshold(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        first = self.client.post("/api/ai/gemini/stub/", {"prompt": "uno"}, format="json")
+        second = self.client.post("/api/ai/gemini/stub/", {"prompt": "dos"}, format="json")
+        third = self.client.post("/api/ai/gemini/stub/", {"prompt": "tres"}, format="json")
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+        self.assertEqual(second.status_code, status.HTTP_429_TOO_MANY_REQUESTS, second.data)
+        self.assertEqual(third.status_code, status.HTTP_429_TOO_MANY_REQUESTS, third.data)
+        self.assertEqual(second.data.get("code"), "AI_RATE_LIMITED")
+
+    @override_settings(GEMINI_ENABLED=True)
+    def test_stub_timeout_returns_gateway_timeout(self):
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        with patch("accesos.views._gemini_stub_with_retry", side_effect=TimeoutError("simulated-timeout")):
+            r = self.client.post("/api/ai/gemini/stub/", {"prompt": "hola"}, format="json")
+        self.assertEqual(r.status_code, status.HTTP_504_GATEWAY_TIMEOUT, r.data)
+        self.assertEqual(r.data.get("code"), "UPSTREAM_TIMEOUT")
 
 
 class GlobalAllowedDomainPolicyTests(BaseApiTest):
@@ -1980,9 +2180,9 @@ class FrontendContractSmokeTests(BaseApiTest):
         self.assertNotIn("WhatsApp", recovery)
         self.assertNotIn("passwordResetVerifyWithChannel", auth_api)
         self.assertNotIn("passwordResetConfirmWithChannel", auth_api)
-        self.assertIn('/api/auth/password-reset/request/', auth_api)
-        self.assertIn('/api/auth/password-reset/verify/', auth_api)
-        self.assertIn('/api/auth/password-reset/confirm/', auth_api)
+        self.assertIn("/api/auth/password-reset/request/", auth_api)
+        self.assertIn("/api/auth/password-reset/verify/", auth_api)
+        self.assertIn("/api/auth/password-reset/confirm/", auth_api)
 
     def test_web_login_uses_expected_role_and_passkey_endpoints(self):
         root = Path(__file__).resolve().parents[3]
@@ -1990,6 +2190,12 @@ class FrontendContractSmokeTests(BaseApiTest):
         self.assertIn("expected_role", login)
         self.assertIn("/api/auth/passkeys/auth/options/", login)
         self.assertIn("/api/auth/passkeys/auth/verify/", login)
+
+    def test_web_auth_tokens_are_not_persisted_in_local_storage(self):
+        root = Path(__file__).resolve().parents[3]
+        auth_lib = (root / "apps" / "web" / "src" / "lib" / "auth.ts").read_text(encoding="utf-8")
+        self.assertIn("accessTokenMemory", auth_lib)
+        self.assertNotIn(".setItem(", auth_lib)
 
     def test_admin_pages_use_dynamic_sedes_api_not_hardcoded_constants(self):
         root = Path(__file__).resolve().parents[3]
@@ -2019,7 +2225,9 @@ class ExceptionHandlerSafetyTests(BaseApiTest):
 
     def test_validation_message_is_human_friendly(self):
         request = APIRequestFactory().post("/api/usuarios/", {}, format="json")
-        response = ui_exception_handler(ValidationError({"username": ["This field is required."]}), {"request": request})
+        response = ui_exception_handler(
+            ValidationError({"username": ["This field is required."]}), {"request": request}
+        )
         self.assertIsNotNone(response)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("nombre de usuario", str(response.data.get("message", "")).lower())

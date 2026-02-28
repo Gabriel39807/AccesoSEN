@@ -34,6 +34,76 @@ DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 logger = logging.getLogger(__name__)
 
 
+AUTH_TRANSPORT_COOKIE = "cookie"
+
+
+def _auth_transport(request) -> str:
+    if request is None:
+        return ""
+    from_header = str(request.headers.get("X-Auth-Transport", "") or "").strip().lower()
+    if from_header:
+        return from_header
+    from_body = str(request.data.get("auth_transport", "") or "").strip().lower() if hasattr(request, "data") else ""
+    return from_body
+
+
+def _refresh_cookie_name() -> str:
+    return str(getattr(settings, "AUTH_COOKIE_REFRESH_NAME", "sadi_refresh") or "sadi_refresh")
+
+
+def _cookie_mode_requested(request) -> bool:
+    if not bool(getattr(settings, "AUTH_COOKIE_REFRESH_ENABLED", True)):
+        return False
+    return _auth_transport(request) == AUTH_TRANSPORT_COOKIE
+
+
+def _set_refresh_cookie(response, refresh_token: str):
+    if not response or not refresh_token:
+        return
+    max_age = int(_refresh_token_lifetime().total_seconds())
+    response.set_cookie(
+        _refresh_cookie_name(),
+        refresh_token,
+        max_age=max_age,
+        httponly=bool(getattr(settings, "AUTH_COOKIE_REFRESH_HTTPONLY", True)),
+        secure=bool(getattr(settings, "AUTH_COOKIE_REFRESH_SECURE", False)),
+        samesite=str(getattr(settings, "AUTH_COOKIE_REFRESH_SAMESITE", "Lax") or "Lax"),
+        path=str(getattr(settings, "AUTH_COOKIE_REFRESH_PATH", "/api/") or "/api/"),
+        domain=getattr(settings, "AUTH_COOKIE_REFRESH_DOMAIN", None),
+    )
+
+
+def _clear_refresh_cookie(response):
+    if not response:
+        return
+    response.delete_cookie(
+        _refresh_cookie_name(),
+        path=str(getattr(settings, "AUTH_COOKIE_REFRESH_PATH", "/api/") or "/api/"),
+        domain=getattr(settings, "AUTH_COOKIE_REFRESH_DOMAIN", None),
+        samesite=str(getattr(settings, "AUTH_COOKIE_REFRESH_SAMESITE", "Lax") or "Lax"),
+    )
+
+
+def _extract_refresh_from_request(request) -> str:
+    if request is None:
+        return ""
+    from_body = str(request.data.get("refresh", "") or "").strip()
+    if from_body:
+        return from_body
+    if bool(getattr(settings, "AUTH_COOKIE_REFRESH_ENABLED", True)):
+        from_cookie = str(request.COOKIES.get(_refresh_cookie_name(), "") or "").strip()
+        if from_cookie:
+            return from_cookie
+    return ""
+
+
+def _strip_refresh_from_body_if_needed(*, request, payload: dict):
+    if not isinstance(payload, dict):
+        return
+    if _cookie_mode_requested(request) and not bool(getattr(settings, "AUTH_COOKIE_REFRESH_LEGACY_BODY", True)):
+        payload.pop("refresh", None)
+
+
 def _env_int(name: str, default: int, *, min_value: int = 1) -> int:
     raw = str(os.getenv(name, str(default)) or "").strip()
     try:
@@ -298,6 +368,7 @@ def issue_tokens_for_user(
 class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
     expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
     device_id = serializers.CharField(required=False, allow_blank=True, max_length=DEVICE_ID_MAX_LEN)
+    auth_transport = serializers.ChoiceField(choices=[AUTH_TRANSPORT_COOKIE], required=False)
 
     @classmethod
     def get_token(cls, user):
@@ -457,7 +528,13 @@ class SadiTokenObtainPairView(TokenObtainPairView):
 
     def post(self, request, *args, **kwargs):
         try:
-            return super().post(request, *args, **kwargs)
+            response = super().post(request, *args, **kwargs)
+            if response.status_code == status.HTTP_200_OK and isinstance(response.data, dict):
+                refresh_token = str(response.data.get("refresh", "") or "").strip()
+                if refresh_token and _cookie_mode_requested(request):
+                    _set_refresh_cookie(response, refresh_token)
+                    _strip_refresh_from_body_if_needed(request=request, payload=response.data)
+            return response
         except AuthenticationFailed as exc:
             detail = exc.detail if isinstance(exc.detail, dict) else {}
             code = detail.get("code", ErrorCode.INVALID_CREDENTIALS)
@@ -480,7 +557,7 @@ class SadiTokenRefreshView(APIView):
     authentication_classes = []
 
     def post(self, request, *args, **kwargs):
-        refresh_raw = str(request.data.get("refresh", "") or "").strip()
+        refresh_raw = _extract_refresh_from_request(request)
         if not refresh_raw:
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
@@ -581,7 +658,13 @@ class SadiTokenRefreshView(APIView):
 
         reset_counter("refresh-ip", [ip])
         reset_counter("refresh-device", [device_key])
-        return Response(tokens, status=status.HTTP_200_OK)
+        response = Response(tokens, status=status.HTTP_200_OK)
+        if _cookie_mode_requested(request):
+            refresh_token = str(tokens.get("refresh", "") or "").strip()
+            if refresh_token:
+                _set_refresh_cookie(response, refresh_token)
+            _strip_refresh_from_body_if_needed(request=request, payload=response.data)
+        return response
 
 
 class SadiLogoutView(APIView):
@@ -627,7 +710,9 @@ class SadiLogoutView(APIView):
                     user.active_session_id = None
                     user.save(update_fields=["active_session_id"])
 
-        return ok_response({"mensaje": "Sesion cerrada.", "revoked_sessions": revoked})
+        response = ok_response({"mensaje": "Sesion cerrada.", "revoked_sessions": revoked})
+        _clear_refresh_cookie(response)
+        return response
 
 
 class SadiLogoutAllView(APIView):
@@ -646,4 +731,6 @@ class SadiLogoutAllView(APIView):
             user.active_session_id = None
             user.save(update_fields=["active_session_id"])
 
-        return ok_response({"mensaje": "Todas las sesiones fueron revocadas.", "revoked_sessions": revoked})
+        response = ok_response({"mensaje": "Todas las sesiones fueron revocadas.", "revoked_sessions": revoked})
+        _clear_refresh_cookie(response)
+        return response

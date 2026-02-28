@@ -45,6 +45,8 @@ function isSupabaseProjectUrl(value: string): boolean {
 }
 
 const API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
+const COOKIE_AUTH_MODE =
+  String(process.env.NEXT_PUBLIC_AUTH_COOKIE_MODE || "true").trim().toLowerCase() !== "false";
 
 if (ENFORCE_DEPLOY_API_URL_GUARD && !API_BASE) {
   throw new Error("Missing NEXT_PUBLIC_API_URL for production build.");
@@ -58,6 +60,7 @@ if (ENFORCE_DEPLOY_API_URL_GUARD && isSupabaseProjectUrl(API_BASE)) {
 
 export const api = axios.create({
   baseURL: API_BASE || undefined,
+  withCredentials: COOKIE_AUTH_MODE,
 });
 
 const nullableText = z.union([z.string(), z.null(), z.undefined()]).transform((value) => {
@@ -255,12 +258,18 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!refreshing) {
     refreshing = (async () => {
       const refresh = getRefreshToken();
-      if (!refresh) return null;
-      const r = await axios.post(`${API_BASE}/api/token/refresh/`, { refresh });
+      const payload: Record<string, string> = {};
+      if (refresh) payload.refresh = refresh;
+      if (COOKIE_AUTH_MODE) payload.auth_transport = "cookie";
+      if (!refresh && !COOKIE_AUTH_MODE) return null;
+      const r = await axios.post(`${API_BASE}/api/token/refresh/`, payload, {
+        withCredentials: COOKIE_AUTH_MODE,
+        headers: COOKIE_AUTH_MODE ? { "X-Auth-Transport": "cookie" } : undefined,
+      });
       const nextAccess = r?.data?.access as string | undefined;
       const nextRefresh = (r?.data?.refresh as string | undefined) || refresh;
       if (!nextAccess) return null;
-      saveTokens({ access: nextAccess, refresh: nextRefresh });
+      saveTokens({ access: nextAccess, refresh: nextRefresh || "" });
       return nextAccess;
     })().finally(() => {
       refreshing = null;

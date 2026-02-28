@@ -68,7 +68,16 @@ export default function AprendizShell({
     };
   }, []);
 
-  function logout() {
+  async function logout() {
+    try {
+      await api.post(
+        "/api/auth/logout-all/",
+        { auth_transport: "cookie" },
+        { headers: { "X-Auth-Transport": "cookie" } }
+      );
+    } catch {
+      // best effort revocation
+    }
     clearTokens();
     router.replace("/login");
   }
@@ -212,4 +221,3 @@ export default function AprendizShell({
     </div>
   );
 }
-

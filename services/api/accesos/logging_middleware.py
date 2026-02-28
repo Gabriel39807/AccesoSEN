@@ -28,6 +28,7 @@ class RequestLogMiddleware:
             client_ip = client_ip.split(",")[0].strip()
 
         event = {
+            "event": "http_request",
             "request_id": request_id,
             "method": request.method,
             "path": request.path,

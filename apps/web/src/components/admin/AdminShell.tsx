@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import SidebarItem from "@/components/aprendiz/dashboard/SidebarItem";
 import { IconClock, IconHistory, IconLaptop, IconLogout, IconUser } from "@/components/aprendiz/dashboard/DashboardIcons";
 import { useMe } from "@/hooks/useMe";
+import { api } from "@/lib/api";
 import { clearTokens } from "@/lib/auth";
 
 export default function AdminShell({
@@ -16,7 +17,16 @@ export default function AdminShell({
   const router = useRouter();
   const { me, loadingMe } = useMe();
 
-  function logout() {
+  async function logout() {
+    try {
+      await api.post(
+        "/api/auth/logout-all/",
+        { auth_transport: "cookie" },
+        { headers: { "X-Auth-Transport": "cookie" } }
+      );
+    } catch {
+      // best effort revocation
+    }
     clearTokens();
     router.replace("/login");
   }

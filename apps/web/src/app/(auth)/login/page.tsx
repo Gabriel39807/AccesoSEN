@@ -60,7 +60,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loginFailTick, setLoginFailTick] = useState(0);
   const [role, setRole] = useState<AuthRole>("admin");
   const [showPassword, setShowPassword] = useState(false);
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
@@ -153,7 +152,6 @@ export default function LoginPage() {
     const validationError = validateLogin();
     if (validationError) {
       setError(validationError);
-      setLoginFailTick((v) => v + 1);
       return;
     }
 
@@ -164,8 +162,9 @@ export default function LoginPage() {
         username: username.trim(),
         password,
         expected_role: roleForBackend(),
+        auth_transport: "cookie",
       });
-      saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh });
+      saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh || "" });
 
       const meRes = await api.get<MeResponse>("/api/me/");
       const rol = meRes.data.usuario.rol;
@@ -173,14 +172,12 @@ export default function LoginPage() {
       if (role === "admin" && !["superadmin", "admin_sede"].includes(rol)) {
         await clearTokens();
         setError("Este modulo solo permite credenciales de administrador.");
-        setLoginFailTick((v) => v + 1);
         return;
       }
 
       if (role === "aprendiz" && rol !== "aprendiz") {
         await clearTokens();
         setError("Este modulo solo permite credenciales de aprendiz.");
-        setLoginFailTick((v) => v + 1);
         return;
       }
 
@@ -195,11 +192,9 @@ export default function LoginPage() {
 
       await clearTokens();
       setError("El rol guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
-      setLoginFailTick((v) => v + 1);
     } catch (err: any) {
       applyLockFromError(err);
       setError(toErrorMessage(err, "Credenciales invalidas."));
-      setLoginFailTick((v) => v + 1);
     } finally {
       setLoading(false);
     }
@@ -250,8 +245,9 @@ export default function LoginPage() {
         challenge: options.challenge,
         credential_id: credentialId,
         expected_role: roleForBackend(),
+        auth_transport: "cookie",
       });
-      saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh });
+      saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh || "" });
 
       const meRes = await api.get<MeResponse>("/api/me/");
       const rol = meRes.data.usuario.rol;
@@ -266,7 +262,6 @@ export default function LoginPage() {
     } catch (err: any) {
       applyLockFromError(err);
       setError(toErrorMessage(err, "No se pudo iniciar con passkey."));
-      setLoginFailTick((v) => v + 1);
     } finally {
       setPasskeyLoading(false);
     }

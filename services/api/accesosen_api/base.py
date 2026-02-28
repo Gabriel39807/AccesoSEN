@@ -49,6 +49,17 @@ def env_list(name: str, default: list[str] | None = None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def env_int(name: str, default: int, *, min_value: int | None = None) -> int:
+    raw = str(os.getenv(name, str(default)) or "").strip()
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = default
+    if min_value is not None:
+        value = max(min_value, value)
+    return value
+
+
 def _parse_postgres_database_url(url: str) -> dict[str, object]:
     """Parse PostgreSQL DATABASE_URL into Django DB settings parts.
 
@@ -114,9 +125,7 @@ def _build_cache_config() -> dict:
         }
 
     if selected_backend == "database" or (
-        selected_backend == "auto"
-        and use_database_fallback
-        and database_engine == "django.db.backends.postgresql"
+        selected_backend == "auto" and use_database_fallback and database_engine == "django.db.backends.postgresql"
     ):
         return {
             "BACKEND": "django.core.cache.backends.db.DatabaseCache",
@@ -126,9 +135,7 @@ def _build_cache_config() -> dict:
         }
 
     if selected_backend not in {"auto", "locmem"}:
-        raise ImproperlyConfigured(
-            "CACHE_BACKEND must be one of: auto, redis, database, locmem."
-        )
+        raise ImproperlyConfigured("CACHE_BACKEND must be one of: auto, redis, database, locmem.")
 
     return {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -136,7 +143,13 @@ def _build_cache_config() -> dict:
     }
 
 
-def enforce_production_security_guards(*, django_env: str, cache_backend: str, webauthn_mock: bool):
+def enforce_production_security_guards(
+    *,
+    django_env: str,
+    cache_backend: str,
+    webauthn_mock: bool,
+    refresh_cookie_secure: bool,
+):
     """Fail fast on insecure production runtime settings."""
     env_name = str(django_env or "").strip().lower()
     backend = str(cache_backend or "").strip()
@@ -145,9 +158,9 @@ def enforce_production_security_guards(*, django_env: str, cache_backend: str, w
             "Unsafe cache backend for production: LocMemCache is not allowed. Configure REDIS_URL."
         )
     if env_name == "production" and webauthn_mock:
-        raise ImproperlyConfigured(
-            "Unsafe WebAuthn setting for production: WEBAUTHN_MOCK must be false."
-        )
+        raise ImproperlyConfigured("Unsafe WebAuthn setting for production: WEBAUTHN_MOCK must be false.")
+    if env_name == "production" and not refresh_cookie_secure:
+        raise ImproperlyConfigured("Unsafe cookie setting for production: AUTH_COOKIE_REFRESH_SECURE must be true.")
 
 
 def env_required(name: str, *, allow_generated_for_dev: bool = False) -> str:
@@ -325,8 +338,38 @@ SIMPLE_JWT = {
     "UPDATE_LAST_LOGIN": env_bool("JWT_UPDATE_LAST_LOGIN", True),
 }
 REFRESH_TOKEN_PEPPER = str(os.getenv("REFRESH_TOKEN_PEPPER", "") or SECRET_KEY).strip()
+AUTH_COOKIE_REFRESH_ENABLED = env_bool("AUTH_COOKIE_REFRESH_ENABLED", True)
+AUTH_COOKIE_REFRESH_NAME = (
+    str(os.getenv("AUTH_COOKIE_REFRESH_NAME", "sadi_refresh") or "sadi_refresh").strip() or "sadi_refresh"
+)
+AUTH_COOKIE_REFRESH_PATH = str(os.getenv("AUTH_COOKIE_REFRESH_PATH", "/api/") or "/api/").strip() or "/api/"
+AUTH_COOKIE_REFRESH_DOMAIN = str(os.getenv("AUTH_COOKIE_REFRESH_DOMAIN", "") or "").strip() or None
+AUTH_COOKIE_REFRESH_HTTPONLY = True
+AUTH_COOKIE_REFRESH_SECURE = env_bool(
+    "AUTH_COOKIE_REFRESH_SECURE",
+    CURRENT_DJANGO_ENV == "production",
+)
+AUTH_COOKIE_REFRESH_SAMESITE = str(os.getenv("AUTH_COOKIE_REFRESH_SAMESITE", "Lax") or "Lax").strip().title()
+if AUTH_COOKIE_REFRESH_SAMESITE not in {"Lax", "Strict", "None"}:
+    raise ImproperlyConfigured("AUTH_COOKIE_REFRESH_SAMESITE must be one of: Lax, Strict, None.")
+AUTH_COOKIE_REFRESH_LEGACY_BODY = env_bool("AUTH_COOKIE_REFRESH_LEGACY_BODY", True)
 GUARDA_SINGLE_ACTIVE_SESSION = env_bool("GUARDA_SINGLE_ACTIVE_SESSION", True)
 DOMAIN_POLICY_EXEMPT_SUPERADMIN = env_bool("DOMAIN_POLICY_EXEMPT_SUPERADMIN", False)
+
+GEMINI_ENABLED = env_bool("GEMINI_ENABLED", False)
+GEMINI_API_KEY = str(os.getenv("GEMINI_API_KEY", "") or "").strip()
+GEMINI_MODEL = str(os.getenv("GEMINI_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash").strip()
+GEMINI_TIMEOUT_SEC = env_int("GEMINI_TIMEOUT_SEC", 12, min_value=1)
+GEMINI_RETRY_ATTEMPTS = env_int("GEMINI_RETRY_ATTEMPTS", 2, min_value=1)
+GEMINI_RETRY_BACKOFF_MS = env_int("GEMINI_RETRY_BACKOFF_MS", 250, min_value=50)
+GEMINI_RATE_LIMIT_ATTEMPTS = env_int("GEMINI_RATE_LIMIT_ATTEMPTS", 10, min_value=1)
+GEMINI_RATE_LIMIT_WINDOW_SEC = env_int("GEMINI_RATE_LIMIT_WINDOW_SEC", 60, min_value=10)
+GEMINI_RATE_LIMIT_LOCK_SEC = env_int("GEMINI_RATE_LIMIT_LOCK_SEC", 60, min_value=10)
+if GEMINI_ENABLED and not GEMINI_API_KEY:
+    raise ImproperlyConfigured("GEMINI_API_KEY is required when GEMINI_ENABLED=true.")
+
+IDEMPOTENCY_TTL_SEC = env_int("IDEMPOTENCY_TTL_SEC", 600, min_value=60)
+IDEMPOTENCY_LOCK_SEC = env_int("IDEMPOTENCY_LOCK_SEC", 30, min_value=5)
 
 CACHES = {"default": _build_cache_config()}
 
@@ -349,9 +392,7 @@ DEFAULT_SUPERADMIN_EMAIL = os.getenv("DEFAULT_SUPERADMIN_EMAIL", "superadmin@sad
 DEFAULT_SUPERADMIN_AUTO_CREATE = env_bool("DEFAULT_SUPERADMIN_AUTO_CREATE", False)
 DEFAULT_SUPERADMIN_PASSWORD = os.getenv("DEFAULT_SUPERADMIN_PASSWORD", "").strip()
 if DEFAULT_SUPERADMIN_AUTO_CREATE and not DEFAULT_SUPERADMIN_PASSWORD:
-    raise ImproperlyConfigured(
-        "DEFAULT_SUPERADMIN_PASSWORD is required when DEFAULT_SUPERADMIN_AUTO_CREATE=true."
-    )
+    raise ImproperlyConfigured("DEFAULT_SUPERADMIN_PASSWORD is required when DEFAULT_SUPERADMIN_AUTO_CREATE=true.")
 
 WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "")
 WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "SADI")
@@ -362,6 +403,7 @@ enforce_production_security_guards(
     django_env=CURRENT_DJANGO_ENV,
     cache_backend=CACHES["default"]["BACKEND"],
     webauthn_mock=WEBAUTHN_MOCK,
+    refresh_cookie_secure=AUTH_COOKIE_REFRESH_SECURE,
 )
 
 # Security defaults; production overrides these to hardened values.
@@ -372,6 +414,7 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
 
 LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
+APP_RELEASE = str(os.getenv("APP_RELEASE", "") or "").strip() or "local"
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

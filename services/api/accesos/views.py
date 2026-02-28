@@ -44,7 +44,13 @@ from .import_services import (
     get_cached_import_payload,
     validate_excel,
 )
-from .jwt_views import issue_tokens_for_user
+from .jwt_views import (
+    _cookie_mode_requested,
+    _set_refresh_cookie,
+    _strip_refresh_from_body_if_needed,
+    issue_tokens_for_user,
+)
+from .metrics import incr as incr_metric
 from .models import (
     Acceso,
     AllowedEmailDomain,
@@ -87,6 +93,7 @@ from .serializers import (
     ConfiguracionSistemaSerializer,
     EquipoRevisionSerializer,
     EquipoSerializer,
+    GeminiStubSerializer,
     ImportAprendicesConfirmSerializer,
     ImportAprendicesValidateSerializer,
     NotificacionSerializer,
@@ -114,6 +121,11 @@ PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
 MAX_ADMINS_PER_SEDE = 4
 FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
 TURNO_AUTO_CLOSE_OBSERVATION = "Cierre por tiempo limite alcanzado"
+IDEMPOTENCY_TTL_SEC = max(60, int(getattr(settings, "IDEMPOTENCY_TTL_SEC", 600) or 600))
+IDEMPOTENCY_LOCK_SEC = max(5, int(getattr(settings, "IDEMPOTENCY_LOCK_SEC", 30) or 30))
+GEMINI_RATE_LIMIT_ATTEMPTS = max(1, int(getattr(settings, "GEMINI_RATE_LIMIT_ATTEMPTS", 10) or 10))
+GEMINI_RATE_LIMIT_WINDOW_SEC = max(10, int(getattr(settings, "GEMINI_RATE_LIMIT_WINDOW_SEC", 60) or 60))
+GEMINI_RATE_LIMIT_LOCK_SEC = max(10, int(getattr(settings, "GEMINI_RATE_LIMIT_LOCK_SEC", 60) or 60))
 logger = logging.getLogger(__name__)
 
 
@@ -365,11 +377,7 @@ def _resolve_sede_code(raw: str, *, field: str = "sede_id") -> str | None:
         return sede.code
     if Sede.objects.filter(name__iexact=clean, is_active=True).exists():
         raise ValidationError(
-            {
-                field: (
-                    "Valor invalido para sede. Debes enviar el codigo tecnico o id, no la etiqueta visible."
-                )
-            }
+            {field: ("Valor invalido para sede. Debes enviar el codigo tecnico o id, no la etiqueta visible.")}
         )
     return None
 
@@ -423,6 +431,88 @@ def _uniform_response_delay(start_ts: float, min_ms: int = 220):
     remaining_ms = max(0, min_ms - elapsed_ms)
     if remaining_ms:
         time.sleep(remaining_ms / 1000.0)
+
+
+def _idempotency_prepare(request, *, action: str) -> tuple[Response | None, str | None, str | None]:
+    raw_key = str(request.headers.get("X-Idempotency-Key", "") or "").strip()
+    if not raw_key:
+        return None, None, None
+
+    user_id = getattr(getattr(request, "user", None), "id", None)
+    if not user_id:
+        return None, None, None
+
+    cache_key = f"sadi:idempotency:{action}:{user_id}:{raw_key}"
+    lock_key = f"{cache_key}:lock"
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict) and "status" in cached and "data" in cached:
+        return Response(cached.get("data"), status=int(cached.get("status", status.HTTP_200_OK))), cache_key, None
+
+    if not cache.add(lock_key, "1", timeout=IDEMPOTENCY_LOCK_SEC):
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and "status" in cached and "data" in cached:
+            return Response(cached.get("data"), status=int(cached.get("status", status.HTTP_200_OK))), cache_key, None
+        return (
+            error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Operacion en curso para la misma clave de idempotencia.",
+                status_code=status.HTTP_409_CONFLICT,
+            ),
+            cache_key,
+            None,
+        )
+
+    return None, cache_key, lock_key
+
+
+def _idempotency_store_success(cache_key: str | None, response: Response):
+    if not cache_key:
+        return
+    if int(getattr(response, "status_code", 500) or 500) >= 500:
+        return
+    cache.set(
+        cache_key,
+        {"status": int(response.status_code), "data": response.data},
+        timeout=IDEMPOTENCY_TTL_SEC,
+    )
+
+
+def _idempotency_release(lock_key: str | None):
+    if lock_key:
+        cache.delete(lock_key)
+
+
+def _gemini_stub_response(prompt: str) -> str:
+    clean_prompt = " ".join((prompt or "").strip().split())
+    preview = clean_prompt[:280]
+    model = str(getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash")
+    return f"[stub:{model}] Respuesta simulada para: {preview}"
+
+
+def _gemini_stub_with_retry(prompt: str) -> str:
+    attempts = max(1, int(getattr(settings, "GEMINI_RETRY_ATTEMPTS", 2) or 2))
+    timeout_sec = max(1, int(getattr(settings, "GEMINI_TIMEOUT_SEC", 12) or 12))
+    backoff_ms = max(50, int(getattr(settings, "GEMINI_RETRY_BACKOFF_MS", 250) or 250))
+    last_error: Exception | None = None
+
+    for attempt in range(attempts):
+        started = time.perf_counter()
+        try:
+            # Hook de prueba para validar timeout/backoff sin depender de red externa.
+            if str(prompt or "").strip().lower() == "__simulate_timeout__":
+                time.sleep(timeout_sec + 0.05)
+            response = _gemini_stub_response(prompt)
+            elapsed = time.perf_counter() - started
+            if elapsed > float(timeout_sec):
+                raise TimeoutError("gemini_stub_timeout")
+            return response
+        except TimeoutError as exc:
+            last_error = exc
+            if attempt + 1 >= attempts:
+                break
+            time.sleep((backoff_ms / 1000.0) * (2**attempt))
+
+    raise TimeoutError("gemini_stub_timeout") from last_error
 
 
 def _normalize_active_turnos(user: Usuario, *, lock_for_update: bool = False) -> list[Turno]:
@@ -481,8 +571,6 @@ def _build_aprendiz_qr_value(user: Usuario, *, request=None) -> tuple[str, str]:
         user_id=getattr(user, "id", None),
     )
     return qr_value, mode
-
-
 
 
 def _extract_documento_from_scan(raw_value: str, *, sede: Sede | None = None) -> str:
@@ -675,7 +763,9 @@ class AprendizEmailChangeRequestView(APIView):
         k_user = [str(user.id), "email-change"]
         k_ip = [ip, "email-change"]
         if is_locked("email-change-user", k_user) or is_locked("email-change-ip", k_ip):
-            remaining = max(get_lock_remaining("email-change-user", k_user), get_lock_remaining("email-change-ip", k_ip))
+            remaining = max(
+                get_lock_remaining("email-change-user", k_user), get_lock_remaining("email-change-ip", k_ip)
+            )
             return error_response(
                 code=ErrorCode.ACCOUNT_LOCKED_15MIN,
                 message="Demasiadas solicitudes. Intenta mas tarde.",
@@ -683,8 +773,12 @@ class AprendizEmailChangeRequestView(APIView):
                 detail={"seconds_remaining": remaining},
             )
 
-        limit_user = bump_with_lock("email-change-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
-        limit_ip = bump_with_lock("email-change-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+        limit_user = bump_with_lock(
+            "email-change-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+        )
+        limit_ip = bump_with_lock(
+            "email-change-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+        )
         if limit_user["locked"] or limit_ip["locked"]:
             remaining = max(int(limit_user.get("remaining_sec", 0)), int(limit_ip.get("remaining_sec", 0)))
             return error_response(
@@ -787,7 +881,9 @@ class AprendizEmailChangeConfirmView(APIView):
 
         otp_obj.used_at = timezone.now()
         otp_obj.save(update_fields=["used_at"])
-        EmailChangeOTP.objects.filter(user=user, used_at__isnull=True).exclude(id=otp_obj.id).update(used_at=timezone.now())
+        EmailChangeOTP.objects.filter(user=user, used_at__isnull=True).exclude(id=otp_obj.id).update(
+            used_at=timezone.now()
+        )
 
         payload = AprendizPerfilSerializer(user).data
         payload["pending_email_change"] = None
@@ -926,8 +1022,12 @@ class LegacyPasswordResetRequestView(APIView):
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
-            limit_user = bump_with_lock("otp-request-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
-            limit_ip = bump_with_lock("otp-request-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            limit_user = bump_with_lock(
+                "otp-request-user", k_user, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+            )
+            limit_ip = bump_with_lock(
+                "otp-request-ip", k_ip, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+            )
             if limit_user["locked"] or limit_ip["locked"]:
                 return error_response(
                     code=ErrorCode.ACCOUNT_LOCKED_15MIN,
@@ -1064,9 +1164,9 @@ class LegacyPasswordResetConfirmView(APIView):
 
         otp_obj.used_at = timezone.now()
         otp_obj.save(update_fields=["used_at"])
-        PasswordResetOTP.objects.filter(user=user, used_at__isnull=True, channel=PasswordResetOTP.Channel.EMAIL).exclude(id=otp_obj.id).update(
-            used_at=timezone.now()
-        )
+        PasswordResetOTP.objects.filter(
+            user=user, used_at__isnull=True, channel=PasswordResetOTP.Channel.EMAIL
+        ).exclude(id=otp_obj.id).update(used_at=timezone.now())
 
         return ok_response()
 
@@ -1169,7 +1269,11 @@ class PermissionViewSet(viewsets.ModelViewSet):
 
 class RolePermissionViewSet(viewsets.ModelViewSet):
     serializer_class = RolePermissionSerializer
-    queryset = RolePermission.objects.select_related("role", "permission").all().order_by("role__code", "permission__code", "scope")
+    queryset = (
+        RolePermission.objects.select_related("role", "permission")
+        .all()
+        .order_by("role__code", "permission__code", "scope")
+    )
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
 
@@ -1181,10 +1285,14 @@ class SedePolicyViewSet(viewsets.ModelViewSet):
 
 class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
     serializer_class = AllowedEmailDomainSerializer
-    queryset = AllowedEmailDomain.objects.select_related("role", "sede", "created_by").all().order_by(
-        "domain",
-        "role__code",
-        "sede__code",
+    queryset = (
+        AllowedEmailDomain.objects.select_related("role", "sede", "created_by")
+        .all()
+        .order_by(
+            "domain",
+            "role__code",
+            "sede__code",
+        )
     )
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
@@ -1199,11 +1307,7 @@ class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
         if role:
             qs = qs.filter(role__code=role)
 
-        sede = (
-            self.request.query_params.get("sede")
-            or self.request.query_params.get("sede_id")
-            or ""
-        ).strip()
+        sede = (self.request.query_params.get("sede") or self.request.query_params.get("sede_id") or "").strip()
         if sede:
             if sede.isdigit():
                 qs = qs.filter(sede_id=int(sede))
@@ -1230,12 +1334,7 @@ class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
                 qs = qs.filter(role__isnull=False, sede__isnull=False)
             else:
                 raise ValidationError(
-                    {
-                        "scope": (
-                            "Scope invalido. Valores permitidos: "
-                            "GLOBAL, SEDE, ROLE, ROLE_SEDE."
-                        )
-                    }
+                    {"scope": ("Scope invalido. Valores permitidos: " "GLOBAL, SEDE, ROLE, ROLE_SEDE.")}
                 )
 
         return qs
@@ -1283,9 +1382,7 @@ class AuditEventsView(APIView):
             )
 
         for session in (
-            RefreshSession.objects.filter(revoked_at__isnull=False)
-            .select_related("user")
-            .order_by("-revoked_at")[:30]
+            RefreshSession.objects.filter(revoked_at__isnull=False).select_related("user").order_by("-revoked_at")[:30]
         ):
             events.append(
                 {
@@ -1885,7 +1982,9 @@ class EquipoViewSet(viewsets.ModelViewSet):
 
         propietario = serializer.validated_data.get("propietario", None)
         if not propietario:
-            raise ValidationError({"propietario": "Como usuario administrativo debes enviar el propietario (id del aprendiz)."})
+            raise ValidationError(
+                {"propietario": "Como usuario administrativo debes enviar el propietario (id del aprendiz)."}
+            )
         if is_admin_sede(user):
             actor_sede = _scope_sede(user)
             if not actor_sede or _scope_sede(propietario) != actor_sede:
@@ -2072,7 +2171,9 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
                     fin=None,
                 )
         except IntegrityError:
-            turno_activo = Turno.objects.filter(guarda=request.user, activo=True, fin__isnull=True).order_by("-inicio").first()
+            turno_activo = (
+                Turno.objects.filter(guarda=request.user, activo=True, fin__isnull=True).order_by("-inicio").first()
+            )
             return error_response(
                 code=ErrorCode.TURNO_ALREADY_ACTIVE,
                 message="Ya tienes un turno activo.",
@@ -2344,23 +2445,38 @@ class AccesoViewSet(viewsets.ModelViewSet):
         enviados_ids = sorted([e.id for e in equipos_enviados])
 
         if ingreso_ids and not equipos_enviados:
-            raise ValidationError({"equipos": "Salida inválida: debes seleccionar los mismos equipos del último ingreso."})
+            raise ValidationError(
+                {"equipos": "Salida inválida: debes seleccionar los mismos equipos del último ingreso."}
+            )
 
         if (not ingreso_ids) and equipos_enviados:
             raise ValidationError({"equipos": "Salida inválida: el último ingreso no tenía equipos."})
 
         if equipos_enviados and ingreso_ids != enviados_ids:
-            raise ValidationError({"equipos": "Los equipos en la salida deben coincidir exactamente con los del último ingreso."})
+            raise ValidationError(
+                {"equipos": "Los equipos en la salida deben coincidir exactamente con los del último ingreso."}
+            )
 
     def create(self, request, *args, **kwargs):
+        replay_response, idem_cache_key, idem_lock_key = _idempotency_prepare(request, action="acceso.create")
+        if replay_response is not None:
+            return replay_response
+
+        def _finish(response: Response):
+            _idempotency_store_success(idem_cache_key, response)
+            _idempotency_release(idem_lock_key)
+            return response
+
         request_user = request.user
         rol = _effective_role(request_user)
 
         if rol not in [Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA]:
-            return error_response(
-                code=ErrorCode.PERMISSION_DENIED,
-                message="No tienes permisos para registrar accesos.",
-                status_code=status.HTTP_403_FORBIDDEN,
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No tienes permisos para registrar accesos.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
             )
 
         turno = None
@@ -2371,25 +2487,31 @@ class AccesoViewSet(viewsets.ModelViewSet):
             guarda_sede = getattr(request_user, "sede_principal", None)
             policy = PolicyService.get_policy(turno.sede if turno else guarda_sede)
             if policy.access_requires_active_turno and not turno:
-                return error_response(
-                    code=ErrorCode.TURNO_REQUIRED,
-                    message="Debes iniciar turno antes de registrar accesos.",
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                return _finish(
+                    error_response(
+                        code=ErrorCode.TURNO_REQUIRED,
+                        message="Debes iniciar turno antes de registrar accesos.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
                 )
             sede = turno.sede if turno else guarda_sede
             if not sede:
-                return error_response(
-                    code=ErrorCode.PERMISSION_DENIED,
-                    message="No tienes una sede operativa para registrar accesos.",
-                    status_code=status.HTTP_403_FORBIDDEN,
+                return _finish(
+                    error_response(
+                        code=ErrorCode.PERMISSION_DENIED,
+                        message="No tienes una sede operativa para registrar accesos.",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
                 )
         elif is_admin_sede(request_user):
             sede = getattr(request_user, "sede_principal", None)
             if not sede:
-                return error_response(
-                    code=ErrorCode.PERMISSION_DENIED,
-                    message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
-                    status_code=status.HTTP_403_FORBIDDEN,
+                return _finish(
+                    error_response(
+                        code=ErrorCode.PERMISSION_DENIED,
+                        message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
                 )
 
         serializer = self.get_serializer(data=request.data)
@@ -2401,26 +2523,32 @@ class AccesoViewSet(viewsets.ModelViewSet):
         if is_admin_sede(request_user):
             actor_sede = _scope_sede(request_user)
             if _scope_sede(aprendiz) != actor_sede:
-                return error_response(
-                    code=ErrorCode.PERMISSION_DENIED,
-                    message="Solo puedes registrar accesos para aprendices de tu sede.",
-                    status_code=status.HTTP_403_FORBIDDEN,
+                return _finish(
+                    error_response(
+                        code=ErrorCode.PERMISSION_DENIED,
+                        message="Solo puedes registrar accesos para aprendices de tu sede.",
+                        status_code=status.HTTP_403_FORBIDDEN,
+                    )
                 )
 
         ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
-            return error_response(
-                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
-                message="Salida sin ingreso previo.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return _finish(
+                error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message="Salida sin ingreso previo.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             )
 
         if ultimo is not None and ultimo.tipo == tipo:
-            return error_response(
-                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
-                message=f"Doble {tipo}.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return _finish(
+                error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message=f"Doble {tipo}.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             )
 
         if tipo == Acceso.Tipo.INGRESO and equipos_enviados:
@@ -2428,20 +2556,24 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         if tipo == Acceso.Tipo.SALIDA:
             if not ultimo or ultimo.tipo != Acceso.Tipo.INGRESO:
-                return error_response(
-                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
-                    message="Salida inválida: el último registro no es un ingreso.",
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                return _finish(
+                    error_response(
+                        code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                        message="Salida inválida: el último registro no es un ingreso.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
                 )
             sede = ultimo.sede
             turno = ultimo.turno
             if is_admin_sede(request_user):
                 actor_sede = _scope_sede(request_user)
                 if getattr(ultimo.sede, "code", None) != actor_sede:
-                    return error_response(
-                        code=ErrorCode.PERMISSION_DENIED,
-                        message="Solo puedes registrar salidas de tu sede.",
-                        status_code=status.HTTP_403_FORBIDDEN,
+                    return _finish(
+                        error_response(
+                            code=ErrorCode.PERMISSION_DENIED,
+                            message="Solo puedes registrar salidas de tu sede.",
+                            status_code=status.HTTP_403_FORBIDDEN,
+                        )
                     )
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos_enviados))
 
@@ -2458,7 +2590,8 @@ class AccesoViewSet(viewsets.ModelViewSet):
             getattr(sede, "id", None),
         )
 
-        return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
+        incr_metric("acceso_create_success_total")
+        return _finish(ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED))
 
     def update(self, request, *args, **kwargs):
         scope_error = self._ensure_admin_sede_acceso_payload_scope(request.data.copy())
@@ -2538,7 +2671,9 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
         estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
-        equipos_aprobados = Equipo.objects.filter(propietario=aprendiz, estado=Equipo.Estado.APROBADO).order_by("-creado_en")
+        equipos_aprobados = Equipo.objects.filter(propietario=aprendiz, estado=Equipo.Estado.APROBADO).order_by(
+            "-creado_en"
+        )
 
         return ok_response(
             {
@@ -2551,11 +2686,22 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="registrar_por_documento")
     def registrar_por_documento(self, request):
+        replay_response, idem_cache_key, idem_lock_key = _idempotency_prepare(request, action="acceso.scan")
+        if replay_response is not None:
+            return replay_response
+
+        def _finish(response: Response):
+            _idempotency_store_success(idem_cache_key, response)
+            _idempotency_release(idem_lock_key)
+            return response
+
         if not _has_role(request.user, Usuario.Rol.GUARDA):
-            return error_response(
-                code=ErrorCode.PERMISSION_DENIED,
-                message="No tienes permisos para registrar accesos por documento.",
-                status_code=status.HTTP_403_FORBIDDEN,
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No tienes permisos para registrar accesos por documento.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
             )
         s = RegistrarAccesoDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
@@ -2564,32 +2710,40 @@ class AccesoViewSet(viewsets.ModelViewSet):
         default_sede = getattr(request.user, "sede_principal", None)
         policy = PolicyService.get_policy(turno.sede if turno else default_sede)
         if policy.access_requires_active_turno and not turno:
-            return error_response(
-                code=ErrorCode.TURNO_REQUIRED,
-                message="Debes iniciar turno antes de registrar accesos.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return _finish(
+                error_response(
+                    code=ErrorCode.TURNO_REQUIRED,
+                    message="Debes iniciar turno antes de registrar accesos.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             )
         scan_sede = turno.sede if turno else default_sede
         if not scan_sede:
-            return error_response(
-                code=ErrorCode.PERMISSION_DENIED,
-                message="No tienes una sede operativa para registrar accesos.",
-                status_code=status.HTTP_403_FORBIDDEN,
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No tienes una sede operativa para registrar accesos.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
             )
 
         try:
             documento = _extract_documento_from_scan(s.validated_data["documento"], sede=scan_sede)
         except QRParseError as exc:
             if getattr(exc, "code", "") == "expired":
-                return error_response(
+                return _finish(
+                    error_response(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message="QR expirado. Genera uno nuevo.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                )
+            return _finish(
+                error_response(
                     code=ErrorCode.VALIDATION_ERROR,
-                    message="QR expirado. Genera uno nuevo.",
+                    message=str(exc) or "QR o codigo de barras invalido.",
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=str(exc) or "QR o codigo de barras invalido.",
-                status_code=status.HTTP_400_BAD_REQUEST,
             )
         tipo = s.validated_data["tipo"]
         equipos_ids = s.validated_data.get("equipos", [])
@@ -2597,33 +2751,41 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         aprendiz = Usuario.objects.filter(documento=documento).first()
         if not aprendiz:
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="Documento no registrado.",
-                status_code=status.HTTP_404_NOT_FOUND,
+            return _finish(
+                error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="Documento no registrado.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
             )
 
         if not _has_role(aprendiz, Usuario.Rol.APRENDIZ):
-            return error_response(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="El documento no pertenece a un aprendiz.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return _finish(
+                error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="El documento no pertenece a un aprendiz.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             )
 
         ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
-            return error_response(
-                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
-                message="Salida sin ingreso previo.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return _finish(
+                error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message="Salida sin ingreso previo.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             )
 
         if ultimo is not None and ultimo.tipo == tipo:
-            return error_response(
-                code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
-                message=f"Doble {tipo}.",
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return _finish(
+                error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message=f"Doble {tipo}.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
             )
 
         if tipo == Acceso.Tipo.INGRESO and equipos:
@@ -2631,10 +2793,12 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         if tipo == Acceso.Tipo.SALIDA:
             if not ultimo or ultimo.tipo != Acceso.Tipo.INGRESO:
-                return error_response(
-                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
-                    message="Salida inválida: el último registro no es un ingreso.",
-                    status_code=status.HTTP_400_BAD_REQUEST,
+                return _finish(
+                    error_response(
+                        code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                        message="Salida inválida: el último registro no es un ingreso.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
                 )
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos))
 
@@ -2657,7 +2821,8 @@ class AccesoViewSet(viewsets.ModelViewSet):
             getattr(scan_sede, "id", None),
         )
 
-        return ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED)
+        incr_metric("acceso_scan_success_total")
+        return _finish(ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED))
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
@@ -2791,7 +2956,9 @@ class PasswordResetRequestView(APIView):
                 detail={"seconds_remaining": remaining},
             )
 
-        ip_limit = bump_with_lock("otp-request-ip", ip_key, OTP_MAX_REQUESTS * 3, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+        ip_limit = bump_with_lock(
+            "otp-request-ip", ip_key, OTP_MAX_REQUESTS * 3, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+        )
         if ip_limit["locked"]:
             _uniform_response_delay(started)
             return error_response(
@@ -2813,7 +2980,9 @@ class PasswordResetRequestView(APIView):
                     detail={"seconds_remaining": remaining},
                 )
 
-            user_limit = bump_with_lock("otp-request-user", user_key, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC)
+            user_limit = bump_with_lock(
+                "otp-request-user", user_key, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+            )
             if user_limit["locked"]:
                 _uniform_response_delay(started)
                 return error_response(
@@ -3038,7 +3207,11 @@ class PasskeyRegisterOptionsView(APIView):
             "challenge": challenge,
             "rp": {"name": getattr(settings, "WEBAUTHN_RP_NAME", "SADI"), "id": _resolve_webauthn_rp_id(request)},
             "origin": _resolve_webauthn_origin(request),
-            "user": {"id": str(user.id), "name": user.username, "displayName": f"{user.first_name} {user.last_name}".strip() or user.username},
+            "user": {
+                "id": str(user.id),
+                "name": user.username,
+                "displayName": f"{user.first_name} {user.last_name}".strip() or user.username,
+            },
             "timeout": 60000,
             "attestation": "none",
             "exclude_credentials": list(user.webauthn_credentials.values("credential_id")),
@@ -3113,9 +3286,7 @@ class PasskeyAuthOptionsView(APIView):
                 user = Usuario.objects.filter(email__iexact=login_identifier).first()
         allow_credentials = []
         if user:
-            allow_credentials = list(
-                user.webauthn_credentials.values("credential_id", "transports")
-            )
+            allow_credentials = list(user.webauthn_credentials.values("credential_id", "transports"))
 
         request_id = uuid4().hex
         challenge = secrets.token_urlsafe(32)
@@ -3214,4 +3385,116 @@ class PasskeyAuthVerifyView(APIView):
         credential.save(update_fields=["last_used_at", "sign_count"])
         cache.delete(key)
         tokens = issue_tokens_for_user(user, request=request, rotate_guard_session=True)
-        return Response(tokens, status=status.HTTP_200_OK)
+        response = Response(tokens, status=status.HTTP_200_OK)
+        if _cookie_mode_requested(request):
+            refresh_token = str(tokens.get("refresh", "") or "").strip()
+            if refresh_token:
+                _set_refresh_cookie(response, refresh_token)
+            _strip_refresh_from_body_if_needed(request=request, payload=response.data)
+        return response
+
+
+class GeminiStubView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not bool(getattr(settings, "GEMINI_ENABLED", False)):
+            return error_response(
+                code=ErrorCode.AI_FEATURE_DISABLED,
+                message="La funcionalidad de IA no esta habilitada en este entorno.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        user_id = str(getattr(request.user, "id", "") or "anon")
+        ip = str(get_client_ip(request) or "unknown")
+        rate_limit_attempts = max(
+            1,
+            int(
+                getattr(settings, "GEMINI_RATE_LIMIT_ATTEMPTS", GEMINI_RATE_LIMIT_ATTEMPTS)
+                or GEMINI_RATE_LIMIT_ATTEMPTS
+            ),
+        )
+        rate_limit_window_sec = max(
+            10,
+            int(
+                getattr(settings, "GEMINI_RATE_LIMIT_WINDOW_SEC", GEMINI_RATE_LIMIT_WINDOW_SEC)
+                or GEMINI_RATE_LIMIT_WINDOW_SEC
+            ),
+        )
+        rate_limit_lock_sec = max(
+            10,
+            int(
+                getattr(settings, "GEMINI_RATE_LIMIT_LOCK_SEC", GEMINI_RATE_LIMIT_LOCK_SEC)
+                or GEMINI_RATE_LIMIT_LOCK_SEC
+            ),
+        )
+
+        by_user = bump_with_lock(
+            "gemini-user",
+            [user_id],
+            rate_limit_attempts,
+            rate_limit_window_sec,
+            rate_limit_lock_sec,
+        )
+        if by_user.get("locked"):
+            remaining_sec = int(by_user.get("remaining_sec", 0) or 0)
+            logger.warning("gemini_stub_rate_limited user_id=%s ip=%s remaining_sec=%s", user_id, ip, remaining_sec)
+            incr_metric("gemini_stub_rate_limited_total")
+            return error_response(
+                code=ErrorCode.AI_RATE_LIMITED,
+                message="Demasiadas solicitudes de IA. Intenta nuevamente en unos segundos.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining_sec},
+            )
+
+        by_ip = bump_with_lock(
+            "gemini-ip",
+            [ip],
+            rate_limit_attempts * 2,
+            rate_limit_window_sec,
+            rate_limit_lock_sec,
+        )
+        if by_ip.get("locked"):
+            remaining_sec = int(by_ip.get("remaining_sec", 0) or 0)
+            logger.warning("gemini_stub_rate_limited_ip user_id=%s ip=%s remaining_sec=%s", user_id, ip, remaining_sec)
+            incr_metric("gemini_stub_rate_limited_total")
+            return error_response(
+                code=ErrorCode.AI_RATE_LIMITED,
+                message="Demasiadas solicitudes de IA. Intenta nuevamente en unos segundos.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"seconds_remaining": remaining_sec},
+            )
+
+        serializer = GeminiStubSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        prompt = serializer.validated_data["prompt"]
+        started = time.perf_counter()
+        try:
+            output = _gemini_stub_with_retry(prompt)
+        except TimeoutError:
+            logger.warning("gemini_stub_timeout user_id=%s ip=%s prompt_len=%s", user_id, ip, len(prompt))
+            incr_metric("gemini_stub_timeout_total")
+            return error_response(
+                code=ErrorCode.UPSTREAM_TIMEOUT,
+                message="El proveedor de IA no respondio a tiempo.",
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
+
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "gemini_stub_success user_id=%s ip=%s prompt_len=%s latency_ms=%s",
+            user_id,
+            ip,
+            len(prompt),
+            elapsed_ms,
+        )
+        incr_metric("gemini_stub_requests_total")
+        return ok_response(
+            {
+                "provider": "gemini",
+                "model": str(getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")),
+                "stub": True,
+                "output": output,
+                "latency_ms": elapsed_ms,
+            }
+        )

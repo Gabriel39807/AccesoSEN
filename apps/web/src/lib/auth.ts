@@ -2,6 +2,7 @@ export type Tokens = { access: string; refresh: string };
 
 const ACCESS_KEY = "sadi_access";
 const REFRESH_KEY = "sadi_refresh";
+let accessTokenMemory: string | null = null;
 
 /**
  * Acceso seguro a localStorage:
@@ -18,24 +19,11 @@ function getStorage(): Storage | null {
 }
 
 export function saveTokens(t: Tokens) {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(ACCESS_KEY, t.access);
-    storage.setItem(REFRESH_KEY, t.refresh);
-  } catch {
-    // noop: si storage falla, no reventamos la app
-  }
+  accessTokenMemory = String(t?.access || "").trim() || null;
 }
 
 export function getAccessToken(): string | null {
-  const storage = getStorage();
-  if (!storage) return null;
-  try {
-    return storage.getItem(ACCESS_KEY);
-  } catch {
-    return null;
-  }
+  return accessTokenMemory;
 }
 
 export function getRefreshToken(): string | null {
@@ -49,6 +37,7 @@ export function getRefreshToken(): string | null {
 }
 
 export function clearTokens() {
+  accessTokenMemory = null;
   const storage = getStorage();
   if (!storage) return;
   try {

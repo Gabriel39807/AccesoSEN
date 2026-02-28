@@ -10,6 +10,7 @@ from __future__ import annotations
 from django.core.cache import cache
 from django.db import connections
 from django.http import JsonResponse
+from django.conf import settings
 
 
 def health(request):
@@ -18,7 +19,13 @@ def health(request):
     Returns:
         JsonResponse: Minimal payload indicating process is alive.
     """
-    return JsonResponse({"status": "ok", "service": "sadi-api"})
+    return JsonResponse(
+        {
+            "status": "ok",
+            "service": "sadi-api",
+            "release": str(getattr(settings, "APP_RELEASE", "local") or "local"),
+        }
+    )
 
 
 def ready(request):
@@ -48,5 +55,9 @@ def ready(request):
         checks["cache"] = "error"
         status_code = 503
 
-    payload = {"status": "ok" if status_code == 200 else "degraded", "checks": checks}
+    payload = {
+        "status": "ok" if status_code == 200 else "degraded",
+        "checks": checks,
+        "release": str(getattr(settings, "APP_RELEASE", "local") or "local"),
+    }
     return JsonResponse(payload, status=status_code)

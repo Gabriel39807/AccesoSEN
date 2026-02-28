@@ -95,6 +95,7 @@ def _raise_domain_policy_error(*, field: str, message: str):
         }
     )
 
+
 # =========================
 # USUARIOS
 # =========================
@@ -185,9 +186,7 @@ class AllowedEmailDomainSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Debes indicar un dominio valido, por ejemplo empresa.com.")
         if " " in clean:
             raise serializers.ValidationError("El dominio no puede contener espacios.")
-        domain_re = re.compile(
-            r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
-        )
+        domain_re = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
         if not domain_re.fullmatch(clean):
             raise serializers.ValidationError("Dominio invalido. Usa formato tipo empresa.com.")
         return clean
@@ -204,9 +203,7 @@ class AllowedEmailDomainSerializer(serializers.ModelSerializer):
         if self.instance is not None:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise serializers.ValidationError(
-                {"domain": "Ya existe una regla para ese dominio con el mismo alcance."}
-            )
+            raise serializers.ValidationError({"domain": "Ya existe una regla para ese dominio con el mismo alcance."})
         return attrs
 
     def get_scope(self, obj):
@@ -283,7 +280,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
     def validate_email(self, value):
         value = (value or "").strip().lower()
-        if value and Usuario.objects.filter(email__iexact=value).exclude(id=getattr(self.instance, "id", None)).exists():
+        if (
+            value
+            and Usuario.objects.filter(email__iexact=value).exclude(id=getattr(self.instance, "id", None)).exists()
+        ):
             raise serializers.ValidationError("El correo ya esta registrado.")
         return value
 
@@ -494,7 +494,18 @@ class TurnoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Turno
-        fields = ["id", "guarda", "sede", "sede_name", "jornada", "inicio", "fin", "activo", "cierre_observacion", "is_expired"]
+        fields = [
+            "id",
+            "guarda",
+            "sede",
+            "sede_name",
+            "jornada",
+            "inicio",
+            "fin",
+            "activo",
+            "cierre_observacion",
+            "is_expired",
+        ]
         read_only_fields = ["guarda", "inicio", "fin", "activo", "cierre_observacion", "is_expired"]
 
 
@@ -653,6 +664,7 @@ class PasskeyRegisterVerifySerializer(serializers.Serializer):
 class PasskeyAuthOptionsSerializer(serializers.Serializer):
     username = serializers.CharField(required=False, allow_blank=True, max_length=150)
     expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
+    auth_transport = serializers.ChoiceField(choices=["cookie"], required=False)
 
     def validate_username(self, value):
         return value.strip().lower()
@@ -663,6 +675,18 @@ class PasskeyAuthVerifySerializer(serializers.Serializer):
     challenge = serializers.CharField(max_length=512)
     credential_id = serializers.CharField(max_length=512)
     expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
+    auth_transport = serializers.ChoiceField(choices=["cookie"], required=False)
 
     def validate_credential_id(self, value):
         return value.strip()
+
+
+class GeminiStubSerializer(serializers.Serializer):
+    prompt = serializers.CharField(min_length=1, max_length=3000)
+    temperature = serializers.FloatField(required=False, min_value=0.0, max_value=2.0, default=0.2)
+
+    def validate_prompt(self, value):
+        clean = (value or "").strip()
+        if not clean:
+            raise serializers.ValidationError("El prompt no puede estar vacio.")
+        return clean
