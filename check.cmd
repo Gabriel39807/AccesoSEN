@@ -24,7 +24,9 @@ if errorlevel 1 (
 )
 
 echo [4/9] Backend: tests + coverage
-.\.venv\Scripts\python.exe -m pytest --cov=accesos --cov-report=term-missing --cov-fail-under=30
+set DJANGO_ENV=test
+if "%TEST_DATABASE_NAME%"=="" set TEST_DATABASE_NAME=sadi_backend_test_%RANDOM%
+.\.venv\Scripts\python.exe -m pytest --create-db --cov=accesos --cov-report=term-missing --cov-fail-under=30
 if errorlevel 1 (
   popd
   exit /b 1

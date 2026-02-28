@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, Variants, Transition } from "framer-motion";
+import { motion } from "framer-motion";
 import SharedStatCard from "@/components/dashboard/shared/StatCard";
 import { IconUser, IconClock, IconLaptop, IconHistory } from "@/components/aprendiz/dashboard/DashboardIcons";
 

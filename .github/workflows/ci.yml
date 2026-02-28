@@ -10,13 +10,34 @@ jobs:
   backend:
     name: Backend (Django)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sadi_ci
+          POSTGRES_USER: sadi_ci
+          POSTGRES_PASSWORD: sadi_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sadi_ci -d sadi_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: services/api
     env:
-      DJANGO_ENV: development
-      DJANGO_DEBUG: "true"
-      DATABASE_ENGINE: django.db.backends.sqlite3
+      DJANGO_ENV: test
+      DJANGO_DEBUG: "false"
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_NAME: sadi_ci
+      DATABASE_USER: sadi_ci
+      DATABASE_PASSWORD: sadi_ci
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: "5432"
+      DATABASE_SSLMODE: disable
+      TEST_DATABASE_NAME: sadi_ci_test
       DJANGO_SECRET_KEY: ci-secret-key-not-for-production
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
     steps:
@@ -37,7 +58,7 @@ jobs:
       - name: Django checks
         run: python manage.py check
       - name: Tests with coverage
-        run: pytest --cov=accesos --cov-report=term-missing --cov-fail-under=30
+        run: pytest --create-db --cov=accesos --cov-report=term-missing --cov-fail-under=30
 
   web:
     name: Web (Next.js)

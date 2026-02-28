@@ -22,7 +22,9 @@ echo "[3/9] Backend: django check"
 echo "[4/9] Backend: tests + coverage"
 (
   cd services/api
-  ./.venv/Scripts/python.exe -m pytest --cov=accesos --cov-report=term-missing --cov-fail-under=30
+  export DJANGO_ENV=test
+  export TEST_DATABASE_NAME="${TEST_DATABASE_NAME:-sadi_backend_test_$$}"
+  ./.venv/Scripts/python.exe -m pytest --create-db --cov=accesos --cov-report=term-missing --cov-fail-under=30
 )
 
 echo "[5/9] Web: lint"

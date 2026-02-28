@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, Variants, Transition } from "framer-motion";
+import { motion } from "framer-motion";
 
 const container = {
     hidden: { opacity: 0 },
@@ -28,7 +28,7 @@ export default function ScheduleWidget() {
     return (
         <article className="flex flex-col rounded-3xl border border-white/60 bg-white/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl">
             <div className="flex items-center justify-between mb-6">
-                <h3 className="text-base font-extrabold text-zinc-900">Today's Schedule</h3>
+                <h3 className="text-base font-extrabold text-zinc-900">Today&apos;s Schedule</h3>
                 <button className="text-xs font-semibold text-sky-600 hover:text-sky-700 transition">
                     3 Schedule
                 </button>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, FlatList, Alert } from "react-native";
+import { View, Text, Pressable, FlatList } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { GuardStackParamList } from "../../navigation/GuardStack";
 import { useSessionStore } from "../../store/session";

@@ -1,6 +1,5 @@
 "use client";
 
-import PageHeader from "@/components/admin/PageHeader";
 import OverviewCards from "@/components/admin/dashboard/OverviewCards";
 import BestEmployeeWidget from "@/components/admin/dashboard/BestEmployeeWidget";
 import ProgressWidget from "@/components/admin/dashboard/ProgressWidget";
