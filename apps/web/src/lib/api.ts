@@ -15,6 +15,9 @@ const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
 const ENFORCE_DEPLOY_API_URL_GUARD =
   IS_PRODUCTION_BUILD &&
   (process.env.VERCEL === "1" || process.env.CI === "true" || process.env.STRICT_PUBLIC_API_URL === "true");
+const DEPLOY_DEFAULT_API_URL = normalizeApiBaseUrl(
+  process.env.NEXT_PUBLIC_DEPLOY_DEFAULT_API_URL || "https://sadi-api-genm.onrender.com"
+);
 
 function normalizeApiBaseUrl(value: string): string {
   const trimmed = (value || "").trim().replace(/\/+$/, "");
@@ -61,7 +64,7 @@ function isPlaceholderApiHost(value: string): boolean {
   }
 }
 
-const API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
+const RAW_API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
 const COOKIE_AUTH_MODE =
   String(process.env.NEXT_PUBLIC_AUTH_COOKIE_MODE || "true").trim().toLowerCase() !== "false";
 const API_TIMEOUT_MS = (() => {
@@ -70,19 +73,38 @@ const API_TIMEOUT_MS = (() => {
   return Math.max(5000, Math.trunc(raw));
 })();
 
-if (ENFORCE_DEPLOY_API_URL_GUARD && !API_BASE) {
-  throw new Error("Missing NEXT_PUBLIC_API_URL for production build.");
-}
-if (ENFORCE_DEPLOY_API_URL_GUARD && isLoopbackHost(API_BASE)) {
-  throw new Error("Invalid NEXT_PUBLIC_API_URL for production: localhost/loopback is not allowed.");
-}
-if (ENFORCE_DEPLOY_API_URL_GUARD && isSupabaseProjectUrl(API_BASE)) {
-  throw new Error("Invalid NEXT_PUBLIC_API_URL: it must point to your Django API, not directly to *.supabase.co.");
-}
-if (ENFORCE_DEPLOY_API_URL_GUARD && isPlaceholderApiHost(API_BASE)) {
-  throw new Error("Invalid NEXT_PUBLIC_API_URL: placeholder domains are not allowed in production builds.");
+function reportApiBaseGuard(reason: string) {
+  if (!ENFORCE_DEPLOY_API_URL_GUARD || typeof console === "undefined") return;
+  console.error(`[api-config] ${reason} Usando fallback ${DEPLOY_DEFAULT_API_URL}.`);
 }
 
+function resolveApiBaseUrl(): string {
+  if (!ENFORCE_DEPLOY_API_URL_GUARD) return RAW_API_BASE;
+  if (!RAW_API_BASE) {
+    reportApiBaseGuard("Falta NEXT_PUBLIC_API_URL en produccion.");
+    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
+  }
+  if (isLoopbackHost(RAW_API_BASE)) {
+    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: localhost/loopback.");
+    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
+  }
+  if (isSupabaseProjectUrl(RAW_API_BASE)) {
+    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: apunta a *.supabase.co.");
+    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
+  }
+  if (isPlaceholderApiHost(RAW_API_BASE)) {
+    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: dominio placeholder.");
+    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
+  }
+  return RAW_API_BASE;
+}
+
+function joinApiPath(path: string): string {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return API_BASE ? `${API_BASE}${cleanPath}` : cleanPath;
+}
+
+const API_BASE = resolveApiBaseUrl();
 export const api = axios.create({
   baseURL: API_BASE || undefined,
   withCredentials: COOKIE_AUTH_MODE,
@@ -288,9 +310,10 @@ async function refreshAccessToken(): Promise<string | null> {
       if (refresh) payload.refresh = refresh;
       if (COOKIE_AUTH_MODE) payload.auth_transport = "cookie";
       if (!refresh && !COOKIE_AUTH_MODE) return null;
-      const r = await axios.post(`${API_BASE}/api/token/refresh/`, payload, {
+      const r = await axios.post(joinApiPath("/api/token/refresh/"), payload, {
         withCredentials: COOKIE_AUTH_MODE,
         headers: COOKIE_AUTH_MODE ? { "X-Auth-Transport": "cookie" } : undefined,
+        timeout: API_TIMEOUT_MS,
       });
       const nextAccess = r?.data?.access as string | undefined;
       const nextRefresh = (r?.data?.refresh as string | undefined) || refresh;
