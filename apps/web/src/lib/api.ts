@@ -44,6 +44,23 @@ function isSupabaseProjectUrl(value: string): boolean {
   }
 }
 
+function isPlaceholderApiHost(value: string): boolean {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value, "https://placeholder.invalid");
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === "api.tu-dominio.com" ||
+      host.endsWith(".tu-dominio.com") ||
+      host === "tu-dominio.com" ||
+      host === "example.com" ||
+      host.endsWith(".example.com")
+    );
+  } catch {
+    return /tu-dominio\.com|example\.com/i.test(value);
+  }
+}
+
 const API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
 const COOKIE_AUTH_MODE =
   String(process.env.NEXT_PUBLIC_AUTH_COOKIE_MODE || "true").trim().toLowerCase() !== "false";
@@ -61,6 +78,9 @@ if (ENFORCE_DEPLOY_API_URL_GUARD && isLoopbackHost(API_BASE)) {
 }
 if (ENFORCE_DEPLOY_API_URL_GUARD && isSupabaseProjectUrl(API_BASE)) {
   throw new Error("Invalid NEXT_PUBLIC_API_URL: it must point to your Django API, not directly to *.supabase.co.");
+}
+if (ENFORCE_DEPLOY_API_URL_GUARD && isPlaceholderApiHost(API_BASE)) {
+  throw new Error("Invalid NEXT_PUBLIC_API_URL: placeholder domains are not allowed in production builds.");
 }
 
 export const api = axios.create({
