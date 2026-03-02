@@ -75,3 +75,6 @@ yarn-error.log*
 
 # Local connection debug scripts (may contain credentials)
 test_connection_host.py
+
+# Local design references (must not be pushed)
+designinspo/

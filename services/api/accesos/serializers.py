@@ -625,6 +625,12 @@ class ImportAprendicesValidateSerializer(serializers.Serializer):
 
 class ImportAprendicesConfirmSerializer(serializers.Serializer):
     import_id = serializers.CharField(max_length=128)
+    allow_skip_file_duplicates = serializers.BooleanField(required=False, default=False)
+    row_numbers = serializers.ListField(
+        child=serializers.IntegerField(min_value=2),
+        required=False,
+        allow_empty=False,
+    )
 
 
 class ChangeInitialPasswordSerializer(serializers.Serializer):

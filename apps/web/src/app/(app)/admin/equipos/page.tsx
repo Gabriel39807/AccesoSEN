@@ -9,8 +9,11 @@ import StatCard from "@/components/admin/StatCard";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import Button from "@/components/dashboard/shared/Button";
+import FormBanner from "@/components/feedback/FormBanner";
+import FieldError from "@/components/feedback/FieldError";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { parseApiError } from "@/lib/apiError";
 
 type Usuario = {
   id: number;
@@ -50,6 +53,8 @@ function useDebounced<T>(value: T, delay = 450) {
 }
 
 function safeErrorMessage(e: any) {
+  const parsed = parseApiError(e);
+  if (parsed.message) return parsed.message;
   return (
     e?.response?.data?.detail ??
     e?.response?.data?.motivo ??
@@ -175,6 +180,8 @@ export default function AdminEquiposPage() {
   const [accion, setAccion] = useState<"aprobado" | "rechazado">("aprobado");
   const [motivo, setMotivo] = useState("");
   const [revisando, setRevisando] = useState(false);
+  const [reviewBanner, setReviewBanner] = useState<string | null>(null);
+  const [reviewFieldError, setReviewFieldError] = useState<string>("");
 
   const usuariosMap = useMemo(() => {
     const m = new Map<number, Usuario>();
@@ -250,6 +257,8 @@ export default function AdminEquiposPage() {
     setEquipoSel(e);
     setAccion("aprobado");
     setMotivo("");
+    setReviewBanner(null);
+    setReviewFieldError("");
     setOpenRevisar(true);
   }
 
@@ -257,10 +266,13 @@ export default function AdminEquiposPage() {
     if (!equipoSel) return;
 
     if (accion === "rechazado" && !motivo.trim()) {
-      alert("Debes escribir el motivo de rechazo.");
+      setReviewFieldError("Debes escribir el motivo de rechazo.");
+      setReviewBanner("Para rechazar un equipo debes registrar el motivo.");
       return;
     }
 
+    setReviewBanner(null);
+    setReviewFieldError("");
     setRevisando(true);
     try {
       await api.patch(`/api/equipos/${equipoSel.id}/revisar/`, {
@@ -272,7 +284,7 @@ export default function AdminEquiposPage() {
       setEquipoSel(null);
       await cargarEquipos(page);
     } catch (e: any) {
-      alert(safeErrorMessage(e));
+      setReviewBanner(safeErrorMessage(e));
       await cargarEquipos(page);
     } finally {
       setRevisando(false);
@@ -350,7 +362,7 @@ export default function AdminEquiposPage() {
       ) : (
         <FilterBar
           footer={
-            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+            error ? <FormBanner type="error" message={error} /> : null
           }
         >
           <input
@@ -463,6 +475,7 @@ export default function AdminEquiposPage() {
             <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
               Selecciona aprobar o rechazar. Si rechazas, debes poner un motivo.
             </div>
+            {reviewBanner ? <FormBanner type="error" message={reviewBanner} /> : null}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -490,9 +503,14 @@ export default function AdminEquiposPage() {
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
                   placeholder="Ej: Equipo sin etiqueta / serial no coincide…"
                   value={motivo}
-                  onChange={(e) => setMotivo(e.target.value)}
+                  onChange={(e) => {
+                    setMotivo(e.target.value);
+                    if (reviewFieldError) setReviewFieldError("");
+                    if (reviewBanner) setReviewBanner(null);
+                  }}
                   disabled={accion !== "rechazado"}
                 />
+                <FieldError text={reviewFieldError} />
               </div>
             </div>
 
@@ -518,7 +536,3 @@ export default function AdminEquiposPage() {
     </div>
   );
 }
-
-
-
-

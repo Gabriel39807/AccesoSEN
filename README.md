@@ -105,6 +105,7 @@ Perfiles sugeridos:
 
 ### Web (`apps/web/.env`)
 - `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_API_TIMEOUT_MS` (opcional, default `20000`)
 - `NEXT_PUBLIC_SUPABASE_URL` (opcional, si usas `supabase-js`)
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (opcional, nunca `service_role`)
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` (opcional, fallback legacy)

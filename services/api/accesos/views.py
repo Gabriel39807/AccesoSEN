@@ -1650,9 +1650,16 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         s = ImportAprendicesValidateSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
-        result = validate_excel(s.validated_data["file"])
+        require_sede = not is_admin_sede(request.user)
+        default_sede = _scope_sede(request.user) if is_admin_sede(request.user) else None
+        result = validate_excel(
+            s.validated_data["file"],
+            require_sede=require_sede,
+            default_sede_code=default_sede,
+        )
         import_id = uuid4().hex
         cache_import_payload(import_id, request.user.id, result.rows, result.errors)
+        duplicates_in_file = [err for err in result.errors if err.get("code") == "DUPLICATE_IN_FILE"]
 
         return ok_response(
             {
@@ -1661,8 +1668,12 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                     "validos": len(result.rows),
                     "errores": len(result.errors),
                     "total": len(result.rows) + len(result.errors),
+                    "duplicados_archivo": len(duplicates_in_file),
                 },
                 "errores": result.errors,
+                "duplicates_in_file": duplicates_in_file,
+                "preview": result.rows[:25],
+                "row_numbers": [int(row.get("source_row") or 0) for row in result.rows],
             }
         )
 
@@ -1681,6 +1692,24 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
         rows = payload.get("rows", [])
         errors = payload.get("errors", [])
+        allow_skip_file_duplicates = bool(s.validated_data.get("allow_skip_file_duplicates", False))
+        duplicates_in_file = [err for err in errors if err.get("code") == "DUPLICATE_IN_FILE"]
+
+        if duplicates_in_file and not allow_skip_file_duplicates:
+            return error_response(
+                code=ErrorCode.DUPLICATES_IN_FILE,
+                message="Hay documentos duplicados dentro del archivo. Debes omitirlos para continuar.",
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"duplicates_in_file": duplicates_in_file},
+                field="Documento",
+            )
+
+        selected_row_numbers = s.validated_data.get("row_numbers")
+        if selected_row_numbers:
+            allowed_set = {int(v) for v in selected_row_numbers}
+            rows = [row for row in rows if int(row.get("source_row") or 0) in allowed_set]
+            errors = []
+
         if is_admin_sede(request.user):
             actor_sede = _scope_sede(request.user)
             if not actor_sede:
@@ -1716,8 +1745,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         parts = []
         if result.created_count:
             parts.append(f"{result.created_count} creados")
-        if result.updated_count:
-            parts.append(f"{result.updated_count} actualizados")
+        if result.skipped_count:
+            parts.append(f"{result.skipped_count} omitidos")
+        if result.failed_count:
+            parts.append(f"{result.failed_count} fallidos")
         if result.errors_count:
             parts.append(f"{result.errors_count} con errores")
         resumen = ", ".join(parts) if parts else "Sin cambios"
@@ -1733,6 +1764,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 "created": result.created_count,
                 "updated": result.updated_count,
                 "errors": result.errors_count,
+                "skipped": result.skipped_count,
+                "failed": result.failed_count,
+                "processed": len(result.row_results),
+                "row_results": result.row_results,
+                "duplicates_conflicts": [r for r in result.row_results if r.get("code") == "DOCUMENT_EXISTS"],
             }
         )
 

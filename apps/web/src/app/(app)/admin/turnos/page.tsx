@@ -9,9 +9,11 @@ import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import Button from "@/components/dashboard/shared/Button";
 import { IconClock } from "@/components/aprendiz/dashboard/DashboardIcons";
+import FormBanner from "@/components/feedback/FormBanner";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
 import { api } from "@/lib/api";
+import { parseApiError } from "@/lib/apiError";
 import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
@@ -75,16 +77,7 @@ function normalizarJornada(j: Turno["jornada"]) {
 }
 
 function safeErrorMessage(e: any) {
-  return (
-    (typeof e?.response?.data?.message === "string" ? e.response.data.message : null) ??
-    (typeof e?.response?.data?.detail === "string" ? e.response.data.detail : null) ??
-    (typeof e?.response?.data?.motivo === "string" ? e.response.data.motivo : null) ??
-    e?.response?.data?.detail ??
-    e?.response?.data?.motivo ??
-    (typeof e?.response?.data === "object" ? JSON.stringify(e.response.data) : null) ??
-    e?.message ??
-    "Ocurrio un error."
-  );
+  return parseApiError(e).message;
 }
 
 function StatSkeleton() {
@@ -225,13 +218,14 @@ export default function AdminTurnosPage() {
     try {
       const res = await api.post(`/api/turnos/${turnoFinalizar.id}/finalizar_admin/`);
       if (res?.data?.permitido === false) {
-        alert(res?.data?.motivo ?? "No se pudo finalizar el turno.");
+        setError(String(res?.data?.motivo || "No se pudo finalizar el turno. Verifica permisos o estado del turno y vuelve a intentar."));
+        return;
       }
       setOpenFinalizar(false);
       setTurnoFinalizar(null);
       await cargarTurnos();
     } catch (e: any) {
-      alert(safeErrorMessage(e) || "No se pudo finalizar el turno.");
+      setError(safeErrorMessage(e) || "No se pudo finalizar el turno. Revisa tu conexión e intenta nuevamente.");
       await cargarTurnos();
     } finally {
       setFinalizando(false);
@@ -281,7 +275,7 @@ export default function AdminTurnosPage() {
       ) : (
         <FilterBar
           footer={
-            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+            error ? <FormBanner type="error" message={error} /> : null
           }
         >
           <select

@@ -47,6 +47,11 @@ function isSupabaseProjectUrl(value: string): boolean {
 const API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
 const COOKIE_AUTH_MODE =
   String(process.env.NEXT_PUBLIC_AUTH_COOKIE_MODE || "true").trim().toLowerCase() !== "false";
+const API_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || 20000);
+  if (!Number.isFinite(raw)) return 20000;
+  return Math.max(5000, Math.trunc(raw));
+})();
 
 if (ENFORCE_DEPLOY_API_URL_GUARD && !API_BASE) {
   throw new Error("Missing NEXT_PUBLIC_API_URL for production build.");
@@ -61,6 +66,7 @@ if (ENFORCE_DEPLOY_API_URL_GUARD && isSupabaseProjectUrl(API_BASE)) {
 export const api = axios.create({
   baseURL: API_BASE || undefined,
   withCredentials: COOKIE_AUTH_MODE,
+  timeout: API_TIMEOUT_MS,
 });
 
 const nullableText = z.union([z.string(), z.null(), z.undefined()]).transform((value) => {

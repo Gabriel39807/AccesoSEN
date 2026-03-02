@@ -163,10 +163,10 @@ export default function LoginPage() {
         password,
         expected_role: roleForBackend(),
         auth_transport: "cookie",
-      });
+      }, { timeout: 20000 });
       saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh || "" });
 
-      const meRes = await api.get<MeResponse>("/api/me/");
+      const meRes = await api.get<MeResponse>("/api/me/", { timeout: 20000 });
       const rol = meRes.data.usuario.rol;
 
       if (role === "admin" && !["superadmin", "admin_sede"].includes(rol)) {
@@ -219,7 +219,7 @@ export default function LoginPage() {
       const optionsRes = await api.post<PasskeyAuthOptionsResponse>("/api/auth/passkeys/auth/options/", {
         username: username.trim(),
         expected_role: roleForBackend(),
-      });
+      }, { timeout: 20000 });
       const options = optionsRes.data;
 
       const publicKey: PublicKeyCredentialRequestOptions = {
@@ -246,10 +246,10 @@ export default function LoginPage() {
         credential_id: credentialId,
         expected_role: roleForBackend(),
         auth_transport: "cookie",
-      });
+      }, { timeout: 20000 });
       saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh || "" });
 
-      const meRes = await api.get<MeResponse>("/api/me/");
+      const meRes = await api.get<MeResponse>("/api/me/", { timeout: 20000 });
       const rol = meRes.data.usuario.rol;
       if (rol === "aprendiz") {
         router.replace("/aprendiz/inicio");
