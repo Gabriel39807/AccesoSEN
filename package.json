@@ -1,0 +1,11 @@
+{
+  "name": "sadi-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix apps/web run build",
+    "lint": "npm --prefix apps/web run lint",
+    "typecheck": "npm --prefix apps/web run typecheck",
+    "vercel-build": "npm --prefix apps/web ci && npm --prefix apps/web run build"
+  }
+}
+
