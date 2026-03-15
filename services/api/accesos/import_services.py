@@ -532,15 +532,9 @@ def validate_excel(
     if duplicate_docs:
         filtered_rows: list[dict] = []
         duplicate_errors: list[dict] = []
-        duplicate_row_numbers = {
-            row_num
-            for row_num, document in row_doc_map.items()
-            if document in duplicate_docs
-        }
+        duplicate_row_numbers = {row_num for row_num, document in row_doc_map.items() if document in duplicate_docs}
         existing_duplicate_rows = {
-            int(err.get("row") or 0)
-            for err in errors
-            if str(err.get("code") or "").upper() == "DUPLICATE_IN_FILE"
+            int(err.get("row") or 0) for err in errors if str(err.get("code") or "").upper() == "DUPLICATE_IN_FILE"
         }
         emitted_duplicate_rows = set(existing_duplicate_rows)
         for row in rows:
@@ -610,7 +604,9 @@ def execute_aprendices_import(
 
     try:
         with transaction.atomic():
-            sede_codes = [str(r.get("sede_principal", "")).strip() for r in rows if str(r.get("sede_principal", "")).strip()]
+            sede_codes = [
+                str(r.get("sede_principal", "")).strip() for r in rows if str(r.get("sede_principal", "")).strip()
+            ]
             sedes_by_code = {s.code: s for s in Sede.objects.filter(code__in=sede_codes)}
             existing_users = {
                 str(item["documento"]): item
@@ -647,19 +643,12 @@ def execute_aprendices_import(
                 )
                 username = _resolve_import_username(username, documento, username_exists=_username_exists)
                 if not username:
-                    failed_count += 1
-                    row_results.append(
-                        {
-                            "row": source_row,
-                            "documento": documento,
-                            "status": "failed",
-                            "code": "USERNAME_EXISTS",
-                            "field": "Nombres",
-                            "reason": "No se pudo asignar un username unico para el aprendiz.",
-                            "username_asignado": None,
-                        }
+                    raise ImportServiceError(
+                        code="USERNAME_EXISTS",
+                        message="No se pudo asignar un username unico para el aprendiz.",
+                        field="Nombres",
+                        detail={"row": source_row, "documento": documento},
                     )
-                    continue
 
                 if documento in existing_docs:
                     existing = existing_users.get(documento) or {}
@@ -682,19 +671,12 @@ def execute_aprendices_import(
 
                 sede_obj = sedes_by_code.get(sede_code)
                 if not sede_obj:
-                    failed_count += 1
-                    row_results.append(
-                        {
-                            "row": source_row,
-                            "documento": documento,
-                            "status": "failed",
-                            "code": "INVALID_SEDE",
-                            "field": "Sede",
-                            "reason": "Sede invalida para la fila importada.",
-                            "username_asignado": None,
-                        }
+                    raise ImportServiceError(
+                        code="INVALID_SEDE",
+                        message="Sede invalida para la fila importada.",
+                        field="Sede",
+                        detail={"row": source_row, "documento": documento, "sede_principal": sede_code},
                     )
-                    continue
 
                 email = str(row.get("email", "")).strip().lower()
                 if email:
@@ -704,19 +686,12 @@ def execute_aprendices_import(
                         sede=sede_obj,
                     )
                     if not domain_check.allowed:
-                        failed_count += 1
-                        row_results.append(
-                            {
-                                "row": source_row,
-                                "documento": documento,
-                                "status": "failed",
-                                "code": domain_check.code or ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED,
-                                "field": "Correo",
-                                "reason": domain_check.message or "Dominio de correo no permitido para esta sede.",
-                                "username_asignado": None,
-                            }
+                        raise ImportServiceError(
+                            code=domain_check.code or ErrorCode.EMAIL_DOMAIN_NOT_ALLOWED,
+                            message=domain_check.message or "Dominio de correo no permitido para esta sede.",
+                            field="Correo",
+                            detail={"row": source_row, "documento": documento, "email": email},
                         )
-                        continue
 
                 created = Usuario.objects.create(
                     username=username,

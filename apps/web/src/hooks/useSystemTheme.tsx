@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 
 export type SystemThemeConfig = {
   nombre_institucion: string;
+  branding_preset?: string | null;
   color_aprendiz_light: string;
   color_aprendiz_dark: string;
   color_admin_light: string;
@@ -22,6 +23,7 @@ type SystemThemeContextValue = {
 
 const DEFAULT_CONFIG: SystemThemeConfig = {
   nombre_institucion: (process.env.NEXT_PUBLIC_INSTITUTION_NAME || "Institucion").trim() || "Institucion",
+  branding_preset: null,
   color_aprendiz_light: "#14B8A6",
   color_aprendiz_dark: "#0F766E",
   color_admin_light: "#3B82F6",
@@ -65,6 +67,20 @@ export function SystemThemeProvider({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     refresh();
+  }, []);
+
+  useEffect(() => {
+    function onRefreshRequested() {
+      refresh();
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("system-theme:refresh", onRefreshRequested);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("system-theme:refresh", onRefreshRequested);
+      }
+    };
   }, []);
 
   const value = useMemo<SystemThemeContextValue>(

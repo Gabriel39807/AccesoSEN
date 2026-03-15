@@ -16,6 +16,7 @@ const securityHeaders = [
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https:",
       "connect-src 'self' http: https: ws: wss:",
+      "frame-src 'self' https://view.officeapps.live.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",

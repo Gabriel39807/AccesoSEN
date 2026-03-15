@@ -3,24 +3,29 @@ from __future__ import annotations
 from rest_framework.permissions import BasePermission
 
 from accesos.domain.services.authorization import AuthorizationService
+from accesos.models import Usuario
 
 ADMIN_ROLES = {"superadmin", "admin_sede", "admin"}
 
 
 def is_superadmin(user) -> bool:
-    return bool(user and getattr(user, "is_authenticated", False) and AuthorizationService.is_superadmin(user))
+    return bool(
+        user
+        and getattr(user, "is_authenticated", False)
+        and AuthorizationService.runtime_role_for_user(user) == AuthorizationService.SUPERADMIN_CODE
+    )
 
 
 def is_admin_sede(user) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    return "admin_sede" in AuthorizationService.role_codes(user)
+    return AuthorizationService.runtime_role_for_user(user) == AuthorizationService.ADMIN_SEDE_CODE
 
 
 def is_admin_role(user) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return False
-    return bool(AuthorizationService.role_codes(user).intersection(ADMIN_ROLES))
+    return AuthorizationService.runtime_role_for_user(user) in ADMIN_ROLES
 
 
 class IsAdmin(BasePermission):
@@ -36,10 +41,18 @@ class IsSuperAdmin(BasePermission):
 class IsGuarda(BasePermission):
     def has_permission(self, request, view):
         user = getattr(request, "user", None)
-        return bool(user and user.is_authenticated and "guarda" in AuthorizationService.role_codes(user))
+        return bool(
+            user
+            and user.is_authenticated
+            and AuthorizationService.runtime_role_for_user(user) == Usuario.Rol.GUARDA
+        )
 
 
 class IsAprendiz(BasePermission):
     def has_permission(self, request, view):
         user = getattr(request, "user", None)
-        return bool(user and user.is_authenticated and "aprendiz" in AuthorizationService.role_codes(user))
+        return bool(
+            user
+            and user.is_authenticated
+            and AuthorizationService.runtime_role_for_user(user) == Usuario.Rol.APRENDIZ
+        )

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from django.db.models import Q, QuerySet
 
-from accesos.models import RolePermission, UserMembership, Usuario
+from accesos.models import Notificacion, RolePermission, UserMembership, Usuario
 
 
 @dataclass(frozen=True)
@@ -72,6 +72,16 @@ class AuthorizationService:
         return UserMembership.objects.filter(user=user, is_active=True).select_related("role")
 
     @classmethod
+    def _memberships_for_role(cls, user: Usuario, role_code: str | None = None):
+        qs = cls._active_memberships_qs(user)
+        normalized = cls._normalize_role_code(role_code)
+        if not normalized:
+            return qs.order_by("-is_primary", "id")
+        if normalized == cls.ADMIN_SEDE_CODE:
+            return qs.filter(role__code__in=[cls.ADMIN_SEDE_CODE, cls.LEGACY_ADMIN_CODE]).order_by("-is_primary", "id")
+        return qs.filter(role__code=normalized).order_by("-is_primary", "id")
+
+    @classmethod
     def role_codes(cls, user: Usuario) -> set[str]:
         if not user or not getattr(user, "is_authenticated", False):
             return set()
@@ -83,6 +93,20 @@ class AuthorizationService:
         if getattr(user, "is_superuser", False):
             role_codes.add(cls.SUPERADMIN_CODE)
         return role_codes
+
+    @classmethod
+    def runtime_role_for_user(cls, user: Usuario) -> str:
+        if not user or not getattr(user, "is_authenticated", False):
+            return ""
+        active_role = cls._normalize_role_code(getattr(user, "_active_role", ""))
+        if active_role and active_role in cls.role_codes(user):
+            return active_role
+        return cls.default_role_for_user(user)
+
+    @classmethod
+    def runtime_role_codes(cls, user: Usuario) -> set[str]:
+        active_role = cls.runtime_role_for_user(user)
+        return {active_role} if active_role else set()
 
     @classmethod
     def allowed_sede_ids(cls, user: Usuario) -> set[int]:
@@ -98,15 +122,67 @@ class AuthorizationService:
         return membership_sede_ids
 
     @classmethod
+    def allowed_sede_ids_for_roles(cls, user: Usuario, role_codes: set[str] | None = None) -> set[int]:
+        if not user or not getattr(user, "is_authenticated", False):
+            return set()
+
+        if role_codes and cls.SUPERADMIN_CODE in role_codes:
+            return set()
+        if not role_codes and cls.is_superadmin(user):
+            return set()
+
+        qs = cls._active_memberships_qs(user).filter(sede__isnull=False)
+        normalized_roles = {cls._normalize_role_code(code) for code in (role_codes or set()) if code}
+        if normalized_roles:
+            membership_role_codes: set[str] = set()
+            for code in normalized_roles:
+                if code == cls.ADMIN_SEDE_CODE:
+                    membership_role_codes.update({cls.ADMIN_SEDE_CODE, cls.LEGACY_ADMIN_CODE})
+                else:
+                    membership_role_codes.add(code)
+            qs = qs.filter(role__code__in=membership_role_codes)
+        return set(qs.values_list("sede_id", flat=True))
+
+    @classmethod
+    def primary_membership(cls, user: Usuario, *, role_code: str | None = None):
+        if not user or not getattr(user, "is_authenticated", False):
+            return None
+        effective_role = role_code or cls.default_role_for_user(user)
+        if effective_role:
+            membership = cls._memberships_for_role(user, effective_role).first()
+            if membership is not None:
+                return membership
+        return cls._memberships_for_role(user).first()
+
+    @classmethod
+    def default_sede(cls, user: Usuario, *, role_code: str | None = None):
+        membership = cls.primary_membership(user, role_code=role_code)
+        if membership is None:
+            return None
+        return getattr(membership, "sede", None)
+
+    @classmethod
+    def default_sede_id(cls, user: Usuario, *, role_code: str | None = None) -> int | None:
+        sede = cls.default_sede(user, role_code=role_code)
+        return getattr(sede, "id", None)
+
+    @classmethod
+    def default_sede_code(cls, user: Usuario, *, role_code: str | None = None) -> str:
+        sede = cls.default_sede(user, role_code=role_code)
+        code = getattr(sede, "code", None)
+        return (str(code or "").strip()) or ""
+
+    @classmethod
     def context(cls, user: Usuario) -> AuthorizationContext:
+        runtime_roles = cls.runtime_role_codes(user)
         return AuthorizationContext(
-            role_codes=cls.role_codes(user),
-            sede_ids=cls.allowed_sede_ids(user),
+            role_codes=runtime_roles or cls.role_codes(user),
+            sede_ids=cls.allowed_sede_ids_for_roles(user, runtime_roles) or cls.allowed_sede_ids(user),
         )
 
     @classmethod
     def is_superadmin(cls, user: Usuario) -> bool:
-        return cls.SUPERADMIN_CODE in cls.role_codes(user)
+        return cls.SUPERADMIN_CODE in (cls.runtime_role_codes(user) or cls.role_codes(user))
 
     @classmethod
     def _matches_sede_scope(cls, user: Usuario, sede_id: int | None = None, obj=None) -> bool:
@@ -126,7 +202,10 @@ class AuthorizationService:
         if sede_id is None:
             return False
 
-        return int(sede_id) in cls.allowed_sede_ids(user)
+        runtime_roles = cls.runtime_role_codes(user)
+        return int(sede_id) in (
+            cls.allowed_sede_ids_for_roles(user, runtime_roles) if runtime_roles else cls.allowed_sede_ids(user)
+        )
 
     @classmethod
     def _matches_own_scope(cls, user: Usuario, obj=None) -> bool:
@@ -137,6 +216,12 @@ class AuthorizationService:
         for owner_field in ("user_id", "usuario_id", "propietario_id", "guarda_id"):
             if hasattr(obj, owner_field) and getattr(obj, owner_field, None) == getattr(user, "id", None):
                 return True
+        if isinstance(obj, Notificacion) and getattr(obj, "user_id", None) is None:
+            target_role = cls._normalize_role_code(getattr(obj, "rol_objetivo", None))
+            runtime_roles = cls.runtime_role_codes(user) or cls.role_codes(user)
+            if not target_role:
+                return True
+            return target_role in runtime_roles
         return False
 
     @classmethod
@@ -148,7 +233,7 @@ class AuthorizationService:
         if cls.is_superadmin(user):
             return True
 
-        role_codes = cls.role_codes(user)
+        role_codes = cls.runtime_role_codes(user) or cls.role_codes(user)
         if not role_codes:
             return False
 
@@ -169,7 +254,7 @@ class AuthorizationService:
                 # In that case, allow the permission only when the actor has at
                 # least one active sede membership.
                 if obj is None and sede_id is None:
-                    if bool(cls.allowed_sede_ids(user)):
+                    if bool(cls.allowed_sede_ids_for_roles(user, role_codes)):
                         return True
                 elif cls._matches_sede_scope(user, sede_id=sede_id, obj=obj):
                     return True
@@ -187,8 +272,8 @@ class AuthorizationService:
         if cls.is_superadmin(user):
             return qs
 
-        roles = cls.role_codes(user)
-        sede_ids = cls.allowed_sede_ids(user)
+        roles = cls.runtime_role_codes(user) or cls.role_codes(user)
+        sede_ids = cls.allowed_sede_ids_for_roles(user, roles)
         resource_rules = cls._RESOURCE_SCOPE_RULES.get(resource, {})
         if not resource_rules:
             # Unknown resource -> fail secure.
@@ -213,7 +298,7 @@ class AuthorizationService:
     def can_manage_role(cls, actor: Usuario, target_role_code: str) -> bool:
         if cls.is_superadmin(actor):
             return True
-        if "admin_sede" in cls.role_codes(actor):
+        if "admin_sede" in (cls.runtime_role_codes(actor) or cls.role_codes(actor)):
             return target_role_code in {"guarda", "aprendiz"}
         return False
 
@@ -229,3 +314,19 @@ class AuthorizationService:
             if role_code in roles:
                 return role_code
         return ""
+
+    @classmethod
+    def resolve_login_role(cls, user: Usuario, expected_role: str | None) -> str:
+        if not user or not getattr(user, "is_authenticated", False):
+            return ""
+        available_roles = cls.role_codes(user)
+        requested = cls._normalize_role_code(expected_role)
+        if not requested:
+            return cls.default_role_for_user(user)
+        if requested == cls.ADMIN_SEDE_CODE:
+            if cls.SUPERADMIN_CODE in available_roles:
+                return cls.SUPERADMIN_CODE
+            if cls.ADMIN_SEDE_CODE in available_roles:
+                return cls.ADMIN_SEDE_CODE
+            return ""
+        return requested if requested in available_roles else ""

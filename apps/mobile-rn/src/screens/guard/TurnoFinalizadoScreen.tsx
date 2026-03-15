@@ -1,23 +1,27 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+
+import { useSystemBranding } from "../../theme/system-branding";
+import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../ui/modern";
 import { useSessionStore } from "../../store/session";
 
 export function TurnoFinalizadoScreen() {
-  const signOut = useSessionStore((s) => s.signOut);
+  const signOut = useSessionStore((state) => state.signOut);
+  const { config } = useSystemBranding();
 
   return (
-    <View style={{ flex: 1, padding: 16, justifyContent: "center", gap: 14 }}>
-      <Text style={{ fontSize: 28, fontWeight: "900", textAlign: "center" }}>Turno Finalizado</Text>
-      <Text style={{ textAlign: "center", opacity: 0.7 }}>
-        Tu turno ha sido cerrado correctamente. Gracias por tu labor en el control de acceso.
-      </Text>
-
-      <Pressable
-        onPress={signOut}
-        style={{ backgroundColor: "#16a34a", padding: 14, borderRadius: 999, alignItems: "center" }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "900" }}>Cerrar sesión</Text>
-      </Pressable>
-    </View>
+    <ModernScreen contentStyle={{ justifyContent: "center" }}>
+      <FadeInCard style={{ gap: 18 }}>
+        <Pill text="TURNO CERRADO" />
+        <TitleBlock
+          title="Turno finalizado"
+          subtitle={`${config.nombre_institucion || "La institucion"} registro correctamente el cierre de tu jornada.`}
+        />
+        <TitleBlock
+          title="Todo quedo auditado"
+          subtitle="Gracias por tu labor en el control de acceso. Puedes cerrar sesion de forma segura."
+        />
+        <ModernButton onPress={signOut} label="Cerrar sesion" icon="log-out-outline" />
+      </FadeInCard>
+    </ModernScreen>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+
 import * as Auth from "../../src/api/auth";
 import { toUiErrorMessage } from "../../src/api/client";
 import { sanitizeDigits, validatePhone10 } from "../../src/lib/validators";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
+import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock, uiTheme } from "../../src/ui/modern";
 
 type PasswordRule = {
   id: string;
@@ -129,35 +131,83 @@ export default function AprendizPerfil() {
 
   return (
     <ModernScreen scroll>
-      <FadeInCard>
+      <FadeInCard delay={0} style={{ gap: 16 }}>
         <Pill text="MI PERFIL" />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock
-            title={loadingPerfil ? "Cargando..." : `${perfil?.first_name || "-"} ${perfil?.last_name || ""}`.trim()}
-            subtitle={`Documento ${perfil?.documento || "-"}`}
-          />
+        <View
+          style={{
+            borderRadius: 30,
+            backgroundColor: "rgba(15,118,110,0.1)",
+            borderWidth: 1,
+            borderColor: "rgba(15,118,110,0.16)",
+            padding: 18,
+            gap: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
+            <View style={{ flex: 1, gap: 8 }}>
+              <Text style={{ color: uiTheme.accentDeep, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+                Identidad del aprendiz
+              </Text>
+              <Text style={{ color: uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
+                {loadingPerfil ? "Cargando perfil..." : `${perfil?.first_name || "-"} ${perfil?.last_name || ""}`.trim()}
+              </Text>
+              <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
+                Documento {perfil?.documento || "-"} | Programa {perfil?.programa_formacion || "-"}
+              </Text>
+            </View>
+            <View
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: 18,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "rgba(255,255,255,0.62)",
+                borderWidth: 1,
+                borderColor: "rgba(15,118,110,0.12)",
+              }}
+            >
+              <Ionicons name="person-circle-outline" size={24} color={uiTheme.accentDeep} />
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
+              <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Correo</Text>
+              <Text style={{ color: uiTheme.ink, fontWeight: "900", marginTop: 6 }}>{perfil?.email || "-"}</Text>
+            </View>
+            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
+              <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Sede</Text>
+              <Text style={{ color: uiTheme.ink, fontWeight: "900", marginTop: 6 }}>{perfil?.sede_principal || "-"}</Text>
+            </View>
+          </View>
+
+          {perfil?.pending_email_change ? (
+            <View style={{ borderRadius: 18, padding: 12, backgroundColor: "rgba(161,98,7,0.08)", borderWidth: 1, borderColor: "rgba(161,98,7,0.16)" }}>
+              <Text style={{ color: uiTheme.warn, fontWeight: "900" }}>Correo pendiente: {perfil.pending_email_change}</Text>
+            </View>
+          ) : null}
         </View>
-        <Text style={{ color: "#64748b", marginTop: 6 }}>Correo: {perfil?.email || "-"}</Text>
-        <Text style={{ color: "#64748b" }}>Programa: {perfil?.programa_formacion || "-"}</Text>
-        <Text style={{ color: "#64748b" }}>Sede: {perfil?.sede_principal || "-"}</Text>
-        {perfil?.pending_email_change ? (
-          <Text style={{ color: "#b45309" }}>Correo pendiente: {perfil.pending_email_change}</Text>
-        ) : null}
       </FadeInCard>
 
-      <FadeInCard delay={70}>
-        <TitleBlock title="Datos de contacto" subtitle="Solo puedes editar telefono y correo con OTP." />
-        <View style={{ marginTop: 8, gap: 8 }}>
-          <InputField
-            label="Telefono"
-            value={telefono}
-            onChangeText={(v) => setTelefono(sanitizeDigits(v).slice(0, 10))}
-            placeholder="3001234567"
-            keyboardType="phone-pad"
-            maxLength={10}
-          />
-          <ModernButton label={saving ? "Guardando..." : "Guardar telefono"} disabled={saving} onPress={guardarTelefono} />
+      <FadeInCard delay={70} style={{ gap: 14 }}>
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Contacto</Text>
+          <TitleBlock title="Actualiza tus datos" subtitle="Solo puedes editar telefono y solicitar cambio de correo mediante OTP." />
+        </View>
 
+        <InputField
+          label="Telefono"
+          value={telefono}
+          onChangeText={(v) => setTelefono(sanitizeDigits(v).slice(0, 10))}
+          placeholder="3001234567"
+          keyboardType="phone-pad"
+          maxLength={10}
+        />
+        <ModernButton label={saving ? "Guardando..." : "Guardar telefono"} disabled={saving} onPress={guardarTelefono} />
+
+        <View style={{ borderRadius: 22, padding: 14, gap: 10, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
+          <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Cambio de correo con OTP</Text>
           <InputField
             label="Nuevo correo"
             value={newEmail}
@@ -190,27 +240,30 @@ export default function AprendizPerfil() {
         </View>
       </FadeInCard>
 
-      <FadeInCard delay={120}>
-        <TitleBlock title="Cambiar contrasena" subtitle="Requiere contrasena actual." />
-        <View style={{ marginTop: 8, gap: 8 }}>
-          <InputField label="Contrasena actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
-          <InputField label="Nueva contrasena" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
-          <InputField label="Confirmar contrasena" value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="********" />
-
-          <View style={{ borderWidth: 1, borderColor: "#dbeafe", borderRadius: 12, padding: 12, gap: 6, backgroundColor: "#f8fafc" }}>
-            <Text style={{ fontWeight: "700", color: "#0f172a" }}>Checklist de seguridad</Text>
-            {rules.map((rule) => (
-              <Text key={rule.id} style={{ color: rule.valid ? "#15803d" : "#64748b" }}>
-                {rule.valid ? "[OK]" : "[ ]"} {rule.label}
-              </Text>
-            ))}
-          </View>
-
-          {msg ? <Text style={{ color: msg.toLowerCase().includes("actualizada") ? "#15803d" : "#b91c1c" }}>{msg}</Text> : null}
-
-          <ModernButton label={saving ? "Guardando..." : "Actualizar contrasena"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
-          {(saving || loadingPerfil) ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
+      <FadeInCard delay={120} style={{ gap: 14 }}>
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Seguridad</Text>
+          <TitleBlock title="Cambiar contrasena" subtitle="Requiere tu contrasena actual y valida la nueva con las reglas de seguridad." />
         </View>
+
+        <InputField label="Contrasena actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
+        <InputField label="Nueva contrasena" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
+        <InputField label="Confirmar contrasena" value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="********" />
+
+        <View style={{ borderRadius: 22, padding: 14, gap: 8, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
+          <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Checklist de seguridad</Text>
+          {rules.map((rule) => (
+            <View key={rule.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Ionicons name={rule.valid ? "checkmark-circle" : "ellipse-outline"} size={18} color={rule.valid ? uiTheme.success : uiTheme.muted} />
+              <Text style={{ color: rule.valid ? uiTheme.success : uiTheme.inkSoft }}>{rule.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {msg ? <Text style={{ color: msg.toLowerCase().includes("actualizada") || msg.toLowerCase().includes("actualizado") ? uiTheme.success : uiTheme.danger, lineHeight: 20 }}>{msg}</Text> : null}
+
+        <ModernButton label={saving ? "Guardando..." : "Actualizar contrasena"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
+        {saving || loadingPerfil ? <ActivityIndicator style={{ marginTop: 4 }} color={uiTheme.accent} /> : null}
       </FadeInCard>
     </ModernScreen>
   );

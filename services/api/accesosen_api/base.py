@@ -20,8 +20,9 @@ from django.core.exceptions import ImproperlyConfigured
 BASE_DIR = Path(__file__).resolve().parent.parent
 CURRENT_DJANGO_ENV = os.getenv("DJANGO_ENV", "development").strip().lower()
 
-# Load local .env first when present.
+# Load base env and then allow a local override for demo/dev machines.
 load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env.local", override=True)
 load_dotenv()
 
 
@@ -88,6 +89,32 @@ def _parse_postgres_database_url(url: str) -> dict[str, object]:
         "SSLMODE": str(sslmode or "").strip(),
         "PGBOUNCER": pgbouncer_raw in {"1", "true", "yes", "on"},
     }
+
+
+def _validate_runtime_database_guard(
+    *,
+    django_env: str,
+    host: str,
+    port: str,
+    use_pgbouncer: bool,
+):
+    """Fail fast for known unsafe production DB pooler configurations."""
+    env_name = str(django_env or "").strip().lower()
+    if env_name != "production":
+        return
+
+    host_value = str(host or "").strip().lower()
+    port_value = str(port or "").strip()
+
+    # Supabase pooler on 5432 is session mode and may exhaust clients under API load.
+    if host_value.endswith(".pooler.supabase.com") and port_value == "5432":
+        raise ImproperlyConfigured(
+            "Unsafe DATABASE configuration for production: Supabase pooler host on port 5432 "
+            "uses session mode and can exhaust clients. Use port 6543 with pgbouncer=true."
+        )
+
+    if use_pgbouncer and not port_value:
+        raise ImproperlyConfigured("DATABASE port is required when DATABASE_USE_PGBOUNCER=true.")
 
 
 def _build_cache_config() -> dict:
@@ -252,6 +279,12 @@ if DATABASE_URL:
     db_url = _parse_postgres_database_url(DATABASE_URL)
     db_sslmode = str(db_url.get("SSLMODE") or DATABASE_SSLMODE).strip() or "require"
     db_use_pgbouncer = env_bool("DATABASE_USE_PGBOUNCER", bool(db_url.get("PGBOUNCER")))
+    _validate_runtime_database_guard(
+        django_env=CURRENT_DJANGO_ENV,
+        host=str(db_url.get("HOST") or ""),
+        port=str(db_url.get("PORT") or ""),
+        use_pgbouncer=db_use_pgbouncer,
+    )
     default_conn_max_age = "0" if db_use_pgbouncer else "60"
     DATABASES = {
         "default": {
@@ -270,6 +303,14 @@ if DATABASE_URL:
     }
 elif DATABASE_ENGINE == "django.db.backends.postgresql":
     db_use_pgbouncer = env_bool("DATABASE_USE_PGBOUNCER", False)
+    db_host = env_required("DATABASE_HOST")
+    db_port = env_required("DATABASE_PORT")
+    _validate_runtime_database_guard(
+        django_env=CURRENT_DJANGO_ENV,
+        host=db_host,
+        port=db_port,
+        use_pgbouncer=db_use_pgbouncer,
+    )
     default_conn_max_age = "0" if db_use_pgbouncer else "60"
     DATABASES = {
         "default": {
@@ -277,8 +318,8 @@ elif DATABASE_ENGINE == "django.db.backends.postgresql":
             "NAME": env_required("DATABASE_NAME"),
             "USER": env_required("DATABASE_USER"),
             "PASSWORD": env_required("DATABASE_PASSWORD"),
-            "HOST": env_required("DATABASE_HOST"),
-            "PORT": env_required("DATABASE_PORT"),
+            "HOST": db_host,
+            "PORT": db_port,
             "OPTIONS": {
                 "sslmode": DATABASE_SSLMODE,
             },
@@ -329,6 +370,10 @@ REST_FRAMEWORK = {
         "user": os.getenv("THROTTLE_USER_RATE", "120/minute"),
     },
 }
+
+# drf_yasg 1.21+ recommends disabling compat renderers to avoid deprecated
+# dotted format suffixes in Swagger/Redoc routes.
+SWAGGER_USE_COMPAT_RENDERERS = False
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_MINUTES", "15"))),
@@ -398,7 +443,7 @@ if DEFAULT_SUPERADMIN_AUTO_CREATE and not DEFAULT_SUPERADMIN_PASSWORD:
 WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "")
 WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "SADI")
 WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "")
-WEBAUTHN_MOCK = env_bool("WEBAUTHN_MOCK", True)
+WEBAUTHN_MOCK = env_bool("WEBAUTHN_MOCK", CURRENT_DJANGO_ENV != "production")
 
 enforce_production_security_guards(
     django_env=CURRENT_DJANGO_ENV,

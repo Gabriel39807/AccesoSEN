@@ -12,7 +12,7 @@ import io
 import logging
 import secrets
 import time
-from datetime import date
+from datetime import date, timedelta
 from uuid import uuid4
 
 import qrcode
@@ -20,6 +20,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
+from django.forms.models import model_to_dict
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -31,7 +32,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .api_responses import error_response, ok_response
-from .api.permissions import RequiresPermission
+from .api.permissions import RequiresControlPanelSession, RequiresPermission, resolve_control_panel_session
 from .domain.services.authorization import AuthorizationService
 from .domain.services.email_domain_service import EmailDomainService
 from .domain.services.policy_service import PolicyService
@@ -54,7 +55,11 @@ from .metrics import incr as incr_metric
 from .models import (
     Acceso,
     AllowedEmailDomain,
+    BrandingPreset,
     ConfiguracionSistema,
+    ControlPanelAuditEvent,
+    ControlPanelQuotaCounter,
+    ControlPanelSession,
     EmailChangeOTP,
     Equipo,
     Notificacion,
@@ -65,6 +70,7 @@ from .models import (
     RolePermission,
     Sede,
     SedePolicy,
+    TenantBrandingConfig,
     Turno,
     UserMembership,
     Usuario,
@@ -78,9 +84,10 @@ from .otp_services import (
     create_otp_for_user,
     generate_otp_code,
     hash_code,
+    send_control_panel_otp_email,
     send_password_reset_email,
 )
-from .permissions import IsAdmin, IsAprendiz, IsGuarda, IsSuperAdmin, is_admin_role, is_admin_sede, is_superadmin
+from .permissions import IsAprendiz, IsGuarda, is_admin_role, is_admin_sede, is_superadmin
 from .rate_limit import bump_with_lock, get_client_ip, get_lock_remaining, is_locked
 from .serializers import (
     AccesoSerializer,
@@ -89,8 +96,11 @@ from .serializers import (
     AprendizEmailChangeRequestSerializer,
     AprendizPerfilSerializer,
     AprendizPerfilUpdateSerializer,
+    BrandingPresetSerializer,
     ChangeInitialPasswordSerializer,
     ConfiguracionSistemaSerializer,
+    ControlPanelSessionOtpVerifySerializer,
+    ControlPanelSessionPasskeyVerifySerializer,
     EquipoRevisionSerializer,
     EquipoSerializer,
     GeminiStubSerializer,
@@ -110,6 +120,8 @@ from .serializers import (
     RoleSerializer,
     SedeSerializer,
     SedePolicySerializer,
+    TenantBrandingConfigSerializer,
+    TenantBrandingConfigUpdateSerializer,
     TurnoIniciarSerializer,
     TurnoSerializer,
     UsuarioSerializer,
@@ -118,6 +130,8 @@ from .serializers import (
 
 PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
 PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
+CONTROL_PANEL_SESSION_TTL_SEC = max(60, int(getattr(settings, "CONTROL_PANEL_SESSION_TTL_SEC", 15 * 60) or 15 * 60))
+CONTROL_PANEL_OTP_TTL_SEC = max(60, int(getattr(settings, "CONTROL_PANEL_OTP_TTL_SEC", 5 * 60) or 5 * 60))
 MAX_ADMINS_PER_SEDE = 4
 FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
 TURNO_AUTO_CLOSE_OBSERVATION = "Cierre por tiempo limite alcanzado"
@@ -135,6 +149,163 @@ def _webauthn_register_cache_key(user_id: int, request_id: str) -> str:
 
 def _webauthn_auth_cache_key(request_id: str) -> str:
     return f"sadi:webauthn:auth:{request_id}"
+
+
+def _control_panel_otp_cache_key(user_id: int, request_id: str) -> str:
+    return f"sadi:control-panel:otp:{user_id}:{request_id}"
+
+
+def _control_panel_passkey_cache_key(user_id: int, request_id: str) -> str:
+    return f"sadi:control-panel:passkey:{user_id}:{request_id}"
+
+
+def _control_panel_reason(request) -> str:
+    raw_reason = str(request.headers.get("X-Control-Panel-Reason", "") or "").strip()
+    if not raw_reason:
+        raw_reason = str(request.query_params.get("reason", "") or "").strip()
+    return raw_reason
+
+
+def _require_control_panel_reason_response(request):
+    reason = _control_panel_reason(request)
+    if reason:
+        return None
+    return error_response(
+        code=ErrorCode.VALIDATION_ERROR,
+        message="Debes indicar un motivo del cambio en X-Control-Panel-Reason.",
+        status_code=status.HTTP_400_BAD_REQUEST,
+        field="reason",
+    )
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, date):
+        return value.isoformat()
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except Exception:
+            return value
+    return value
+
+
+def _snapshot_model(instance, serializer_class=None):
+    if instance is None:
+        return None
+    if serializer_class is not None:
+        return _json_safe(serializer_class(instance).data)
+    return _json_safe(model_to_dict(instance))
+
+
+def _control_panel_quota_state(user: Usuario, category: str):
+    limit = _control_panel_category_limit(category)
+    today = timezone.localdate()
+    counter = ControlPanelQuotaCounter.objects.filter(user=user, category=category, window_start=today).first()
+    used = int(getattr(counter, "count", 0) or 0)
+    remaining = max(0, limit - used)
+    return {
+        "category": category,
+        "limit": limit,
+        "used": used,
+        "remaining": remaining,
+        "window_start": today.isoformat(),
+        "last_action_at": (
+            getattr(counter, "last_action_at", None).isoformat() if getattr(counter, "last_action_at", None) else None
+        ),
+    }
+
+
+def _ensure_control_panel_quota_response(user: Usuario, category: str):
+    state = _control_panel_quota_state(user, category)
+    if state["used"] < state["limit"]:
+        return None
+    return error_response(
+        code=ErrorCode.VALIDATION_ERROR,
+        message=f"Se alcanzo la cuota diaria para {category}.",
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=state,
+        field="quota",
+    )
+
+
+def _consume_control_panel_quota(user: Usuario, category: str):
+    today = timezone.localdate()
+    with transaction.atomic():
+        counter, _ = ControlPanelQuotaCounter.objects.select_for_update().get_or_create(
+            user=user,
+            category=category,
+            window_start=today,
+            defaults={"count": 0},
+        )
+        limit = _control_panel_category_limit(category)
+        if counter.count >= limit:
+            return None
+        counter.count += 1
+        counter.last_action_at = timezone.now()
+        counter.save(update_fields=["count", "last_action_at"])
+        return counter
+
+
+def _record_control_panel_audit(
+    *,
+    request,
+    category: str,
+    action: str,
+    target_type: str,
+    target_id,
+    before_json,
+    after_json,
+):
+    session = getattr(request, "control_panel_session", None) or resolve_control_panel_session(request)
+    return ControlPanelAuditEvent.objects.create(
+        actor=getattr(request, "user", None),
+        session=session,
+        action=action,
+        category=category,
+        target_type=target_type,
+        target_id=str(target_id or ""),
+        before_json=_json_safe(before_json),
+        after_json=_json_safe(after_json),
+        reason=_control_panel_reason(request),
+        ip_address=str(get_client_ip(request) or ""),
+    )
+
+
+def _control_panel_category_limit(category: str) -> int:
+    setting_by_category = {
+        ControlPanelQuotaCounter.Category.BRANDING: ("CONTROL_PANEL_BRANDING_DAILY_LIMIT", 10),
+        ControlPanelQuotaCounter.Category.DOMAINS: ("CONTROL_PANEL_DOMAINS_DAILY_LIMIT", 5),
+        ControlPanelQuotaCounter.Category.POLICIES: ("CONTROL_PANEL_POLICIES_DAILY_LIMIT", 3),
+        ControlPanelQuotaCounter.Category.PERMISSIONS: ("CONTROL_PANEL_PERMISSIONS_DAILY_LIMIT", 2),
+        ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT: ("CONTROL_PANEL_SEDE_DAILY_LIMIT", 5),
+    }
+    setting_name, default = setting_by_category.get(category, ("CONTROL_PANEL_GENERIC_DAILY_LIMIT", 1))
+    return max(1, int(getattr(settings, setting_name, default) or default))
+
+
+def _apply_branding_preset_to_config(*, preset: BrandingPreset, config: ConfiguracionSistema):
+    tokens = dict(getattr(preset, "tokens_json", {}) or {})
+    config.color_aprendiz_light = tokens.get("color_aprendiz_light", config.color_aprendiz_light)
+    config.color_aprendiz_dark = tokens.get("color_aprendiz_dark", config.color_aprendiz_dark)
+    config.color_admin_light = tokens.get("color_admin_light", config.color_admin_light)
+    config.color_admin_dark = tokens.get("color_admin_dark", config.color_admin_dark)
+    config.color_guarda_light = tokens.get("color_guarda_light", config.color_guarda_light)
+    config.color_guarda_dark = tokens.get("color_guarda_dark", config.color_guarda_dark)
+    config.save()
+
+
+def _effective_config_payload(config: ConfiguracionSistema, *, preset: BrandingPreset | None = None):
+    payload = ConfiguracionSistemaSerializer(config).data
+    if preset is not None:
+        tokens = dict(getattr(preset, "tokens_json", {}) or {})
+        for key, value in tokens.items():
+            payload[key] = value
+        payload["branding_preset"] = preset.slug
+    return payload
 
 
 def _request_host_without_port(request) -> str:
@@ -158,6 +329,10 @@ def _request_origin(request) -> str:
     return f"{proto}://{host}"
 
 
+def _request_user_agent(request) -> str:
+    return str(request.META.get("HTTP_USER_AGENT", "") or "").strip()
+
+
 def _resolve_webauthn_rp_id(request) -> str:
     configured = str(getattr(settings, "WEBAUTHN_RP_ID", "") or "").strip()
     if configured:
@@ -175,15 +350,21 @@ def _resolve_webauthn_origin(request) -> str:
 def _scope_sede_id(user: Usuario) -> int | None:
     if not user:
         return None
-    return getattr(user, "sede_principal_id", None)
+    return AuthorizationService.default_sede_id(user, role_code=_effective_role(user))
 
 
 def _scope_sede_code(user: Usuario) -> str | None:
     if not user:
         return None
-    sede = getattr(user, "sede_principal", None)
+    sede = AuthorizationService.default_sede(user, role_code=_effective_role(user))
     code = getattr(sede, "code", None)
     return (code or "").strip() or None
+
+
+def _scope_sede_obj(user: Usuario):
+    if not user:
+        return None
+    return AuthorizationService.default_sede(user, role_code=_effective_role(user))
 
 
 def _scope_sede(user: Usuario) -> str | None:
@@ -196,13 +377,81 @@ def _is_admin_full_access(user: Usuario) -> bool:
 
 
 def _effective_role(user: Usuario | None) -> str:
-    return AuthorizationService.default_role_for_user(user) if user else ""
+    return AuthorizationService.runtime_role_for_user(user) if user else ""
 
 
 def _has_role(user: Usuario | None, role_code: str) -> bool:
     if not user:
         return False
     return role_code in AuthorizationService.role_codes(user)
+
+
+def _has_active_role(user: Usuario | None, role_code: str) -> bool:
+    if not user:
+        return False
+    return AuthorizationService.runtime_role_for_user(user) == role_code
+
+
+def _require_permission_response(user: Usuario | None, perm_code: str, *, message: str):
+    if user and getattr(user, "is_authenticated", False) and AuthorizationService.has_perm(user, perm_code):
+        return None
+    return error_response(
+        code=ErrorCode.PERMISSION_DENIED,
+        message=message,
+        status_code=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _active_control_panel_session_payload(session: ControlPanelSession | None) -> dict:
+    if not session:
+        return {"active": False, "session": None}
+    return {
+        "active": True,
+        "session": {
+            "id": str(session.id),
+            "verified_by": session.verified_by,
+            "granted_at": session.granted_at.isoformat() if session.granted_at else None,
+            "expires_at": session.expires_at.isoformat() if session.expires_at else None,
+            "last_used_at": session.last_used_at.isoformat() if session.last_used_at else None,
+        },
+    }
+
+
+def _revoke_active_control_panel_sessions(user: Usuario):
+    if not user:
+        return
+    ControlPanelSession.objects.filter(
+        user=user,
+        revoked_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    ).update(revoked_at=timezone.now())
+
+
+def _create_control_panel_session(request, user: Usuario, *, verified_by: str) -> ControlPanelSession:
+    _revoke_active_control_panel_sessions(user)
+    runtime_role = AuthorizationService.runtime_role_for_user(user)
+    return ControlPanelSession.objects.create(
+        user=user,
+        verified_by=verified_by,
+        expires_at=timezone.now() + timedelta(seconds=CONTROL_PANEL_SESSION_TTL_SEC),
+        ip_address=str(get_client_ip(request) or ""),
+        user_agent=_request_user_agent(request),
+        scope_snapshot={
+            "runtime_role": runtime_role,
+            "permissions": sorted(list(AuthorizationService.role_codes(user))),
+        },
+    )
+
+
+def _require_control_panel_session_response(request, user: Usuario | None):
+    session = resolve_control_panel_session(request)
+    if session is not None:
+        return None
+    return error_response(
+        code=ErrorCode.PERMISSION_DENIED,
+        message="Se requiere una sesion reforzada vigente del panel de control.",
+        status_code=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _same_sede_or_superadmin(actor: Usuario, target_sede: str | None) -> bool:
@@ -566,7 +815,7 @@ def _request_session_id(request) -> str | None:
 def _build_aprendiz_qr_value(user: Usuario, *, request=None) -> tuple[str, str]:
     qr_value, mode = QRService.build_aprendiz_qr_value(
         str(user.documento or "").strip(),
-        sede=getattr(user, "sede_principal", None),
+        sede=_scope_sede_obj(user),
         session_id=_request_session_id(request) if request is not None else None,
         user_id=getattr(user, "id", None),
     )
@@ -620,8 +869,9 @@ class ConfiguracionSistemaView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        tenant_branding = TenantBrandingConfig.get_solo()
         cfg = ConfiguracionSistema.get_solo()
-        payload = ConfiguracionSistemaSerializer(cfg).data
+        payload = _effective_config_payload(cfg, preset=tenant_branding.branding_preset)
         return ok_response({"configuracion": payload})
 
     def put(self, request):
@@ -633,18 +883,372 @@ class ConfiguracionSistemaView(APIView):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
 
-        if not bool(getattr(user, "is_superuser", False)):
-            return error_response(
-                code=ErrorCode.PERMISSION_DENIED,
-                message="Solo un superusuario puede actualizar la configuracion global.",
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
+        denied = _require_permission_response(
+            user,
+            "control_panel.branding.update",
+            message="No tienes permisos para actualizar la configuracion global.",
+        )
+        if denied:
+            return denied
+        denied = _require_control_panel_session_response(request, user)
+        if denied:
+            return denied
+        denied = _require_control_panel_reason_response(request)
+        if denied:
+            return denied
+        denied = _ensure_control_panel_quota_response(user, ControlPanelQuotaCounter.Category.BRANDING)
+        if denied:
+            return denied
 
         cfg = ConfiguracionSistema.get_solo()
+        before_json = _snapshot_model(cfg, ConfiguracionSistemaSerializer)
         serializer = ConfiguracionSistemaSerializer(cfg, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        finalized = _consume_control_panel_quota(user, ControlPanelQuotaCounter.Category.BRANDING)
+        if finalized is None:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Se alcanzo la cuota diaria para branding.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_control_panel_quota_state(user, ControlPanelQuotaCounter.Category.BRANDING),
+                field="quota",
+            )
+        _record_control_panel_audit(
+            request=request,
+            category=ControlPanelQuotaCounter.Category.BRANDING,
+            action=ControlPanelAuditEvent.Action.UPDATE,
+            target_type="configuracion_sistema",
+            target_id=cfg.pk,
+            before_json=before_json,
+            after_json=serializer.data,
+        )
         return ok_response({"configuracion": serializer.data, "mensaje": "Configuracion actualizada correctamente."})
+
+
+class ControlPanelSessionStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session = resolve_control_panel_session(request)
+        return ok_response(_active_control_panel_session_payload(session))
+
+
+class ControlPanelBrandingPresetListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        denied = _require_permission_response(
+            request.user,
+            "control_panel.branding.read",
+            message="No tienes permisos para consultar presets de branding.",
+        )
+        if denied:
+            return denied
+        denied = _require_control_panel_session_response(request, request.user)
+        if denied:
+            return denied
+        presets = BrandingPreset.objects.filter(is_active=True).order_by("name")
+        return ok_response({"results": BrandingPresetSerializer(presets, many=True).data, "count": presets.count()})
+
+
+class ControlPanelBrandingConfigView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        denied = _require_permission_response(
+            request.user,
+            "control_panel.branding.read",
+            message="No tienes permisos para consultar la configuracion de branding.",
+        )
+        if denied:
+            return denied
+        denied = _require_control_panel_session_response(request, request.user)
+        if denied:
+            return denied
+        config = TenantBrandingConfig.get_solo()
+        return ok_response({"configuracion": TenantBrandingConfigSerializer(config).data})
+
+    def patch(self, request):
+        denied = _require_permission_response(
+            request.user,
+            "control_panel.branding.update",
+            message="No tienes permisos para actualizar la configuracion de branding.",
+        )
+        if denied:
+            return denied
+        denied = _require_control_panel_session_response(request, request.user)
+        if denied:
+            return denied
+        denied = _require_control_panel_reason_response(request)
+        if denied:
+            return denied
+        denied = _ensure_control_panel_quota_response(request.user, ControlPanelQuotaCounter.Category.BRANDING)
+        if denied:
+            return denied
+
+        config = TenantBrandingConfig.get_solo()
+        before_json = TenantBrandingConfigSerializer(config).data
+        serializer = TenantBrandingConfigUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        preset = serializer.validated_data["branding_preset"]
+        config.branding_preset = preset
+        config.updated_by = request.user
+        config.save(update_fields=["branding_preset", "updated_by", "updated_at"])
+        _apply_branding_preset_to_config(preset=preset, config=ConfiguracionSistema.get_solo())
+        after_json = TenantBrandingConfigSerializer(config).data
+
+        finalized = _consume_control_panel_quota(request.user, ControlPanelQuotaCounter.Category.BRANDING)
+        if finalized is None:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Se alcanzo la cuota diaria para branding.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_control_panel_quota_state(request.user, ControlPanelQuotaCounter.Category.BRANDING),
+                field="quota",
+            )
+        _record_control_panel_audit(
+            request=request,
+            category=ControlPanelQuotaCounter.Category.BRANDING,
+            action=ControlPanelAuditEvent.Action.UPDATE,
+            target_type="tenant_branding_config",
+            target_id=config.pk,
+            before_json=before_json,
+            after_json=after_json,
+        )
+        return ok_response({"configuracion": after_json, "mensaje": "Branding actualizado correctamente."})
+
+
+class ControlPanelSessionCloseView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        session = resolve_control_panel_session(request)
+        if session is None:
+            return ok_response(_active_control_panel_session_payload(None))
+        session.revoked_at = timezone.now()
+        session.save(update_fields=["revoked_at"])
+        return ok_response({"active": False, "session": None, "mensaje": "Sesion del panel cerrada correctamente."})
+
+
+class ControlPanelSessionRequestOtpView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user: Usuario = request.user
+        denied = _require_permission_response(
+            user,
+            "control_panel.session.open",
+            message="No tienes permisos para abrir una sesion del panel de control.",
+        )
+        if denied:
+            return denied
+        if not user.email:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Tu cuenta no tiene un correo configurado para OTP.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="email",
+            )
+
+        ip = get_client_ip(request)
+        user_key = [str(user.id), "control-panel-session"]
+        ip_key = [ip, "control-panel-session"]
+        if is_locked("otp-request-user", user_key) or is_locked("otp-request-ip", ip_key):
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiadas solicitudes. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        user_limit = bump_with_lock(
+            "otp-request-user", user_key, OTP_MAX_REQUESTS, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+        )
+        ip_limit = bump_with_lock(
+            "otp-request-ip", ip_key, OTP_MAX_REQUESTS * 2, OTP_REQUEST_WINDOW_SEC, OTP_REQUEST_LOCK_SEC
+        )
+        if user_limit["locked"] or ip_limit["locked"]:
+            return error_response(
+                code=ErrorCode.ACCOUNT_LOCKED_15MIN,
+                message="Demasiadas solicitudes. Intenta mas tarde.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        request_id = uuid4().hex
+        code = generate_otp_code()
+        salt = secrets.token_hex(16)
+        cache.set(
+            _control_panel_otp_cache_key(user.id, request_id),
+            {
+                "salt": salt,
+                "code_hash": hash_code(salt, code),
+                "attempts": 0,
+                "ip": str(ip or ""),
+                "user_agent": _request_user_agent(request),
+            },
+            timeout=CONTROL_PANEL_OTP_TTL_SEC,
+        )
+        try:
+            send_control_panel_otp_email(user.email, code)
+        except Exception:
+            cache.delete(_control_panel_otp_cache_key(user.id, request_id))
+            return error_response(
+                code=ErrorCode.NETWORK_ERROR,
+                message="No se pudo enviar el codigo OTP del panel.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return ok_response(
+            {
+                "request_id": request_id,
+                "expires_in": CONTROL_PANEL_OTP_TTL_SEC,
+                "delivery": {"channel": "email", "to": user.email},
+            }
+        )
+
+
+class ControlPanelSessionVerifyOtpView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user: Usuario = request.user
+        denied = _require_permission_response(
+            user,
+            "control_panel.session.open",
+            message="No tienes permisos para abrir una sesion del panel de control.",
+        )
+        if denied:
+            return denied
+
+        s = ControlPanelSessionOtpVerifySerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        key = _control_panel_otp_cache_key(user.id, s.validated_data["request_id"])
+        payload = cache.get(key) or {}
+        if not payload:
+            return error_response(
+                code=ErrorCode.OTP_EXPIRED,
+                message="El codigo OTP del panel expiro. Solicita uno nuevo.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        attempts = int(payload.get("attempts", 0) or 0)
+        if attempts >= OTP_MAX_ATTEMPTS:
+            return error_response(
+                code=ErrorCode.OTP_TOO_MANY_ATTEMPTS,
+                message="Demasiados intentos con OTP. Solicita uno nuevo.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        if hash_code(str(payload.get("salt", "")), s.validated_data["otp"]) != payload.get("code_hash"):
+            payload["attempts"] = attempts + 1
+            cache.set(key, payload, timeout=CONTROL_PANEL_OTP_TTL_SEC)
+            return error_response(
+                code=ErrorCode.OTP_INVALID,
+                message="El codigo OTP no es valido.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cache.delete(key)
+        session = _create_control_panel_session(request, user, verified_by=ControlPanelSession.VerifiedBy.OTP)
+        return ok_response(
+            {
+                **_active_control_panel_session_payload(session),
+                "mensaje": "Sesion del panel abierta correctamente.",
+            }
+        )
+
+
+class ControlPanelSessionRequestPasskeyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user: Usuario = request.user
+        denied = _require_permission_response(
+            user,
+            "control_panel.session.open",
+            message="No tienes permisos para abrir una sesion del panel de control.",
+        )
+        if denied:
+            return denied
+        credentials = list(user.webauthn_credentials.values("credential_id", "transports"))
+        if not credentials:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="No tienes passkeys registradas para step-up auth.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        request_id = uuid4().hex
+        challenge = secrets.token_urlsafe(32)
+        cache.set(
+            _control_panel_passkey_cache_key(user.id, request_id),
+            {"challenge": challenge},
+            timeout=PASSKEY_AUTH_CHALLENGE_TTL,
+        )
+        return ok_response(
+            {
+                "request_id": request_id,
+                "challenge": challenge,
+                "rp_id": _resolve_webauthn_rp_id(request),
+                "timeout": 60000,
+                "allow_credentials": credentials,
+                "mock": bool(getattr(settings, "WEBAUTHN_MOCK", True)),
+            }
+        )
+
+
+class ControlPanelSessionVerifyPasskeyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user: Usuario = request.user
+        denied = _require_permission_response(
+            user,
+            "control_panel.session.open",
+            message="No tienes permisos para abrir una sesion del panel de control.",
+        )
+        if denied:
+            return denied
+
+        s = ControlPanelSessionPasskeyVerifySerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        key = _control_panel_passkey_cache_key(user.id, s.validated_data["request_id"])
+        payload = cache.get(key) or {}
+        if not payload:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="El reto de autenticacion del panel expiro.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if payload.get("challenge") != s.validated_data["challenge"]:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="Verificacion passkey invalida.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        credential = (
+            WebAuthnCredential.objects.select_related("user")
+            .filter(user=user, credential_id=s.validated_data["credential_id"])
+            .first()
+        )
+        if credential is None:
+            return error_response(
+                code=ErrorCode.PASSKEY_INVALID,
+                message="Credencial passkey invalida.",
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        credential.last_used_at = timezone.now()
+        credential.sign_count = int(credential.sign_count or 0) + 1
+        credential.save(update_fields=["last_used_at", "sign_count"])
+        cache.delete(key)
+        session = _create_control_panel_session(request, user, verified_by=ControlPanelSession.VerifiedBy.PASSKEY)
+        return ok_response(
+            {
+                **_active_control_panel_session_payload(session),
+                "mensaje": "Sesion del panel abierta correctamente.",
+            }
+        )
 
 
 def _role_display_name(code: str) -> str:
@@ -866,7 +1470,7 @@ class AprendizEmailChangeConfirmView(APIView):
         domain_check = EmailDomainService.validate(
             email=new_email,
             role_code=AuthorizationService.default_role_for_user(user) or Usuario.Rol.APRENDIZ,
-            sede=getattr(user, "sede_principal", None),
+            sede=_scope_sede_obj(user),
         )
         if not domain_check.allowed:
             return error_response(
@@ -1171,15 +1775,129 @@ class LegacyPasswordResetConfirmView(APIView):
         return ok_response()
 
 
-class SedeViewSet(viewsets.ModelViewSet):
+class ControlPanelMutationMixin:
+    control_panel_category: str | None = None
+    control_panel_target_type: str | None = None
+
+    def _control_panel_snapshot(self, instance):
+        return _json_safe(self.get_serializer(instance).data)
+
+    def _control_panel_target_name(self) -> str:
+        if self.control_panel_target_type:
+            return self.control_panel_target_type
+        model = getattr(getattr(self, "queryset", None), "model", None)
+        return getattr(getattr(model, "_meta", None), "model_name", "resource")
+
+    def _preflight_control_panel_mutation(self, request):
+        denied = _require_control_panel_reason_response(request)
+        if denied:
+            return denied
+        return _ensure_control_panel_quota_response(request.user, self.control_panel_category)
+
+    def _finalize_control_panel_mutation(self, request, *, action: str, target_id, before_json, after_json):
+        counter = _consume_control_panel_quota(request.user, self.control_panel_category)
+        if counter is None:
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=f"Se alcanzo la cuota diaria para {self.control_panel_category}.",
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=_control_panel_quota_state(request.user, self.control_panel_category),
+                field="quota",
+            )
+        _record_control_panel_audit(
+            request=request,
+            category=self.control_panel_category,
+            action=action,
+            target_type=self._control_panel_target_name(),
+            target_id=target_id,
+            before_json=before_json,
+            after_json=after_json,
+        )
+        return None
+
+    def create(self, request, *args, **kwargs):
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.CREATE,
+            target_id=serializer.data.get("id"),
+            before_json=None,
+            after_json=serializer.data,
+        )
+        if finalized:
+            return finalized
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        before_json = self._control_panel_snapshot(instance)
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, "_prefetched_objects_cache", None):
+            instance._prefetched_objects_cache = {}
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.UPDATE,
+            target_id=serializer.data.get("id"),
+            before_json=before_json,
+            after_json=serializer.data,
+        )
+        if finalized:
+            return finalized
+        return Response(serializer.data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        before_json = self._control_panel_snapshot(instance)
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        target_id = getattr(instance, "id", None)
+        self.perform_destroy(instance)
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.DELETE,
+            target_id=target_id,
+            before_json=before_json,
+            after_json=None,
+        )
+        if finalized:
+            return finalized
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SedeViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = SedeSerializer
     queryset = Sede.objects.all().order_by("name")
     permission_classes = [AllowAny]
+    control_panel_category = ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT
+    control_panel_target_type = "sede"
+    permission_map = {
+        "create": "sede.manage",
+        "update": "sede.manage",
+        "partial_update": "sede.manage",
+        "destroy": "sede.manage",
+    }
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]
-        return [IsAuthenticated(), IsSuperAdmin()]
+        return [IsAuthenticated(), RequiresPermission(), RequiresControlPanelSession()]
 
     def get_queryset(self):
         qs = Sede.objects.all().order_by("name")
@@ -1212,25 +1930,59 @@ class SedeViewSet(viewsets.ModelViewSet):
             return qs.none()
         scoped = qs.filter(id__in=allowed_sede_ids)
         if active_filter is False or include_inactive:
-            return scoped.filter(is_active=True)
+            raise ValidationError(
+                {
+                    "active": (
+                        "Solo superadmin puede consultar sedes inactivas o usar include_inactive."
+                    )
+                }
+            )
         return scoped.filter(is_active=True)
 
     def destroy(self, request, *args, **kwargs):
         sede = self.get_object()
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        before_json = self._control_panel_snapshot(sede)
         if not sede.is_active:
             return ok_response({"sede": self.get_serializer(sede).data, "mensaje": "La sede ya estaba inactiva."})
         sede.is_active = False
         sede.save(update_fields=["is_active"])
+        after_json = self._control_panel_snapshot(sede)
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.DELETE,
+            target_id=sede.id,
+            before_json=before_json,
+            after_json=after_json,
+        )
+        if finalized:
+            return finalized
         return ok_response({"sede": self.get_serializer(sede).data, "mensaje": "Sede desactivada correctamente."})
 
 
-class RoleViewSet(viewsets.ModelViewSet):
+class RoleViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     queryset = Role.objects.all().order_by("code")
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RequiresPermission, RequiresControlPanelSession]
+    control_panel_category = ControlPanelQuotaCounter.Category.PERMISSIONS
+    control_panel_target_type = "role"
+    permission_map = {
+        "list": "control_panel.permissions.read",
+        "retrieve": "control_panel.permissions.read",
+        "create": "control_panel.permissions.update",
+        "update": "control_panel.permissions.update",
+        "partial_update": "control_panel.permissions.update",
+        "destroy": "control_panel.permissions.update",
+    }
 
     def destroy(self, request, *args, **kwargs):
         role = self.get_object()
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        before_json = self._control_panel_snapshot(role)
         if role.is_system:
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
@@ -1246,16 +1998,39 @@ class RoleViewSet(viewsets.ModelViewSet):
                 field="role",
             )
         role.delete()
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.DELETE,
+            target_id=role.id,
+            before_json=before_json,
+            after_json=None,
+        )
+        if finalized:
+            return finalized
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class PermissionViewSet(viewsets.ModelViewSet):
+class PermissionViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = PermissionSerializer
     queryset = RbacPermission.objects.all().order_by("code")
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RequiresPermission, RequiresControlPanelSession]
+    control_panel_category = ControlPanelQuotaCounter.Category.PERMISSIONS
+    control_panel_target_type = "permission"
+    permission_map = {
+        "list": "control_panel.permissions.read",
+        "retrieve": "control_panel.permissions.read",
+        "create": "control_panel.permissions.update",
+        "update": "control_panel.permissions.update",
+        "partial_update": "control_panel.permissions.update",
+        "destroy": "control_panel.permissions.update",
+    }
 
     def destroy(self, request, *args, **kwargs):
         permission_obj = self.get_object()
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        before_json = self._control_panel_snapshot(permission_obj)
         if permission_obj.role_permissions.exists():
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
@@ -1264,26 +2039,55 @@ class PermissionViewSet(viewsets.ModelViewSet):
                 field="permission",
             )
         permission_obj.delete()
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.DELETE,
+            target_id=permission_obj.id,
+            before_json=before_json,
+            after_json=None,
+        )
+        if finalized:
+            return finalized
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class RolePermissionViewSet(viewsets.ModelViewSet):
+class RolePermissionViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = RolePermissionSerializer
     queryset = (
         RolePermission.objects.select_related("role", "permission")
         .all()
         .order_by("role__code", "permission__code", "scope")
     )
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RequiresPermission, RequiresControlPanelSession]
+    control_panel_category = ControlPanelQuotaCounter.Category.PERMISSIONS
+    control_panel_target_type = "role_permission"
+    permission_map = {
+        "list": "control_panel.permissions.read",
+        "retrieve": "control_panel.permissions.read",
+        "create": "control_panel.permissions.update",
+        "update": "control_panel.permissions.update",
+        "partial_update": "control_panel.permissions.update",
+        "destroy": "control_panel.permissions.update",
+    }
 
 
-class SedePolicyViewSet(viewsets.ModelViewSet):
+class SedePolicyViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = SedePolicySerializer
     queryset = SedePolicy.objects.select_related("sede").all().order_by("sede__name")
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RequiresPermission, RequiresControlPanelSession]
+    control_panel_category = ControlPanelQuotaCounter.Category.POLICIES
+    control_panel_target_type = "sede_policy"
+    permission_map = {
+        "list": "control_panel.policies.read",
+        "retrieve": "control_panel.policies.read",
+        "create": "control_panel.policies.update",
+        "update": "control_panel.policies.update",
+        "partial_update": "control_panel.policies.update",
+        "destroy": "control_panel.policies.update",
+    }
 
 
-class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
+class AllowedEmailDomainViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = AllowedEmailDomainSerializer
     queryset = (
         AllowedEmailDomain.objects.select_related("role", "sede", "created_by")
@@ -1294,7 +2098,17 @@ class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
             "sede__code",
         )
     )
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated, RequiresPermission, RequiresControlPanelSession]
+    control_panel_category = ControlPanelQuotaCounter.Category.DOMAINS
+    control_panel_target_type = "allowed_email_domain"
+    permission_map = {
+        "list": "control_panel.domains.read",
+        "retrieve": "control_panel.domains.read",
+        "create": "control_panel.domains.update",
+        "update": "control_panel.domains.update",
+        "partial_update": "control_panel.domains.update",
+        "destroy": "control_panel.domains.update",
+    }
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -1344,10 +2158,44 @@ class AllowedEmailDomainViewSet(viewsets.ModelViewSet):
 
 
 class AuditEventsView(APIView):
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        denied = _require_permission_response(
+            request.user,
+            "control_panel.audit.read",
+            message="No tienes permisos para consultar la auditoria.",
+        )
+        if denied:
+            return denied
+        denied = _require_control_panel_session_response(request, request.user)
+        if denied:
+            return denied
+
         events: list[dict] = []
+
+        for event in (
+            ControlPanelAuditEvent.objects.select_related("actor", "session")
+            .all()
+            .order_by("-created_at")[:50]
+        ):
+            events.append(
+                {
+                    "id": f"control-panel-{event.id}",
+                    "type": f"control_panel.{event.category}.{event.action}",
+                    "timestamp": event.created_at,
+                    "actor": getattr(getattr(event, "actor", None), "username", None),
+                    "detail": (
+                        f"{event.target_type}#{event.target_id or '-'} | motivo: {event.reason}"
+                    ),
+                    "sede": None,
+                    "category": event.category,
+                    "reason": event.reason,
+                    "before": event.before_json,
+                    "after": event.after_json,
+                    "session_id": str(event.session_id) if event.session_id else None,
+                }
+            )
 
         for acceso in (
             Acceso.objects.filter(is_deleted=True, deleted_at__isnull=False)
@@ -1409,10 +2257,54 @@ class AuditEventsView(APIView):
         return ok_response({"results": serialized_events, "count": len(serialized_events)})
 
 
+class ControlPanelQuotaStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        denied = _require_permission_response(
+            request.user,
+            "control_panel.limits.read",
+            message="No tienes permisos para consultar las cuotas del panel.",
+        )
+        if denied:
+            return denied
+        denied = _require_control_panel_session_response(request, request.user)
+        if denied:
+            return denied
+
+        results = [
+            _control_panel_quota_state(request.user, category)
+            for category in [
+                ControlPanelQuotaCounter.Category.BRANDING,
+                ControlPanelQuotaCounter.Category.DOMAINS,
+                ControlPanelQuotaCounter.Category.POLICIES,
+                ControlPanelQuotaCounter.Category.PERMISSIONS,
+                ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT,
+            ]
+        ]
+        return ok_response({"results": results, "count": len(results)})
+
+
 class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all().order_by("id")
     serializer_class = UsuarioSerializer
-    permission_classes = [IsAuthenticated, IsAdmin]
+    permission_classes = [IsAuthenticated, RequiresPermission]
+    permission_map = {
+        "list": "user.read",
+        "retrieve": "user.read",
+        "create": "user.create",
+        "update": "user.update",
+        "partial_update": "user.update",
+        "destroy": "user.delete",
+        "importar_aprendices_validar": "user.create",
+        "importar_aprendices_confirmar": "user.create",
+    }
+    object_permission_map = {
+        "retrieve": "user.read",
+        "update": "user.update",
+        "partial_update": "user.update",
+        "destroy": "user.delete",
+    }
 
     def get_queryset(self):
         qs = AuthorizationService.scoped_queryset(
@@ -1775,12 +2667,29 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
 class NotificacionViewSet(viewsets.ModelViewSet):
     serializer_class = NotificacionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresPermission]
+    permission_map = {
+        "list": "notificacion.read",
+        "retrieve": "notificacion.read",
+        "leer": "notificacion.read",
+        "create": "notificacion.write",
+        "update": "notificacion.write",
+        "partial_update": "notificacion.write",
+        "destroy": "notificacion.write",
+    }
+    object_permission_map = {
+        "retrieve": "notificacion.read",
+        "leer": "notificacion.read",
+        "update": "notificacion.write",
+        "partial_update": "notificacion.write",
+        "destroy": "notificacion.write",
+    }
+    allow_own_scope_actions = {"list", "retrieve", "leer"}
     queryset = Notificacion.objects.all()
 
     def get_queryset(self):
         user = self.request.user
-        role_codes = list(AuthorizationService.role_codes(user))
+        role_codes = list(AuthorizationService.runtime_role_codes(user) or AuthorizationService.role_codes(user))
 
         qs_user = Notificacion.objects.filter(user=user)
         qs_rol = Notificacion.objects.filter(user__isnull=True, rol_objetivo__in=role_codes)
@@ -1792,11 +2701,6 @@ class NotificacionViewSet(viewsets.ModelViewSet):
                 return Notificacion.objects.none()
             qs = qs.filter(Q(user__isnull=True) | Q(user__sede_principal__code=sede) | Q(user=user))
         return AuthorizationService.scoped_queryset(user, qs, resource="notificacion")
-
-    def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
-            return [IsAuthenticated(), IsAdmin()]
-        return [IsAuthenticated()]
 
     @action(detail=True, methods=["patch"], url_path="leer")
     def leer(self, request, pk=None):
@@ -1826,7 +2730,24 @@ class NotificacionViewSet(viewsets.ModelViewSet):
 
 class EquipoViewSet(viewsets.ModelViewSet):
     serializer_class = EquipoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RequiresPermission]
+    permission_map = {
+        "list": "equipo.read",
+        "retrieve": "equipo.read",
+        "create": "equipo.create",
+        "update": "equipo.update",
+        "partial_update": "equipo.update",
+        "destroy": "equipo.delete",
+        "revisar": "equipo.review",
+    }
+    object_permission_map = {
+        "retrieve": "equipo.read",
+        "update": "equipo.update",
+        "partial_update": "equipo.update",
+        "destroy": "equipo.delete",
+        "revisar": "equipo.review",
+    }
+    allow_own_scope_actions = {"list", "retrieve", "create", "update", "partial_update", "destroy"}
     queryset = Equipo.objects.all()
 
     def get_queryset(self):
@@ -1874,27 +2795,6 @@ class EquipoViewSet(viewsets.ModelViewSet):
             )
 
         return qs
-
-    def get_permissions(self):
-        if self.action == "create":
-            if is_admin_role(self.request.user):
-                return [IsAuthenticated(), IsAdmin()]
-            return [IsAuthenticated(), IsAprendiz()]
-
-        if self.action == "revisar":
-            return [IsAuthenticated(), IsAdmin()]
-
-        if self.action in ["update", "partial_update"]:
-            if is_admin_role(self.request.user):
-                return [IsAuthenticated(), IsAdmin()]
-            return [IsAuthenticated(), IsAprendiz()]
-
-        if self.action == "destroy":
-            if is_admin_role(self.request.user):
-                return [IsAuthenticated(), IsAdmin()]
-            return [IsAuthenticated(), IsAprendiz()]
-
-        return [IsAuthenticated()]
 
     def _ensure_admin_sede_equipo_payload_scope(self, payload: dict, equipo: Equipo):
         actor = self.request.user
@@ -1988,8 +2888,8 @@ class EquipoViewSet(viewsets.ModelViewSet):
         return self._update_as_aprendiz(request, partial=True)
 
     def create(self, request, *args, **kwargs):
-        if _has_role(request.user, Usuario.Rol.APRENDIZ):
-            policy = PolicyService.get_policy(getattr(request.user, "sede_principal", None))
+        if _has_active_role(request.user, Usuario.Rol.APRENDIZ):
+            policy = PolicyService.get_policy(_scope_sede_obj(request.user))
             max_equipos = int(policy.max_equipos_aprendiz or 4)
             total = Equipo.objects.filter(propietario=request.user).count()
             if total >= max_equipos:
@@ -2005,7 +2905,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
         rol = _effective_role(user)
 
         if rol == Usuario.Rol.APRENDIZ:
-            policy = PolicyService.get_policy(getattr(user, "sede_principal", None))
+            policy = PolicyService.get_policy(_scope_sede_obj(user))
             max_equipos = int(policy.max_equipos_aprendiz or 4)
             total = Equipo.objects.filter(propietario=user).count()
             if total >= max_equipos:
@@ -2040,7 +2940,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
         equipo = self.get_object()
         user = request.user
 
-        if _has_role(user, Usuario.Rol.APRENDIZ):
+        if _has_active_role(user, Usuario.Rol.APRENDIZ):
             if equipo.propietario_id != user.id:
                 return error_response(
                     code=ErrorCode.PERMISSION_DENIED,
@@ -2102,17 +3002,22 @@ class EquipoViewSet(viewsets.ModelViewSet):
 class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Turno.objects.all().order_by("-inicio")
     serializer_class = TurnoSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action in ["iniciar", "finalizar", "actual", "reanudar"]:
-            return [IsAuthenticated(), IsGuarda()]
-        if self.action == "finalizar_admin":
-            return [IsAuthenticated(), IsAdmin()]
-
-        if is_admin_role(self.request.user):
-            return [IsAuthenticated(), IsAdmin()]
-        return [IsAuthenticated(), IsGuarda()]
+    permission_classes = [IsAuthenticated, RequiresPermission]
+    permission_map = {
+        "list": "turno.read",
+        "retrieve": "turno.read",
+        "resumen": "turno.read",
+        "actual": "turno.read",
+        "iniciar": "turno.start",
+        "reanudar": "turno.resume",
+        "finalizar": "turno.end",
+        "finalizar_admin": "turno.admin_end",
+    }
+    object_permission_map = {
+        "retrieve": "turno.read",
+        "resumen": "turno.read",
+        "finalizar_admin": "turno.admin_end",
+    }
 
     def get_queryset(self):
         user = self.request.user
@@ -2326,8 +3231,8 @@ class AccesoViewSet(viewsets.ModelViewSet):
         "list": "acceso.read",
         "retrieve": "acceso.read",
         "create": "acceso.create",
-        "update": "acceso.delete",
-        "partial_update": "acceso.delete",
+        "update": "acceso.read",
+        "partial_update": "acceso.read",
         "destroy": "acceso.delete",
         "validar_documento": "acceso.scan",
         "registrar_por_documento": "acceso.scan",
@@ -2337,8 +3242,8 @@ class AccesoViewSet(viewsets.ModelViewSet):
     }
     object_permission_map = {
         "retrieve": "acceso.read",
-        "update": "acceso.delete",
-        "partial_update": "acceso.delete",
+        "update": "acceso.read",
+        "partial_update": "acceso.read",
         "destroy": "acceso.delete",
     }
 
@@ -2520,7 +3425,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
         if rol == Usuario.Rol.GUARDA:
             turno = obtener_turno_activo(request_user)
-            guarda_sede = getattr(request_user, "sede_principal", None)
+            guarda_sede = _scope_sede_obj(request_user)
             policy = PolicyService.get_policy(turno.sede if turno else guarda_sede)
             if policy.access_requires_active_turno and not turno:
                 return _finish(
@@ -2540,7 +3445,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                     )
                 )
         elif is_admin_sede(request_user):
-            sede = getattr(request_user, "sede_principal", None)
+            sede = _scope_sede_obj(request_user)
             if not sede:
                 return _finish(
                     error_response(
@@ -2630,20 +3535,22 @@ class AccesoViewSet(viewsets.ModelViewSet):
         return _finish(ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED))
 
     def update(self, request, *args, **kwargs):
-        scope_error = self._ensure_admin_sede_acceso_payload_scope(request.data.copy())
-        if scope_error:
-            return scope_error
-        return super().update(request, *args, **kwargs)
+        return error_response(
+            code=ErrorCode.PERMISSION_DENIED,
+            message="Los accesos historicos no se pueden editar.",
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
     def partial_update(self, request, *args, **kwargs):
-        scope_error = self._ensure_admin_sede_acceso_payload_scope(request.data.copy())
-        if scope_error:
-            return scope_error
-        return super().partial_update(request, *args, **kwargs)
+        return error_response(
+            code=ErrorCode.PERMISSION_DENIED,
+            message="Los accesos historicos no se pueden editar.",
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
 
     @action(detail=False, methods=["post"], url_path="validar_documento")
     def validar_documento(self, request):
-        if not _has_role(request.user, Usuario.Rol.GUARDA):
+        if not _has_active_role(request.user, Usuario.Rol.GUARDA):
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="No tienes permisos para validar documentos.",
@@ -2652,7 +3559,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         s = ValidarDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         turno = obtener_turno_activo(request.user)
-        default_sede = getattr(request.user, "sede_principal", None)
+        default_sede = _scope_sede_obj(request.user)
         policy = PolicyService.get_policy(turno.sede if turno else default_sede)
         if policy.access_requires_active_turno and not turno:
             return error_response(
@@ -2731,7 +3638,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
             _idempotency_release(idem_lock_key)
             return response
 
-        if not _has_role(request.user, Usuario.Rol.GUARDA):
+        if not _has_active_role(request.user, Usuario.Rol.GUARDA):
             return _finish(
                 error_response(
                     code=ErrorCode.PERMISSION_DENIED,
@@ -2743,7 +3650,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         s.is_valid(raise_exception=True)
 
         turno = obtener_turno_activo(request.user)
-        default_sede = getattr(request.user, "sede_principal", None)
+        default_sede = _scope_sede_obj(request.user)
         policy = PolicyService.get_policy(turno.sede if turno else default_sede)
         if policy.access_requires_active_turno and not turno:
             return _finish(
@@ -2862,14 +3769,14 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="stats")
     def stats(self, request):
-        if not _has_role(request.user, Usuario.Rol.GUARDA):
+        if not _has_active_role(request.user, Usuario.Rol.GUARDA):
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="No tienes permisos para ver estadisticas de escaneo.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
         turno = obtener_turno_activo(request.user)
-        default_sede = getattr(request.user, "sede_principal", None)
+        default_sede = _scope_sede_obj(request.user)
         policy = PolicyService.get_policy(turno.sede if turno else default_sede)
         if policy.access_requires_active_turno and not turno:
             return error_response(
@@ -2899,7 +3806,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="mis_accesos")
     def mis_accesos(self, request):
-        if not _has_role(request.user, Usuario.Rol.APRENDIZ):
+        if not _has_active_role(request.user, Usuario.Rol.APRENDIZ):
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="Este endpoint es exclusivo para aprendices.",
@@ -2910,7 +3817,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="estado")
     def estado(self, request):
-        if not _has_role(request.user, Usuario.Rol.APRENDIZ):
+        if not _has_active_role(request.user, Usuario.Rol.APRENDIZ):
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
                 message="Este endpoint es exclusivo para aprendices.",
@@ -3397,6 +4304,7 @@ class PasskeyAuthVerifyView(APIView):
                 )
 
         expected_role = s.validated_data.get("expected_role") or payload.get("expected_role")
+        resolved_login_role = AuthorizationService.resolve_login_role(user, expected_role)
         if getattr(user, "estado", None) == Usuario.Estado.BLOQUEADO:
             return error_response(
                 code=ErrorCode.ACCOUNT_DISABLED_SECURITY,
@@ -3409,7 +4317,7 @@ class PasskeyAuthVerifyView(APIView):
                 message="Debes recuperar la contrasena antes de volver a iniciar sesion.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
-        if not _role_allowed_for_expected(_effective_role(user), expected_role):
+        if not _role_allowed_for_expected(resolved_login_role, expected_role):
             return error_response(
                 code=ErrorCode.INVALID_CREDENTIALS,
                 message="Credenciales invalidas para este modulo.",
@@ -3420,7 +4328,12 @@ class PasskeyAuthVerifyView(APIView):
         credential.sign_count = int(credential.sign_count or 0) + 1
         credential.save(update_fields=["last_used_at", "sign_count"])
         cache.delete(key)
-        tokens = issue_tokens_for_user(user, request=request, rotate_guard_session=True)
+        tokens = issue_tokens_for_user(
+            user,
+            request=request,
+            role_code=resolved_login_role,
+            rotate_guard_session=True,
+        )
         response = Response(tokens, status=status.HTTP_200_OK)
         if _cookie_mode_requested(request):
             refresh_token = str(tokens.get("refresh", "") or "").strip()

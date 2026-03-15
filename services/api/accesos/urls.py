@@ -29,6 +29,14 @@ from accesos.api.viewsets.auth import (
     AprendizPerfilView,
     ChangeInitialPasswordView,
     ConfiguracionSistemaView,
+    ControlPanelBrandingConfigView,
+    ControlPanelBrandingPresetListView,
+    ControlPanelSessionCloseView,
+    ControlPanelSessionRequestOtpView,
+    ControlPanelSessionRequestPasskeyView,
+    ControlPanelSessionStatusView,
+    ControlPanelSessionVerifyOtpView,
+    ControlPanelSessionVerifyPasskeyView,
     GuardiaEstadoActualView,
     HealthCheckView,
     MeView,
@@ -40,7 +48,7 @@ from accesos.api.viewsets.auth import (
     PasswordResetRequestView,
     PasswordResetVerifyView,
 )
-from accesos.views import AuditEventsView, GeminiStubView
+from accesos.views import AuditEventsView, ControlPanelQuotaStatusView, GeminiStubView
 from .jwt_views import SadiLogoutAllView, SadiLogoutView, SadiTokenObtainPairView, SadiTokenRefreshView
 
 router = DefaultRouter()
@@ -59,6 +67,8 @@ router.register(r"notificaciones", NotificacionViewSet, basename="notificaciones
 urlpatterns = [
     path("health/", HealthCheckView.as_view(), name="api-health"),
     path("configuracion/", ConfiguracionSistemaView.as_view(), name="configuracion-sistema"),
+    path("control-panel/branding/presets/", ControlPanelBrandingPresetListView.as_view(), name="control-panel-branding-presets"),
+    path("control-panel/branding/config/", ControlPanelBrandingConfigView.as_view(), name="control-panel-branding-config"),
     path("auth/login/", SadiTokenObtainPairView.as_view(), name="auth-login"),
     path("auth/refresh/", SadiTokenRefreshView.as_view(), name="auth-refresh"),
     path("auth/logout/", SadiLogoutView.as_view(), name="auth-logout"),
@@ -79,6 +89,30 @@ urlpatterns = [
     path("aprendiz/mi-qr/", AprendizMiQRView.as_view(), name="aprendiz-mi-qr"),
     path("aprendiz/mi-qr/descargar/", AprendizMiQRDownloadView.as_view(), name="aprendiz-mi-qr-descargar"),
     path("guardia/estado-actual/", GuardiaEstadoActualView.as_view(), name="guardia-estado-actual"),
+    path("control-panel/session/status/", ControlPanelSessionStatusView.as_view(), name="control-panel-session-status"),
+    path(
+        "control-panel/session/request-otp/",
+        ControlPanelSessionRequestOtpView.as_view(),
+        name="control-panel-session-request-otp",
+    ),
+    path(
+        "control-panel/session/verify-otp/",
+        ControlPanelSessionVerifyOtpView.as_view(),
+        name="control-panel-session-verify-otp",
+    ),
+    path(
+        "control-panel/session/request-passkey/",
+        ControlPanelSessionRequestPasskeyView.as_view(),
+        name="control-panel-session-request-passkey",
+    ),
+    path(
+        "control-panel/session/verify-passkey/",
+        ControlPanelSessionVerifyPasskeyView.as_view(),
+        name="control-panel-session-verify-passkey",
+    ),
+    path("control-panel/session/close/", ControlPanelSessionCloseView.as_view(), name="control-panel-session-close"),
+    path("control-panel/quotas/", ControlPanelQuotaStatusView.as_view(), name="control-panel-quotas"),
+    path("control-panel/audit-events/", AuditEventsView.as_view(), name="control-panel-audit-events"),
     path("auth/passkeys/register/options/", PasskeyRegisterOptionsView.as_view(), name="passkey-register-options"),
     path("auth/passkeys/register/verify/", PasskeyRegisterVerifyView.as_view(), name="passkey-register-verify"),
     path("auth/passkeys/auth/options/", PasskeyAuthOptionsView.as_view(), name="passkey-auth-options"),

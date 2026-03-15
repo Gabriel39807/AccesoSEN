@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { api } from "../../src/api/client";
 import { useSessionStore } from "../../src/store/session";
-import { FadeInCard, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
+import { FadeInCard, ModernButton, ModernScreen, NoticeBanner, Pill, SkeletonLine, TitleBlock, uiTheme } from "../../src/ui/modern";
 
 type EstadoResponse = {
   permitido: boolean;
@@ -20,6 +21,21 @@ function normalizeEstado(raw?: string | null): "dentro" | "fuera" | "sin_registr
   if (value === "SIN_REGISTROS") return "sin_registros";
   return null;
 }
+
+function stateCopy(estado: "dentro" | "fuera" | "sin_registros" | null) {
+  if (estado === "dentro") return { label: "Dentro", color: uiTheme.success, note: "Tu ultimo registro indica presencia activa en la sede.", hero: "Acceso activo y trazable" };
+  if (estado === "fuera") return { label: "Fuera", color: uiTheme.warn, note: "No hay un ingreso activo en este momento.", hero: "Listo para tu siguiente ingreso" };
+  if (estado === "sin_registros") return { label: "Sin registros", color: uiTheme.muted, note: "Aun no hay movimientos recientes asociados a tu perfil.", hero: "Aun no hay trazabilidad reciente" };
+  return { label: "No disponible", color: uiTheme.muted, note: "No fue posible consultar el estado actual.", hero: "Estado temporalmente no disponible" };
+}
+
+const quickActions = [
+  { label: "Historial", tone: "dark" as const, path: "/aprendiz/historial", icon: "time-outline" as const },
+  { label: "Mis equipos", tone: "primary" as const, path: "/aprendiz/equipos", icon: "hardware-chip-outline" as const },
+  { label: "Mi QR", tone: "light" as const, path: "/aprendiz/mi-qr", icon: "qr-code-outline" as const },
+  { label: "Perfil", tone: "light" as const, path: "/aprendiz/perfil", icon: "person-outline" as const },
+  { label: "Ayuda", tone: "light" as const, path: "/aprendiz/ayuda", icon: "help-circle-outline" as const },
+];
 
 export default function AprendizHome() {
   const user = useSessionStore((s) => s.user);
@@ -50,57 +66,93 @@ export default function AprendizHome() {
     }, [])
   );
 
+  const currentState = stateCopy(estado);
+
   return (
     <ModernScreen scroll>
-      <FadeInCard delay={0}>
+      <FadeInCard delay={0} style={{ gap: 16 }}>
         <Pill text="PANEL APRENDIZ" />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock
-            title={`Hola, ${user?.first_name || user?.username || "Aprendiz"}`}
-            subtitle={`Documento ${user?.documento || "-"} | Programa ${user?.programa_formacion || "-"}`}
-          />
+        <TitleBlock
+          title={`Hola, ${user?.first_name || user?.username || "Aprendiz"}`}
+          subtitle={`Documento ${user?.documento || "-"} | Programa ${user?.programa_formacion || "-"}`}
+        />
+
+        <View
+          style={{
+            borderRadius: 28,
+            padding: 18,
+            backgroundColor: "rgba(15,118,110,0.08)",
+            borderWidth: 1,
+            borderColor: "rgba(15,118,110,0.14)",
+            gap: 12,
+          }}
+        >
+          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            Estado de acceso
+          </Text>
+          {loading ? (
+            <View style={{ gap: 10, marginTop: 4 }}>
+              <SkeletonLine width="46%" height={24} />
+              <SkeletonLine width="82%" height={16} />
+              <SkeletonLine width="60%" height={16} />
+            </View>
+          ) : (
+            <>
+              <Text style={{ color: uiTheme.ink, fontSize: 26, lineHeight: 30, fontWeight: "900", letterSpacing: -0.7 }}>
+                {currentState.hero}
+              </Text>
+              <View style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: `${currentState.color}14`, borderWidth: 1, borderColor: `${currentState.color}20` }}>
+                <Text style={{ color: currentState.color, fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>
+                  {currentState.label}
+                </Text>
+              </View>
+              <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>{currentState.note}</Text>
+            </>
+          )}
         </View>
       </FadeInCard>
 
-      <FadeInCard delay={70}>
-        <Text style={{ color: "#64748b" }}>Estado actual</Text>
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 8 }} />
-        ) : (
-          <Text
-            style={{
-              marginTop: 6,
-              fontWeight: "900",
-              fontSize: 22,
-              color: estado === "dentro" ? "#15803d" : estado === "fuera" ? "#a16207" : "#475569",
-            }}
-          >
-            {estado ? estado.toUpperCase() : "NO DISPONIBLE"}
-          </Text>
-        )}
+      <FadeInCard delay={70} style={{ gap: 12 }}>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={{ flex: 1, borderRadius: 22, padding: 14, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)", gap: 8 }}>
+            <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(15,118,110,0.08)" }}>
+              <Ionicons name="hardware-chip-outline" size={18} color={uiTheme.accentDeep} />
+            </View>
+            <Text style={{ color: uiTheme.ink, fontWeight: "900", fontSize: 22 }}>4</Text>
+            <Text style={{ color: uiTheme.inkSoft, lineHeight: 18 }}>Equipos maximos que puedes administrar desde tu perfil.</Text>
+          </View>
+          <View style={{ flex: 1, borderRadius: 22, padding: 14, backgroundColor: "rgba(15,23,42,0.92)", borderWidth: 1, borderColor: "rgba(15,23,42,0.16)", gap: 8 }}>
+            <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)" }}>
+              <Ionicons name="qr-code-outline" size={18} color="#ffffff" />
+            </View>
+            <Text style={{ color: "#ffffff", fontWeight: "900", fontSize: 22 }}>QR</Text>
+            <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 18 }}>Tu identificacion dinamica para control rapido en porteria.</Text>
+          </View>
+        </View>
+        <NoticeBanner tone="info" text="Mantener tus equipos y tu QR al dia reduce validaciones manuales y hace el ingreso mas fluido." />
       </FadeInCard>
 
-      <FadeInCard delay={120}>
-        <View style={{ gap: 8 }}>
-          <ModernButton label="Historial" tone="dark" onPress={() => router.push("/aprendiz/historial" as any)} />
-          <ModernButton label="Mis Equipos" onPress={() => router.push("/aprendiz/equipos" as any)} />
-          <ModernButton label="Mi QR" tone="light" onPress={() => router.push("/aprendiz/mi-qr" as any)} />
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <ModernButton label="Perfil" tone="light" onPress={() => router.push("/aprendiz/perfil" as any)} />
+      <FadeInCard delay={130} style={{ gap: 12 }}>
+        <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+          Acciones rapidas
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {quickActions.map((action) => (
+            <View key={action.path} style={{ width: "48%" }}>
+              <ModernButton label={action.label} tone={action.tone} icon={action.icon} onPress={() => router.push(action.path as any)} />
             </View>
-            <View style={{ flex: 1 }}>
-              <ModernButton label="Ayuda" tone="light" onPress={() => router.push("/aprendiz/ayuda" as any)} />
-            </View>
+          ))}
+          <View style={{ width: "48%" }}>
+            <ModernButton
+              label="Cerrar sesion"
+              tone="dark"
+              icon="log-out-outline"
+              onPress={async () => {
+                await signOut();
+                router.replace("/" as any);
+              }}
+            />
           </View>
-          <ModernButton
-            label="Cerrar sesion"
-            tone="dark"
-            onPress={async () => {
-              await signOut();
-              router.replace("/" as any);
-            }}
-          />
         </View>
       </FadeInCard>
     </ModernScreen>

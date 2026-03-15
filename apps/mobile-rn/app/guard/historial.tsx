@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
+
 import { api } from "../../src/api/client";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
+import { GuardBottomNav } from "../../src/ui/guard-bottom-nav";
+import { EmptyState, FadeInCard, InputField, ModernButton, ModernScreen, Pill, SkeletonList, TitleBlock, uiTheme } from "../../src/ui/modern";
 
 type Row = { id: number; tipo: "ingreso" | "salida"; fecha: string };
 
@@ -38,24 +40,20 @@ export default function GuardHistorial() {
   }, [rows]);
 
   return (
-    <ModernScreen scroll>
-      <FadeInCard delay={0}>
+    <ModernScreen scroll bottomAccessory={<GuardBottomNav />}>
+      <FadeInCard delay={0} style={{ gap: 14 }}>
         <Pill text="HISTORIAL" />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock title="Registros de acceso" subtitle="Filtra por documento, nombre o serial." />
-        </View>
+        <TitleBlock title="Registros de acceso" subtitle="Filtra por documento, nombre o serial sin salir del flujo operativo." />
       </FadeInCard>
 
-      <FadeInCard delay={70}>
+      <FadeInCard delay={70} style={{ gap: 12 }}>
         <InputField value={q} onChangeText={setQ} label="Buscar" placeholder="Documento, nombre o serial" />
-        <View style={{ marginTop: 10 }}>
-          <ModernButton label={loading ? "Buscando..." : "Filtrar"} onPress={buscar} disabled={loading} />
-        </View>
+        <ModernButton label={loading ? "Buscando..." : "Filtrar"} onPress={buscar} disabled={loading} />
       </FadeInCard>
 
-      <FadeInCard delay={120}>
+      <FadeInCard delay={120} style={{ gap: 12 }}>
         {loading ? (
-          <ActivityIndicator />
+          <SkeletonList items={3} />
         ) : (
           <FlatList
             data={grouped}
@@ -63,28 +61,41 @@ export default function GuardHistorial() {
             keyExtractor={(i) => i.dia}
             renderItem={({ item }) => (
               <View style={{ marginBottom: 12 }}>
-                <Text style={{ fontWeight: "900", color: "#0f172a", marginBottom: 6 }}>{item.dia}</Text>
-                {item.items.map((r) => (
-                  <View
-                    key={r.id}
-                    style={{
-                      backgroundColor: "#f8fafc",
-                      borderWidth: 1,
-                      borderColor: "#e2e8f0",
-                      borderRadius: 12,
-                      padding: 10,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "900", color: "#0f172a" }}>
-                      #{r.id} - {r.tipo.toUpperCase()}
-                    </Text>
-                    <Text style={{ color: "#64748b" }}>{new Date(r.fecha).toLocaleString()}</Text>
-                  </View>
-                ))}
+                <Text style={{ fontWeight: "900", color: uiTheme.ink, marginBottom: 8, fontSize: 16 }}>{item.dia}</Text>
+                {item.items.map((r) => {
+                  const accent = r.tipo === "ingreso" ? uiTheme.success : uiTheme.warn;
+                  return (
+                    <View
+                      key={r.id}
+                      style={{
+                        backgroundColor: "rgba(255,255,255,0.78)",
+                        borderWidth: 1,
+                        borderColor: "rgba(148,163,184,0.22)",
+                        borderRadius: 18,
+                        padding: 12,
+                        marginBottom: 8,
+                        gap: 6,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <Text style={{ fontWeight: "900", color: uiTheme.ink }}>#{r.id}</Text>
+                        <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: `${accent}18`, borderWidth: 1, borderColor: `${accent}24` }}>
+                          <Text style={{ color: accent, fontWeight: "900", fontSize: 11 }}>{r.tipo.toUpperCase()}</Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: uiTheme.inkSoft }}>{new Date(r.fecha).toLocaleString()}</Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
-            ListEmptyComponent={<Text style={{ color: "#64748b" }}>No hay resultados.</Text>}
+            ListEmptyComponent={
+              <EmptyState
+                icon="search-outline"
+                title="Sin resultados"
+                subtitle="Ajusta el criterio de busqueda para encontrar ingresos, salidas o validaciones de equipos."
+              />
+            }
           />
         )}
       </FadeInCard>

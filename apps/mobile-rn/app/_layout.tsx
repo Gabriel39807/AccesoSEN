@@ -1,8 +1,9 @@
 import { Stack, router } from "expo-router";
 import { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
 
 import { useSessionStore } from "../src/store/session";
+import { SystemBrandingProvider } from "../src/theme/system-branding";
+import { FadeInCard, LoadingBlock, ModernScreen, Pill, TitleBlock } from "../src/ui/modern";
 
 export default function RootLayout() {
   const bootstrap = useSessionStore((s) => s.bootstrap);
@@ -23,11 +24,19 @@ export default function RootLayout() {
 
   if (!hasHydrated || !isReady) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
-      </View>
+      <ModernScreen contentStyle={{ justifyContent: "center" }}>
+        <FadeInCard style={{ gap: 16 }}>
+          <Pill text="INICIALIZANDO" />
+          <TitleBlock title="Preparando entorno seguro" subtitle="Estamos restaurando sesion, permisos y contexto operativo del dispositivo." />
+          <LoadingBlock label="Sincronizando acceso institucional" />
+        </FadeInCard>
+      </ModernScreen>
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <SystemBrandingProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </SystemBrandingProvider>
+  );
 }

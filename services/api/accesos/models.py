@@ -247,7 +247,7 @@ class AllowedEmailDomain(models.Model):
     )
 
     class Meta:
-        ordering = ["domain", "role__code", "sede__code"]
+        ordering = ["role__code", "sede__code", "domain"]
         constraints = [
             models.UniqueConstraint(
                 fields=["domain"],
@@ -586,6 +586,7 @@ class RefreshSession(models.Model):
         related_name="refresh_sessions",
     )
     device_id = models.CharField(max_length=128)
+    role_code = models.CharField(max_length=20, blank=True, default="")
     refresh_token_hash = models.CharField(max_length=128, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(auto_now_add=True)
@@ -603,6 +604,7 @@ class RefreshSession(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "device_id"]),
+            models.Index(fields=["user", "role_code"], name="accesos_ref_user_rol_a1f86f_idx"),
             models.Index(fields=["user", "expires_at"]),
             models.Index(fields=["device_id", "expires_at"]),
             models.Index(fields=["revoked_at"]),
@@ -614,6 +616,199 @@ class RefreshSession(models.Model):
 
     def __str__(self):
         return f"RefreshSession(user={self.user_id}, device={self.device_id}, active={self.is_active})"
+
+
+class ControlPanelSession(models.Model):
+    class VerifiedBy(models.TextChoices):
+        OTP = "otp", "OTP"
+        PASSKEY = "passkey", "Passkey"
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="control_panel_sessions",
+    )
+    verified_by = models.CharField(max_length=20, choices=VerifiedBy.choices)
+    granted_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    ip_address = models.CharField(max_length=64, blank=True, default="")
+    user_agent = models.CharField(max_length=255, blank=True, default="")
+    scope_snapshot = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-granted_at"]
+        indexes = [
+            models.Index(fields=["user", "expires_at"], name="accesos_con_user_id_43b90d_idx"),
+            models.Index(fields=["user", "revoked_at"], name="accesos_con_user_id_72dfd9_idx"),
+        ]
+
+    @property
+    def is_active(self) -> bool:
+        return self.revoked_at is None and timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"ControlPanelSession(user={self.user_id}, verified_by={self.verified_by}, active={self.is_active})"
+
+
+class ControlPanelAuditEvent(models.Model):
+    class Action(models.TextChoices):
+        CREATE = "create", "Create"
+        UPDATE = "update", "Update"
+        DELETE = "delete", "Delete"
+
+    class Category(models.TextChoices):
+        BRANDING = "branding", "Branding"
+        DOMAINS = "domains", "Domains"
+        POLICIES = "policies", "Policies"
+        PERMISSIONS = "permissions", "Permissions"
+        SEDE_MANAGEMENT = "sede_management", "Sede Management"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="control_panel_audit_events",
+    )
+    session = models.ForeignKey(
+        ControlPanelSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+    )
+    action = models.CharField(max_length=20, choices=Action.choices)
+    category = models.CharField(max_length=40, choices=Category.choices)
+    target_type = models.CharField(max_length=80)
+    target_id = models.CharField(max_length=80, blank=True, default="")
+    before_json = models.JSONField(null=True, blank=True)
+    after_json = models.JSONField(null=True, blank=True)
+    reason = models.TextField()
+    ip_address = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["category", "created_at"], name="accesos_cpa_cat_fba2ea_idx"),
+            models.Index(fields=["actor", "created_at"], name="accesos_cpa_actor_f0d103_idx"),
+            models.Index(fields=["session", "created_at"], name="accesos_cpa_session_f1a6f4_idx"),
+        ]
+
+    def __str__(self):
+        return f"ControlPanelAuditEvent(actor={self.actor_id}, action={self.action}, category={self.category})"
+
+
+class ControlPanelQuotaCounter(models.Model):
+    class Category(models.TextChoices):
+        BRANDING = "branding", "Branding"
+        DOMAINS = "domains", "Domains"
+        POLICIES = "policies", "Policies"
+        PERMISSIONS = "permissions", "Permissions"
+        SEDE_MANAGEMENT = "sede_management", "Sede Management"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="control_panel_quota_counters",
+    )
+    category = models.CharField(max_length=40, choices=Category.choices)
+    window_start = models.DateField()
+    count = models.PositiveIntegerField(default=0)
+    last_action_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-window_start", "category"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "category", "window_start"],
+                name="unique_control_panel_quota_window",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "window_start"], name="accesos_cpq_user_52377a_idx"),
+            models.Index(fields=["category", "window_start"], name="accesos_cpq_cat_b53b4c_idx"),
+        ]
+
+    def __str__(self):
+        return (
+            f"ControlPanelQuotaCounter(user={self.user_id}, category={self.category}, "
+            f"window_start={self.window_start}, count={self.count})"
+        )
+
+
+class BrandingPreset(models.Model):
+    slug = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=80)
+    tokens_json = models.JSONField(default=dict)
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_default:
+            BrandingPreset.objects.exclude(pk=self.pk).filter(is_default=True).update(is_default=False)
+
+    def __str__(self):
+        return f"BrandingPreset({self.slug})"
+
+
+class TenantBrandingConfig(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    branding_preset = models.ForeignKey(
+        BrandingPreset,
+        on_delete=models.PROTECT,
+        related_name="tenant_configs",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tenant_branding_updates",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tenant branding config"
+        verbose_name_plural = "Tenant branding config"
+
+    @classmethod
+    def get_solo(cls):
+        preset = BrandingPreset.objects.filter(is_default=True, is_active=True).order_by("name").first()
+        if preset is None:
+            preset = BrandingPreset.objects.filter(is_active=True).order_by("name").first()
+        if preset is None:
+            preset = BrandingPreset.objects.create(
+                slug="sadi-default",
+                name="SADI Default",
+                is_active=True,
+                is_default=True,
+                tokens_json={
+                    "color_aprendiz_light": "#14B8A6",
+                    "color_aprendiz_dark": "#0F766E",
+                    "color_admin_light": "#3B82F6",
+                    "color_admin_dark": "#1E3A8A",
+                    "color_guarda_light": "#F59E0B",
+                    "color_guarda_dark": "#B45309",
+                },
+            )
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={"branding_preset": preset})
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"TenantBrandingConfig(preset={self.branding_preset_id})"
 
 
 class AprendizImportAudit(models.Model):

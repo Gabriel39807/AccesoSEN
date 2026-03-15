@@ -7,27 +7,25 @@ const sourceNext = path.join(webRoot, ".next");
 const targetNext = path.join(repoRoot, ".next");
 const sourcePublic = path.join(webRoot, "public");
 const targetPublic = path.join(repoRoot, "public");
+const sourceNodeModules = path.join(webRoot, "node_modules");
+const targetNodeModules = path.join(repoRoot, "node_modules");
 
-function linkOrCopyDir(sourceDir, targetDir, label) {
+function copyDir(sourceDir, targetDir, label) {
   if (!fs.existsSync(sourceDir)) {
     throw new Error(`Missing source directory: ${sourceDir}`);
   }
 
   fs.rmSync(targetDir, { recursive: true, force: true });
-
-  try {
-    fs.symlinkSync(sourceDir, targetDir, "dir");
-    console.log(`[vercel-build] Linked ${label}.`);
-  } catch {
-    fs.cpSync(sourceDir, targetDir, { recursive: true });
-    console.log(`[vercel-build] Copied ${label}.`);
-  }
+  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  console.log(`[vercel-build] Copied ${label}.`);
 }
 
-linkOrCopyDir(sourceNext, targetNext, "apps/web/.next to root/.next");
+copyDir(sourceNext, targetNext, "apps/web/.next to root/.next");
 
 if (fs.existsSync(sourcePublic)) {
-  linkOrCopyDir(sourcePublic, targetPublic, "apps/web/public to root/public");
+  copyDir(sourcePublic, targetPublic, "apps/web/public to root/public");
 }
 
-console.log("[vercel-build] Synced apps/web build artifacts to repository root.");
+copyDir(sourceNodeModules, targetNodeModules, "apps/web/node_modules to root/node_modules");
+
+console.log("[vercel-build] Synced apps/web artifacts and traced dependencies to repository root.");

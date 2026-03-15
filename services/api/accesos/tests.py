@@ -29,14 +29,18 @@ from .models import (
     AprendizImportAudit,
     AllowedEmailDomain,
     ConfiguracionSistema,
+    ControlPanelAuditEvent,
+    ControlPanelQuotaCounter,
     EmailChangeOTP,
     Equipo,
+    Notificacion,
     PasswordResetOTP,
     Permission as RbacPermission,
     RefreshSession,
     Role,
     Sede,
     SedePolicy,
+    TenantBrandingConfig,
     Turno,
     UserMembership,
     Usuario,
@@ -95,6 +99,29 @@ class BaseApiTest(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {r.data['access']}")
         return r
 
+    def start_control_panel_session(self) -> str:
+        with patch("accesos.views.send_control_panel_otp_email") as send_mock:
+            requested = self.client.post("/api/control-panel/session/request-otp/", {}, format="json")
+            self.assertEqual(requested.status_code, status.HTTP_200_OK, requested.data)
+            self.assertTrue(send_mock.called)
+            otp_code = send_mock.call_args.args[1]
+
+        verified = self.client.post(
+            "/api/control-panel/session/verify-otp/",
+            {"request_id": requested.data["request_id"], "otp": otp_code},
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_200_OK, verified.data)
+        session_id = verified.data["session"]["id"]
+        self.assertTrue(session_id)
+        return session_id
+
+    def control_panel_headers(self, *, session_id: str | None = None, reason: str = "Cambio de prueba") -> dict:
+        headers = {"HTTP_X_CONTROL_PANEL_REASON": reason}
+        if session_id:
+            headers["HTTP_X_CONTROL_PANEL_SESSION"] = session_id
+        return headers
+
 
 class HealthEndpointsTests(BaseApiTest):
     def test_health_endpoint_is_available(self):
@@ -140,21 +167,188 @@ class ConfiguracionSistemaEndpointTests(BaseApiTest):
         self.assertEqual(payload.get("nombre_institucion"), "Institución")
         self.assertIn("color_aprendiz_light", payload)
 
-    def test_put_requires_superuser(self):
+    def test_put_requires_superuser_and_control_panel_session(self):
         self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
         denied = self.client.put("/api/configuracion/", {"nombre_institucion": "Institucion X"}, format="json")
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
 
         self.auth(self.superuser.username, "Passw0rd!", expected_role="admin")
+        denied_without_step_up = self.client.put(
+            "/api/configuracion/",
+            {"nombre_institucion": "Institucion X"},
+            format="json",
+        )
+        self.assertEqual(denied_without_step_up.status_code, status.HTTP_403_FORBIDDEN, denied_without_step_up.data)
+
+        session_id = self.start_control_panel_session()
         ok = self.client.put(
             "/api/configuracion/",
             {"nombre_institucion": "Institucion X", "color_admin_light": "#123ABC"},
             format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Actualizar branding base"),
         )
         self.assertEqual(ok.status_code, status.HTTP_200_OK, ok.data)
         self.assertEqual(ok.data["configuracion"]["nombre_institucion"], "Institucion X")
         self.assertEqual(ok.data["configuracion"]["color_admin_light"], "#123ABC")
         self.assertEqual(ConfiguracionSistema.objects.count(), 1)
+
+
+class ControlPanelSessionStepUpTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="cp_super",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="cp.super@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+        self.admin_sede = self.create_user(
+            username="cp_admin",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="cp.admin@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def test_superadmin_can_open_status_and_close_control_panel_session(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        status_ok = self.client.get("/api/control-panel/session/status/", HTTP_X_CONTROL_PANEL_SESSION=session_id)
+        self.assertEqual(status_ok.status_code, status.HTTP_200_OK, status_ok.data)
+        self.assertTrue(status_ok.data.get("active"))
+        self.assertEqual(status_ok.data["session"]["id"], session_id)
+
+        quotas = self.client.get("/api/control-panel/quotas/", **self.control_panel_headers(session_id=session_id))
+        self.assertEqual(quotas.status_code, status.HTTP_200_OK, quotas.data)
+        self.assertEqual(quotas.data.get("count"), 5)
+
+        closed = self.client.post("/api/control-panel/session/close/", {}, format="json", HTTP_X_CONTROL_PANEL_SESSION=session_id)
+        self.assertEqual(closed.status_code, status.HTTP_200_OK, closed.data)
+        self.assertFalse(closed.data.get("active"))
+
+        denied_after_close = self.client.get("/api/auditoria/eventos/", HTTP_X_CONTROL_PANEL_SESSION=session_id)
+        self.assertEqual(denied_after_close.status_code, status.HTTP_403_FORBIDDEN, denied_after_close.data)
+
+    def test_admin_sede_cannot_open_control_panel_session(self):
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+        denied = self.client.post("/api/control-panel/session/request-otp/", {}, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+
+    def test_control_panel_session_cannot_be_reused_by_other_user(self):
+        other_superadmin = self.create_user(
+            username="cp_super_other",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="cp.super.other@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        self.auth(other_superadmin.username, "Passw0rd!", expected_role="admin")
+        denied = self.client.get("/api/auditoria/eventos/", HTTP_X_CONTROL_PANEL_SESSION=session_id)
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+
+
+@override_settings(CONTROL_PANEL_BRANDING_DAILY_LIMIT=1)
+class ControlPanelGovernanceTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="cp_gov_super",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="cp.gov.super@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+
+    def test_branding_mutation_creates_audit_event(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        updated = self.client.put(
+            "/api/configuracion/",
+            {"nombre_institucion": "SADI Cliente"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Ajuste inicial de cliente"),
+        )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK, updated.data)
+
+        audit_event = ControlPanelAuditEvent.objects.filter(category="branding").latest("created_at")
+        self.assertEqual(audit_event.action, "update")
+        self.assertEqual(audit_event.reason, "Ajuste inicial de cliente")
+        self.assertEqual(audit_event.target_type, "configuracion_sistema")
+        self.assertEqual(audit_event.after_json["nombre_institucion"], "SADI Cliente")
+
+        audit_list = self.client.get(
+            "/api/control-panel/audit-events/",
+            **self.control_panel_headers(session_id=session_id),
+        )
+        self.assertEqual(audit_list.status_code, status.HTTP_200_OK, audit_list.data)
+        types = {item.get("type") for item in audit_list.data.get("results", [])}
+        self.assertIn("control_panel.branding.update", types)
+
+    def test_branding_quota_blocks_second_change_in_same_window(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        first = self.client.put(
+            "/api/configuracion/",
+            {"nombre_institucion": "Cliente Uno"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Primer ajuste de branding"),
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK, first.data)
+
+        second = self.client.put(
+            "/api/configuracion/",
+            {"nombre_institucion": "Cliente Dos"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Segundo ajuste de branding"),
+        )
+        self.assertEqual(second.status_code, status.HTTP_429_TOO_MANY_REQUESTS, second.data)
+        self.assertEqual(second.data.get("field"), "quota")
+
+        counter = ControlPanelQuotaCounter.objects.get(user=self.superadmin, category="branding")
+        self.assertEqual(counter.count, 1)
+
+    def test_branding_presets_and_config_endpoint_apply_selected_preset(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        presets = self.client.get(
+            "/api/control-panel/branding/presets/",
+            **self.control_panel_headers(session_id=session_id),
+        )
+        self.assertEqual(presets.status_code, status.HTTP_200_OK, presets.data)
+        preset_slugs = {item["slug"] for item in presets.data["results"]}
+        self.assertIn("sadi-classic", preset_slugs)
+        self.assertIn("forest-campus", preset_slugs)
+
+        changed = self.client.patch(
+            "/api/control-panel/branding/config/",
+            {"branding_preset": "forest-campus"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Ajustar tema del cliente"),
+        )
+        self.assertEqual(changed.status_code, status.HTTP_200_OK, changed.data)
+        self.assertEqual(changed.data["configuracion"]["branding_preset"], "forest-campus")
+
+        tenant_config = TenantBrandingConfig.get_solo()
+        self.assertEqual(tenant_config.branding_preset.slug, "forest-campus")
+
+        public_config = self.client.get("/api/configuracion/")
+        self.assertEqual(public_config.status_code, status.HTTP_200_OK, public_config.data)
+        self.assertEqual(public_config.data["configuracion"]["branding_preset"], "forest-campus")
+        self.assertEqual(public_config.data["configuracion"]["color_aprendiz_light"], "#22C55E")
 
 
 class LoginAndLockTests(BaseApiTest):
@@ -1185,6 +1379,35 @@ class DataDrivenRBACAndPolicyTests(BaseApiTest):
         self.assertTrue(rows)
         self.assertTrue(all(item.get("sede_principal") == "sede-2" for item in rows))
 
+    def test_admin_access_creation_uses_membership_sede_as_source_of_truth(self):
+        role_admin = Role.objects.get(code="admin_sede")
+        UserMembership.objects.filter(user=self.admin_sede).update(is_primary=False, is_active=False)
+        UserMembership.objects.create(
+            user=self.admin_sede,
+            role=role_admin,
+            sede=self.sede("sede-2"),
+            is_primary=True,
+            is_active=True,
+        )
+        aprendiz_sede_2 = self.create_user(
+            username="scope_access_sede2",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1234567893",
+            email="scope.access.sede2@sadi.test",
+            sede_principal="sede-2",
+        )
+
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+        response = self.client.post(
+            "/api/accesos/",
+            {"usuario": aprendiz_sede_2.id, "tipo": Acceso.Tipo.INGRESO},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["acceso"]["sede"], "sede-2")
+
     def test_policy_max_equipos_is_dynamic_per_sede(self):
         policy, _ = SedePolicy.objects.get_or_create(sede=self.sede("sede-1"))
         policy.max_equipos_aprendiz = 2
@@ -1410,6 +1633,70 @@ class SecurityHardeningTests(BaseApiTest):
         self.assertEqual(first.data["acceso"]["id"], second.data["acceso"]["id"])
         self.assertEqual(Acceso.objects.filter(usuario=self.aprendiz, tipo=Acceso.Tipo.INGRESO).count(), 1)
 
+    def test_validar_documento_accepts_signed_aprendiz_qr(self):
+        Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede_1,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+            fin=None,
+        )
+        session = RefreshSession.objects.create(
+            user=self.aprendiz,
+            device_id="guard-validate-signed",
+            refresh_token_hash=uuid4().hex,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        qr_value, _ = QRService.build_aprendiz_qr_value(
+            self.aprendiz.documento,
+            sede=self.sede_1,
+            session_id=str(session.id),
+            user_id=self.aprendiz.id,
+        )
+
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        response = self.client.post(
+            "/api/accesos/validar_documento/",
+            {"documento": qr_value},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["aprendiz"]["documento"], self.aprendiz.documento)
+        self.assertEqual(response.data["turno"]["sede"], self.sede_1.code)
+
+    def test_registrar_por_documento_accepts_signed_aprendiz_qr(self):
+        Turno.objects.create(
+            guarda=self.guarda,
+            sede=self.sede_1,
+            jornada=Turno.Jornada.TARDE,
+            activo=True,
+            fin=None,
+        )
+        session = RefreshSession.objects.create(
+            user=self.aprendiz,
+            device_id="guard-register-signed",
+            refresh_token_hash=uuid4().hex,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+        qr_value, _ = QRService.build_aprendiz_qr_value(
+            self.aprendiz.documento,
+            sede=self.sede_1,
+            session_id=str(session.id),
+            user_id=self.aprendiz.id,
+        )
+
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        response = self.client.post(
+            "/api/accesos/registrar_por_documento/",
+            {"documento": qr_value, "tipo": Acceso.Tipo.INGRESO},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["acceso"]["usuario"], self.aprendiz.id)
+        self.assertEqual(response.data["acceso"]["tipo"], Acceso.Tipo.INGRESO)
+
     def test_access_token_with_invalid_sid_is_rejected(self):
         login = self.client.post(
             "/api/token/",
@@ -1478,6 +1765,23 @@ class SecurityHardeningTests(BaseApiTest):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.data)
         acceso.refresh_from_db()
         self.assertFalse(acceso.is_deleted)
+
+    def test_access_log_cannot_be_updated(self):
+        acceso = Acceso.objects.create(
+            usuario=self.aprendiz,
+            tipo=Acceso.Tipo.INGRESO,
+            sede=self.sede_1,
+            registrado_por=self.guarda,
+        )
+        self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
+        response = self.client.patch(
+            f"/api/accesos/{acceso.id}/",
+            {"tipo": Acceso.Tipo.SALIDA},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED, response.data)
+        acceso.refresh_from_db()
+        self.assertEqual(acceso.tipo, Acceso.Tipo.INGRESO)
 
     def test_sensitive_tables_enable_rls_and_remove_anon_grants(self):
         if connection.vendor != "postgresql":
@@ -1765,10 +2069,12 @@ class GlobalAllowedDomainPolicyTests(BaseApiTest):
 
     def test_duplicate_domain_rule_rejected_with_400(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
         first = self.client.post(
             "/api/dominios-email/",
             {"domain": "empresax.com", "is_active": True},
             format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Crear dominio permitido"),
         )
         self.assertEqual(first.status_code, status.HTTP_201_CREATED, first.data)
 
@@ -1776,6 +2082,7 @@ class GlobalAllowedDomainPolicyTests(BaseApiTest):
             "/api/dominios-email/",
             {"domain": "@EMPRESAX.com", "is_active": True},
             format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Intento duplicado"),
         )
         self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST, duplicate.data)
 
@@ -1789,10 +2096,12 @@ class GlobalAllowedDomainPolicyTests(BaseApiTest):
         self.assertEqual(create_denied.status_code, status.HTTP_403_FORBIDDEN, create_denied.data)
 
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
         created = self.client.post(
             "/api/dominios-email/",
             {"domain": "empresa.com", "is_active": True},
             format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Crear dominio cliente"),
         )
         self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
         rule_id = created.data.get("id")
@@ -1802,8 +2111,12 @@ class GlobalAllowedDomainPolicyTests(BaseApiTest):
             f"/api/dominios-email/{rule_id}/",
             {"is_active": False},
             format="json",
+            **self.control_panel_headers(reason="Cambio ilegal"),
         )
-        delete_denied = self.client.delete(f"/api/dominios-email/{rule_id}/")
+        delete_denied = self.client.delete(
+            f"/api/dominios-email/{rule_id}/",
+            **self.control_panel_headers(reason="Cambio ilegal"),
+        )
         self.assertEqual(patch_denied.status_code, status.HTTP_403_FORBIDDEN, patch_denied.data)
         self.assertEqual(delete_denied.status_code, status.HTTP_403_FORBIDDEN, delete_denied.data)
 
@@ -1822,10 +2135,12 @@ class TurnoConcurrencySafetyTests(BaseApiTest):
 
     def test_parallel_turno_start_returns_one_success_and_one_controlled_conflict(self):
         payload = {"sede": "sede-1", "jornada": Turno.Jornada.TARDE}
-        if connection.vendor == "sqlite":
+        if connection.vendor == "sqlite" or connection.in_atomic_block:
             # SQLite test DB serializes writes aggressively and does not model
-            # real concurrent row-level locks. Run a deterministic two-step
-            # assertion and keep true parallel coverage for non-sqlite engines.
+            # real concurrent row-level locks. Also, Django TestCase wraps each
+            # test in an outer transaction, so worker threads cannot observe
+            # setup data on independent connections in PostgreSQL. Run a
+            # deterministic two-step assertion in those constrained environments.
             self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
             first = self.client.post("/api/turnos/iniciar/", payload, format="json")
             second = self.client.post("/api/turnos/iniciar/", payload, format="json")
@@ -1899,6 +2214,139 @@ class LegacyRolePrecedenceTests(BaseApiTest):
         )
         self.assertEqual(admin_login.status_code, status.HTTP_401_UNAUTHORIZED, admin_login.data)
         self.assertEqual(admin_login.data.get("code"), "INVALID_CREDENTIALS")
+
+
+class MultiRoleSessionRoleTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.user = self.create_user(
+            username="8383838383",
+            password="Passw0rd!",
+            rol="admin_sede",
+            documento="8383838383",
+            email="multi.role@sadi.test",
+            sede_principal="sede-1",
+        )
+        role_guard = Role.objects.get(code="guarda")
+        UserMembership.objects.create(
+            user=self.user,
+            role=role_guard,
+            sede=self.sede("sede-1"),
+            is_active=True,
+            is_primary=False,
+        )
+
+    def test_multi_role_login_issues_guard_token_and_blocks_admin_actions(self):
+        login = self.client.post(
+            "/api/token/",
+            {"username": self.user.documento, "password": "Passw0rd!", "expected_role": "guarda"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+
+        access = AccessToken(login.data["access"])
+        self.assertEqual(access["rol"], Usuario.Rol.GUARDA)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        guard_status = self.client.get("/api/guardia/estado-actual/")
+        self.assertEqual(guard_status.status_code, status.HTTP_200_OK, guard_status.data)
+
+        denied = self.client.post(
+            "/api/usuarios/",
+            {
+                "username": "blocked_from_guard_module",
+                "password": "Passw0rd!",
+                "rol": "aprendiz",
+                "estado": "activo",
+                "documento": "1231231231",
+                "sede_principal": "sede-1",
+            },
+            format="json",
+        )
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+
+    def test_multi_role_refresh_preserves_requested_guard_role(self):
+        login = self.client.post(
+            "/api/token/",
+            {
+                "username": self.user.documento,
+                "password": "Passw0rd!",
+                "expected_role": "guarda",
+                "device_id": "multi-role-guard-device",
+            },
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+
+        refreshed = self.client.post(
+            "/api/token/refresh/",
+            {"refresh": login.data["refresh"], "device_id": "multi-role-guard-device"},
+            format="json",
+        )
+        self.assertEqual(refreshed.status_code, status.HTTP_200_OK, refreshed.data)
+        self.assertEqual(AccessToken(refreshed.data["access"])["rol"], Usuario.Rol.GUARDA)
+
+    def test_multi_role_admin_token_blocks_guard_only_endpoint(self):
+        login = self.client.post(
+            "/api/token/",
+            {"username": self.user.documento, "password": "Passw0rd!", "expected_role": "admin"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+        self.assertEqual(AccessToken(login.data["access"])["rol"], Usuario.Rol.ADMIN_SEDE)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        denied = self.client.get("/api/guardia/estado-actual/")
+        self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+
+    def test_multi_role_notifications_follow_active_runtime_role(self):
+        Notificacion.objects.create(
+            rol_objetivo=Usuario.Rol.ADMIN_SEDE,
+            titulo="Solo admin",
+            mensaje="visible solo en sesion admin",
+        )
+        guard_notification = Notificacion.objects.create(
+            rol_objetivo=Usuario.Rol.GUARDA,
+            titulo="Solo guarda",
+            mensaje="visible solo en sesion guarda",
+        )
+        Notificacion.objects.create(
+            titulo="Global",
+            mensaje="visible para todos",
+        )
+
+        guard_login = self.client.post(
+            "/api/token/",
+            {"username": self.user.documento, "password": "Passw0rd!", "expected_role": "guarda"},
+            format="json",
+        )
+        self.assertEqual(guard_login.status_code, status.HTTP_200_OK, guard_login.data)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {guard_login.data['access']}")
+
+        guard_list = self.client.get("/api/notificaciones/")
+        self.assertEqual(guard_list.status_code, status.HTTP_200_OK, guard_list.data)
+        guard_titles = {item["titulo"] for item in guard_list.data.get("results", [])}
+        self.assertIn("Solo guarda", guard_titles)
+        self.assertIn("Global", guard_titles)
+        self.assertNotIn("Solo admin", guard_titles)
+
+        guard_read = self.client.patch(f"/api/notificaciones/{guard_notification.id}/leer/", {}, format="json")
+        self.assertEqual(guard_read.status_code, status.HTTP_200_OK, guard_read.data)
+
+        admin_login = self.client.post(
+            "/api/token/",
+            {"username": self.user.documento, "password": "Passw0rd!", "expected_role": "admin"},
+            format="json",
+        )
+        self.assertEqual(admin_login.status_code, status.HTTP_200_OK, admin_login.data)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {admin_login.data['access']}")
+
+        admin_list = self.client.get("/api/notificaciones/")
+        self.assertEqual(admin_list.status_code, status.HTTP_200_OK, admin_list.data)
+        admin_titles = {item["titulo"] for item in admin_list.data.get("results", [])}
+        self.assertIn("Solo admin", admin_titles)
+        self.assertIn("Global", admin_titles)
+        self.assertNotIn("Solo guarda", admin_titles)
 
 
 class EmailChangeOtpTests(BaseApiTest):
@@ -2026,6 +2474,24 @@ class NumericFieldValidationTests(BaseApiTest):
         r = self.client.post("/api/usuarios/", payload, format="json")
         self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
         self.assertEqual(r.data["username"], payload["username"])
+
+    def test_usuario_create_without_password_generates_non_document_secret(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        payload = {
+            "username": "auto_password_user",
+            "rol": "aprendiz",
+            "estado": "activo",
+            "documento": "1234567890",
+            "sede_principal": "sede-1",
+            "email": "auto.password@sadi.test",
+        }
+        r = self.client.post("/api/usuarios/", payload, format="json")
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
+
+        created = Usuario.objects.get(username="auto_password_user")
+        self.assertTrue(created.must_change_password)
+        self.assertFalse(created.check_password("567890"))
+        self.assertFalse(created.check_password("7890"))
 
     def test_usuario_create_rejects_username_with_spaces(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
@@ -2347,6 +2813,27 @@ class SedeEndpointIntegrityTests(BaseApiTest):
         codes = {item.get("code") for item in rows}
         self.assertSetEqual(codes, {"north"})
 
+    def test_admin_sede_cannot_request_inactive_sedes_filters(self):
+        Sede.objects.get_or_create(code="north", defaults={"name": "North", "is_active": True})
+        admin = self.create_user(
+            username="admin_sedes_inactive_scope",
+            password="Passw0rd!",
+            rol="admin_sede",
+            email="admin.inactive.scope@sadi.test",
+            sede_principal="north",
+        )
+        self.auth(admin.username, "Passw0rd!", expected_role="admin")
+
+        by_flag = self.client.get("/api/sedes/?include_inactive=true")
+        self.assertEqual(by_flag.status_code, status.HTTP_400_BAD_REQUEST, by_flag.data)
+        self.assertEqual(by_flag.data.get("field"), "active")
+        self.assertIn("active", by_flag.data.get("detail", {}))
+
+        by_active_false = self.client.get("/api/sedes/?active=false")
+        self.assertEqual(by_active_false.status_code, status.HTTP_400_BAD_REQUEST, by_active_false.data)
+        self.assertEqual(by_active_false.data.get("field"), "active")
+        self.assertIn("active", by_active_false.data.get("detail", {}))
+
 
 class SuperadminControlCenterPermissionTests(BaseApiTest):
     def setUp(self):
@@ -2412,13 +2899,22 @@ class SuperadminControlCenterPermissionTests(BaseApiTest):
 
     def test_superadmin_can_create_and_deactivate_sede(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
 
-        created = self.client.post("/api/sedes/", {"code": "campus-z", "name": "Campus Z"}, format="json")
+        created = self.client.post(
+            "/api/sedes/",
+            {"code": "campus-z", "name": "Campus Z"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Crear sede cliente"),
+        )
         self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
         sede_id = created.data.get("id")
         self.assertIsNotNone(sede_id)
 
-        deleted = self.client.delete(f"/api/sedes/{sede_id}/")
+        deleted = self.client.delete(
+            f"/api/sedes/{sede_id}/",
+            **self.control_panel_headers(session_id=session_id, reason="Desactivar sede cliente"),
+        )
         self.assertEqual(deleted.status_code, status.HTTP_200_OK, deleted.data)
         self.assertFalse(Sede.objects.get(id=sede_id).is_active)
 

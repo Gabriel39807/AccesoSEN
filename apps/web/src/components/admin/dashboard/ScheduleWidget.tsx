@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion";
 
+const attendeeBadges = ["A", "B", "C"];
+
 const container = {
     hidden: { opacity: 0 },
     show: {
@@ -83,9 +85,15 @@ export default function ScheduleWidget() {
                                 )}
                                 {i === 0 && (
                                     <div className="mt-2 flex -space-x-1.5">
-                                        <img className="h-5 w-5 rounded-full border border-white transition-transform hover:z-10 hover:scale-110" src="https://ui-avatars.com/api/?name=A&background=random" alt="" />
-                                        <img className="h-5 w-5 rounded-full border border-white transition-transform hover:z-10 hover:scale-110" src="https://ui-avatars.com/api/?name=B&background=random" alt="" />
-                                        <img className="h-5 w-5 rounded-full border border-white transition-transform hover:z-10 hover:scale-110" src="https://ui-avatars.com/api/?name=C&background=random" alt="" />
+                                        {attendeeBadges.map((badge) => (
+                                            <span
+                                                key={badge}
+                                                aria-label={`Asistente ${badge}`}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full border border-white bg-gradient-to-br from-sky-400 to-cyan-500 text-[9px] font-extrabold text-white transition-transform hover:z-10 hover:scale-110"
+                                            >
+                                                {badge}
+                                            </span>
+                                        ))}
                                     </div>
                                 )}
                             </div>

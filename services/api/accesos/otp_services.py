@@ -79,3 +79,20 @@ def send_password_reset_email(to_email: str, code: str):
         msg.attach_alternative(html_body, "text/html")
     msg.send(fail_silently=False)
     logger.info("otp_email_sent recipient=%s", _mask_email(to_email))
+
+
+def send_control_panel_otp_email(to_email: str, code: str):
+    subject = f"{INSTITUTION_NAME} - Codigo de verificacion del panel"
+    text_body = (
+        f"Tu codigo de verificacion del panel de control de {INSTITUTION_NAME} es: {code}\n\n"
+        f"Este codigo vence en {OTP_TTL_MINUTES} minutos.\n"
+        "Si no solicitaste este acceso, ignora este mensaje."
+    )
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@sadi.local"),
+        to=[to_email],
+    )
+    msg.send(fail_silently=False)
+    logger.info("control_panel_otp_email_sent recipient=%s", _mask_email(to_email))

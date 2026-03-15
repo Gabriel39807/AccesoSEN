@@ -1,4 +1,5 @@
 import "./globals.css";
+import "@cyntler/react-doc-viewer/dist/index.css";
 import AppProviders from "@/components/providers/app-providers";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

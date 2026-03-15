@@ -30,16 +30,14 @@ jobs:
     env:
       DJANGO_ENV: test
       DJANGO_DEBUG: "false"
-      DATABASE_ENGINE: django.db.backends.postgresql
-      DATABASE_NAME: sadi_ci
-      DATABASE_USER: sadi_ci
-      DATABASE_PASSWORD: sadi_ci
-      DATABASE_HOST: 127.0.0.1
-      DATABASE_PORT: "5432"
-      DATABASE_SSLMODE: disable
-      TEST_DATABASE_NAME: sadi_ci_test
       DJANGO_SECRET_KEY: ci-secret-key-not-for-production
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      TEST_DATABASE_NAME: sadi_ci
+      TEST_DATABASE_USER: sadi_ci
+      TEST_DATABASE_PASSWORD: sadi_ci
+      TEST_DATABASE_HOST: 127.0.0.1
+      TEST_DATABASE_PORT: "5432"
+      TEST_DATABASE_SSLMODE: disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -57,6 +55,18 @@ jobs:
         run: python -m black --check accesos/auth_jwt.py accesos/jwt_views.py accesos/rate_limit.py accesos/otp_services.py
       - name: Django checks
         run: python manage.py check
+      - name: Production deploy checks
+        env:
+          DJANGO_ENV: production
+          DJANGO_SECRET_KEY: this-is-a-ci-only-secret-key-with-more-than-fifty-characters-123456789
+          DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+          DATABASE_ENGINE: django.db.backends.sqlite3
+          CACHE_BACKEND: database
+          WEBAUTHN_MOCK: "false"
+          SECURE_SSL_REDIRECT: "true"
+          SESSION_COOKIE_SECURE: "true"
+          CSRF_COOKIE_SECURE: "true"
+        run: python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','accesosen_api.settings'); import django; django.setup(); from django.core.management import call_command; call_command('check', deploy=True, fail_level='WARNING')"
       - name: Tests with coverage
         run: pytest --create-db --cov=accesos --cov-report=term-missing --cov-fail-under=30
 
@@ -67,7 +77,8 @@ jobs:
       run:
         working-directory: apps/web
     env:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_AUTH_COOKIE_MODE: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,8 +95,14 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
+      - name: Mobile smoke tests
+        run: npm run test:smoke
       - name: Build
         run: npm run build
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Web smoke e2e
+        run: npm run test:e2e
 
   mobile:
     name: Mobile (Expo RN)

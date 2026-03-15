@@ -22,7 +22,7 @@ Score global: **72/100**
 
 ### P1 (alto impacto)
 1. Lint web con deuda tecnica (`no-explicit-any`) aun elevada.
-2. Ausencia de pruebas e2e para flujos criticos de web/mobile.
+2. Ausencia de pruebas e2e completas en dispositivo real para mobile y cobertura de journeys web todavia limitada.
 3. Falta de reverse proxy/TLS documentado operativamente.
 
 ### P2 (mejora continua)
@@ -86,11 +86,58 @@ Score global: **72/100**
 1. Subir coverage backend a >= 60% y luego >= 75%.
 2. Eliminar excepcion temporal de `no-explicit-any` en CI web.
 3. Integrar escaneo de vulnerabilidades en CI (`pip-audit`, `npm audit`, `trivy`).
-4. Añadir e2e smoke de login/flujo OTP (Playwright para web).
-5. Añadir proxy TLS (Nginx/Caddy) y guia de certificados.
+4. Expandir smoke e2e actuales de web hacia mas journeys criticos.
+5. Evolucionar smoke mobile actuales de contrato hacia pruebas de dispositivo o navegacion real.
+6. Anadir proxy TLS (Nginx/Caddy) y guia de certificados.
 
 ## Plan de mitigacion
 1. Sprint corto de deuda web typing (`any` -> tipos concretos).
 2. Matriz de pruebas de regresion para auth/permisos/OTP.
 3. Observabilidad avanzada (Sentry + metricas HTTP).
 4. Procedimiento formal de rotacion de secretos trimestral.
+
+## Actualizacion 2026-03-15 (hardening final API + Control Panel)
+
+Estado actual estimado:
+
+- Security: 86
+- Reliability: 84
+- Observability: 72
+- CI/CD: 85
+- Testing: 82
+- DX (Developer Experience): 82
+- Architecture: 86
+
+Score global estimado: **82/100**
+
+### Resuelto desde la linea base
+
+- Flujo QR firmado corregido para tokens largos.
+- Healthcheck de plataforma alineado a `/ready/`.
+- `check --deploy` agregado y validado en pipeline.
+- Tests backend desacoplados de dependencia remota accidental.
+- RBAC endurecido con evaluacion por `UserMembership` en flujos criticos.
+- Multirol corregido para que el token respete el rol runtime.
+- `Acceso` dejado inmutable salvo politica controlada de borrado.
+- Contrasenas iniciales predecibles eliminadas.
+- `Control Panel` separado como perimetro sensible con:
+  - permisos `control_panel.*`
+  - step-up auth
+  - cuotas
+  - auditoria before/after
+- Branding migrado a presets seguros con consumo efectivo en web y mobile.
+
+### Riesgos residuales
+
+1. Web ya tiene smoke e2e basicos y mobile tiene smoke de contrato, pero aun faltan pruebas de dispositivo real y mas journeys criticos.
+2. Persisten zonas de backend con cobertura funcional baja, especialmente:
+   - `accesos/import_services.py`
+   - zonas amplias de `accesos/views.py`
+3. Falta observabilidad avanzada de negocio y aplicacion:
+   - metricas HTTP
+   - alertas
+   - error tracking centralizado
+
+### Criterio actual
+
+El proyecto ya no presenta bloqueadores funcionales evidentes para una primera salida controlada, siempre que el despliegue siga el checklist operativo de [release-readiness-checklist.md](/C:/Users/picos/Desktop/SADI/docs/release-readiness-checklist.md).

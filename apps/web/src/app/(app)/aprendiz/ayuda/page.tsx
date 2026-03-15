@@ -1,7 +1,9 @@
 "use client";
 
+import { Eye, FileText, Globe } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useInstitution } from "@/context/institution-context";
+import { useDocumentViewer } from "@/components/document/DocumentViewerProvider";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -31,11 +33,15 @@ function FaqItem({
 
 export default function AprendizAyudaPage() {
   const { emailPlaceholder } = useInstitution();
+  const { openDocument } = useDocumentViewer();
   const supportEmail = (process.env.NEXT_PUBLIC_SUPPORT_EMAIL || `soporte@${emailPlaceholder.split("@")[1]}`).trim();
 
   const [asunto, setAsunto] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [motivo, setMotivo] = useState("Otro motivo");
+  const [documentUrl, setDocumentUrl] = useState("");
+  const [documentName, setDocumentName] = useState("");
+  const [documentType, setDocumentType] = useState("docx");
 
   const mailto = useMemo(() => {
     const to = supportEmail;
@@ -46,6 +52,23 @@ export default function AprendizAyudaPage() {
 
   const canSend = asunto.trim().length > 0 && mensaje.trim().length > 0;
   const charsLeft = Math.max(0, 500 - mensaje.length);
+  const canPreviewDocument = documentUrl.trim().length > 0;
+
+  function handlePreviewDocument() {
+    const trimmedUrl = documentUrl.trim();
+    if (!trimmedUrl) return;
+
+    openDocument({
+      uri: trimmedUrl,
+      fileName: documentName.trim() || undefined,
+      fileType: documentType.trim() || undefined,
+      title: documentName.trim() || "Documento en vista previa",
+      description:
+        documentType === "doc" || documentType === "docx" || documentType === "xls" || documentType === "xlsx" || documentType === "ppt" || documentType === "pptx"
+          ? "Vista global basada en react-doc-viewer. Los archivos Office necesitan una URL publica accesible."
+          : "Vista global basada en react-doc-viewer para archivos compatibles.",
+    });
+  }
 
   return (
     <div className="space-y-5">
@@ -55,7 +78,7 @@ export default function AprendizAyudaPage() {
         <div className="relative">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Centro de soporte</p>
           <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">Ayuda y soporte</h2>
-          <p className="mt-1 text-sm text-zinc-600">Resuelve dudas frecuentes o envia un caso al equipo de soporte.</p>
+          <p className="mt-1 text-sm text-zinc-600">Resuelve dudas frecuentes, abre un caso a soporte o prueba la vista previa global de documentos.</p>
         </div>
       </section>
 
@@ -85,6 +108,11 @@ export default function AprendizAyudaPage() {
             <FaqItem title="Olvide mi contrasena">
               Ve a la opcion de recuperacion de contrasena en login, o contacta administracion con tu documento para
               restablecer acceso.
+            </FaqItem>
+
+            <FaqItem title="Puedo ver documentos Word o PDF dentro del sistema?">
+              Si. Ahora SADI tiene un visor global. Para PDF e imagenes funciona directo. Para Word, Excel y PowerPoint,
+              la URL debe ser publica para que Microsoft Office Online pueda renderizarla dentro del visor.
             </FaqItem>
           </div>
         </section>
@@ -159,6 +187,99 @@ export default function AprendizAyudaPage() {
           </div>
         </section>
       </div>
+
+      <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">
+              <FileText className="h-3.5 w-3.5" />
+              Visor global
+            </div>
+            <h3 className="mt-3 text-2xl font-extrabold tracking-tight text-zinc-900">Vista previa de documentos</h3>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+              Este bloque usa la configuracion global del visor. Cualquier modulo puede reutilizarla con el hook
+              <span className="font-semibold text-zinc-800"> useDocumentViewer()</span>.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 lg:max-w-md">
+            <div className="font-semibold">Importante para Word/Excel/PowerPoint</div>
+            <p className="mt-1">
+              Esos formatos se abren mediante Microsoft Office Online. Usa una URL publica HTTPS; una ruta local o privada no se podra embeber.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div className="space-y-4 rounded-[1.75rem] border border-zinc-200 bg-white/80 p-4 shadow-[0_8px_22px_rgba(2,6,23,0.04)]">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wide text-zinc-700">URL del documento</label>
+              <div className="mt-1 flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-3">
+                <Globe className="h-4 w-4 shrink-0 text-sky-700" />
+                <input
+                  className="w-full bg-transparent text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none"
+                  value={documentUrl}
+                  onChange={(e) => setDocumentUrl(e.target.value)}
+                  placeholder="https://.../archivo.docx"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Nombre visible</label>
+                <input
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
+                  value={documentName}
+                  onChange={(e) => setDocumentName(e.target.value)}
+                  placeholder="Manual de ingreso.docx"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Tipo esperado</label>
+                <select
+                  className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value)}
+                >
+                  <option value="docx">Word (.docx)</option>
+                  <option value="doc">Word (.doc)</option>
+                  <option value="pdf">PDF</option>
+                  <option value="xlsx">Excel (.xlsx)</option>
+                  <option value="pptx">PowerPoint (.pptx)</option>
+                  <option value="txt">Texto (.txt)</option>
+                  <option value="image/png">Imagen PNG</option>
+                  <option value="image/jpeg">Imagen JPG</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handlePreviewDocument}
+                disabled={!canPreviewDocument}
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-sky-600 to-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(14,165,233,0.24)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Eye className="h-4 w-4" />
+                Abrir vista previa
+              </button>
+              <p className="text-xs text-zinc-500">El visor se abre como modal global y se puede reutilizar en cualquier pagina.</p>
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-zinc-200 bg-zinc-950 p-5 text-zinc-100 shadow-[0_12px_28px_rgba(2,6,23,0.18)]">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Notas de compatibilidad</div>
+            <ul className="mt-4 space-y-3 text-sm text-zinc-300">
+              <li>PDF, texto e imagenes suelen renderizar sin depender de servicios externos.</li>
+              <li>DOC, DOCX, XLS, XLSX, PPT y PPTX necesitan una URL publica accesible desde Internet.</li>
+              <li>Si el archivo es privado, el boton &quot;Abrir aparte&quot; del modal sigue disponible para abrir la fuente original.</li>
+              <li>La politica CSP de la app ya fue actualizada para permitir el iframe del visor de Office.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -8,6 +8,7 @@ from .error_codes import ErrorCode
 from .models import (
     Acceso,
     AllowedEmailDomain,
+    BrandingPreset,
     ConfiguracionSistema,
     Equipo,
     Notificacion,
@@ -16,6 +17,7 @@ from .models import (
     RolePermission,
     Sede,
     SedePolicy,
+    TenantBrandingConfig,
     Turno,
     Usuario,
 )
@@ -38,6 +40,7 @@ def password_policy_errors(password: str) -> list[str]:
 
 PHONE_10_RE = re.compile(r"^\d{10}$")
 DOCUMENT_6_TO_10_RE = re.compile(r"^\d{6,10}$")
+SCANNED_DOCUMENT_MAX_LEN = 512
 
 
 def validatePhone10(value, *, required: bool = False) -> str:
@@ -247,6 +250,41 @@ class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
         read_only_fields = ["updated_at"]
 
 
+class BrandingPresetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BrandingPreset
+        fields = ["id", "slug", "name", "tokens_json", "is_active", "is_default", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class TenantBrandingConfigSerializer(serializers.ModelSerializer):
+    branding_preset = serializers.SlugRelatedField(slug_field="slug", read_only=True)
+    branding_preset_name = serializers.CharField(source="branding_preset.name", read_only=True)
+    tokens = serializers.SerializerMethodField()
+    updated_by = serializers.CharField(source="updated_by.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = TenantBrandingConfig
+        fields = [
+            "branding_preset",
+            "branding_preset_name",
+            "tokens",
+            "updated_by",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_tokens(self, obj):
+        return dict(getattr(getattr(obj, "branding_preset", None), "tokens_json", {}) or {})
+
+
+class TenantBrandingConfigUpdateSerializer(serializers.Serializer):
+    branding_preset = serializers.SlugRelatedField(
+        slug_field="slug",
+        queryset=BrandingPreset.objects.filter(is_active=True),
+    )
+
+
 class UsuarioSerializer(serializers.ModelSerializer):
     # ✅ para crear/editar desde Admin (no se devuelve nunca)
     username = serializers.CharField(required=True, allow_blank=False, max_length=150)
@@ -333,13 +371,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
         # Si NO mandan password, por default lo ponemos como los últimos 4 del documento (si existe)
         if password is None:
-            doc = (validated_data.get("documento") or "").strip()
-            if len(doc) >= 6:
-                password = doc[-6:]
-            elif len(doc) >= 4:
-                password = doc[-4:]
-            else:
-                password = f"Sadi!{secrets.token_urlsafe(8)[:10]}"
+            password = secrets.token_urlsafe(18)
             auto_password = True
 
         user = Usuario(**validated_data)
@@ -408,7 +440,7 @@ class AprendizEmailChangeRequestSerializer(serializers.Serializer):
             result = EmailDomainService.validate(
                 email=value,
                 role_code=AuthorizationService.default_role_for_user(user) or Usuario.Rol.APRENDIZ,
-                sede=getattr(user, "sede_principal", None),
+                sede=AuthorizationService.default_sede(user),
             )
             if not result.allowed:
                 _raise_domain_policy_error(
@@ -549,7 +581,7 @@ class AccesoSerializer(serializers.ModelSerializer):
 
 
 class ValidarDocumentoSerializer(serializers.Serializer):
-    documento = serializers.CharField(max_length=30)
+    documento = serializers.CharField(max_length=SCANNED_DOCUMENT_MAX_LEN)
 
     def validate_documento(self, value):
         value = (value or "").strip()
@@ -559,7 +591,7 @@ class ValidarDocumentoSerializer(serializers.Serializer):
 
 
 class RegistrarAccesoDocumentoSerializer(serializers.Serializer):
-    documento = serializers.CharField(max_length=30)
+    documento = serializers.CharField(max_length=SCANNED_DOCUMENT_MAX_LEN)
     tipo = serializers.ChoiceField(choices=Acceso.Tipo.choices)
     equipos = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False, allow_empty=True)
 
@@ -682,6 +714,23 @@ class PasskeyAuthVerifySerializer(serializers.Serializer):
     credential_id = serializers.CharField(max_length=512)
     expected_role = serializers.ChoiceField(choices=["admin", "guarda", "aprendiz"], required=False)
     auth_transport = serializers.ChoiceField(choices=["cookie"], required=False)
+
+    def validate_credential_id(self, value):
+        return value.strip()
+
+
+class ControlPanelSessionOtpVerifySerializer(serializers.Serializer):
+    request_id = serializers.CharField(max_length=120)
+    otp = serializers.CharField(min_length=5, max_length=5)
+
+    def validate_otp(self, value):
+        return value.strip()
+
+
+class ControlPanelSessionPasskeyVerifySerializer(serializers.Serializer):
+    request_id = serializers.CharField(max_length=120)
+    challenge = serializers.CharField(max_length=512)
+    credential_id = serializers.CharField(max_length=512)
 
     def validate_credential_id(self, value):
         return value.strip()

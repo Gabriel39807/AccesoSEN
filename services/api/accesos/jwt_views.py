@@ -173,9 +173,9 @@ def _new_refresh_token() -> str:
     return secrets.token_urlsafe(48)
 
 
-def _build_access_token(user: Usuario, sid) -> str:
+def _build_access_token(user: Usuario, sid, *, role_code: str | None = None) -> str:
     access = AccessToken.for_user(user)
-    access["rol"] = AuthorizationService.default_role_for_user(user)
+    access["rol"] = role_code or AuthorizationService.default_role_for_user(user)
     access["sid"] = str(sid)
     return str(access)
 
@@ -302,6 +302,7 @@ def _issue_session_tokens(
     user: Usuario,
     *,
     device_id: str,
+    role_code: str | None = None,
     rotate_guard_session: bool = True,
     previous_session: RefreshSession | None = None,
 ) -> dict[str, str]:
@@ -328,6 +329,9 @@ def _issue_session_tokens(
         session = RefreshSession.objects.create(
             user=user,
             device_id=device_id,
+            role_code=role_code
+            or getattr(previous_session, "role_code", "")
+            or AuthorizationService.default_role_for_user(user),
             refresh_token_hash=refresh_hash,
             expires_at=now + _refresh_token_lifetime(),
             last_used_at=now,
@@ -346,7 +350,7 @@ def _issue_session_tokens(
 
     return {
         "refresh": refresh_value,
-        "access": _build_access_token(user, session.id),
+        "access": _build_access_token(user, session.id, role_code=session.role_code),
     }
 
 
@@ -355,12 +359,14 @@ def issue_tokens_for_user(
     *,
     request=None,
     device_id: str | None = None,
+    role_code: str | None = None,
     rotate_guard_session: bool = True,
 ) -> dict[str, str]:
     resolved_device = _resolve_device_id(request, explicit=device_id, require_explicit=False)
     return _issue_session_tokens(
         user,
         device_id=resolved_device,
+        role_code=role_code,
         rotate_guard_session=rotate_guard_session,
     )
 
@@ -395,11 +401,13 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
         user = _find_user_by_login_identifier(User, login_identifier) if login_identifier else None
         canonical_login = (getattr(user, "username", "") or "").strip().lower() if user else login_identifier
 
+        resolved_login_role = AuthorizationService.resolve_login_role(user, expected_role) if user else ""
+
         if "@" in login_identifier:
             domain_check = EmailDomainService.validate(
                 email=login_identifier,
-                role_code=AuthorizationService.default_role_for_user(user) if user else None,
-                sede=getattr(user, "sede_principal", None) if user else None,
+                role_code=resolved_login_role or (AuthorizationService.default_role_for_user(user) if user else None),
+                sede=AuthorizationService.default_sede(user, role_code=resolved_login_role) if user else None,
             )
             if not domain_check.allowed:
                 logger.info(
@@ -487,7 +495,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
                 {"code": ErrorCode.INVALID_CREDENTIALS, "message": "Usuario o contrasena invalidos."}
             )
 
-        role = AuthorizationService.default_role_for_user(self.user)
+        role = AuthorizationService.resolve_login_role(self.user, expected_role)
         if not _role_allowed_for_expected(role, expected_role):
             user_lock_sec = _next_lockout_seconds(self.user)
             ip_lock_sec = max(LOGIN_IP_LOCK_SEC, user_lock_sec)
@@ -517,6 +525,7 @@ class SadiTokenObtainPairSerializer(TokenObtainPairSerializer):
                 self.user,
                 request=request,
                 device_id=resolved_device,
+                role_code=role,
                 rotate_guard_session=True,
             )
         )

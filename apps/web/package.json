@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint --rule \"@typescript-eslint/no-explicit-any: off\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@cyntler/react-doc-viewer": "^1.17.1",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@splinetool/react-spline": "^4.1.0",
@@ -26,6 +29,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

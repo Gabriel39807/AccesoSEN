@@ -32,12 +32,27 @@ curl http://<host>:8000/health/
 curl http://<host>:8000/ready/
 ```
 
+Notas:
+- La plataforma debe usar `/ready/` como healthcheck operativo real.
+- `/health/` solo valida liveness del proceso.
+
 ## 4) Migraciones
 El contenedor `api` aplica `migrate` en `entrypoint.sh`.
 Si quieres control manual, elimina el `migrate` del entrypoint y ejecuta:
 ```bash
 docker compose exec api python manage.py migrate --noinput
 ```
+
+## 5) Smoke test minimo post deploy
+
+1. Login de `superadmin`.
+2. Entrada al `Control Panel` con OTP o passkey.
+3. Lectura de auditoria/cuotas del panel.
+4. Login de `guarda`.
+5. Apertura o validacion de turno.
+6. Escaneo de QR firmado.
+7. Login de `aprendiz`.
+8. Carga correcta de `/api/configuracion/` y branding efectivo.
 
 ## Plataformas recomendadas
 - Render: web service para API + managed Postgres.
@@ -52,3 +67,10 @@ docker compose build api web
 docker compose up -d
 ```
 3. Verificar health/readiness.
+4. Ejecutar smoke test corto de login, QR y branding.
+
+## Referencias operativas
+
+- [release-readiness-checklist.md](/C:/Users/picos/Desktop/SADI/docs/release-readiness-checklist.md)
+- [production-cutover-runbook.md](/C:/Users/picos/Desktop/SADI/docs/production-cutover-runbook.md)
+- [production-env-matrix.md](/C:/Users/picos/Desktop/SADI/docs/production-env-matrix.md)

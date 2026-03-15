@@ -6,7 +6,19 @@ import { api } from "@/lib/api";
 import { normalizeApiErrors } from "@/lib/errors";
 import { useMe } from "@/hooks/useMe";
 
-type SectionKey = "sedes" | "roles" | "permisos" | "asignaciones" | "dominios" | "auditoria";
+type SectionKey = "branding" | "sedes" | "roles" | "permisos" | "asignaciones" | "dominios" | "auditoria";
+type ControlPanelSessionState = {
+  active: boolean;
+  session: { id: string; verified_by?: string; expires_at?: string } | null;
+};
+type ControlPanelPasskeyOptionsResponse = {
+  request_id: string;
+  challenge: string;
+  rp_id: string;
+  timeout: number;
+  allow_credentials: Array<{ credential_id: string; transports?: string[] }>;
+  mock?: boolean;
+};
 
 type SedeRow = {
   id: number;
@@ -66,6 +78,32 @@ type AuditRow = {
   sede: string | null;
 };
 
+type BrandingPresetRow = {
+  id: number;
+  slug: string;
+  name: string;
+  tokens_json: Record<string, string>;
+  is_active: boolean;
+  is_default: boolean;
+};
+
+type BrandingConfigRow = {
+  branding_preset: string;
+  branding_preset_name: string;
+  tokens: Record<string, string>;
+  updated_by: string | null;
+  updated_at: string | null;
+};
+
+type QuotaRow = {
+  category: string;
+  limit: number;
+  used: number;
+  remaining: number;
+  window_start: string;
+  last_action_at: string | null;
+};
+
 type Paginated<T> = {
   count: number;
   next: string | null;
@@ -79,6 +117,7 @@ type AuditResponse = {
 };
 
 const sections: Array<{ key: SectionKey; label: string }> = [
+  { key: "branding", label: "Branding" },
   { key: "sedes", label: "Sedes" },
   { key: "roles", label: "Roles" },
   { key: "permisos", label: "Permisos" },
@@ -104,11 +143,27 @@ function formatDate(value?: string | null): string {
   }).format(date);
 }
 
+function stringToBytes(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function toBase64Url(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 export default function SuperadminControlCenterPage() {
   const { me, loadingMe } = useMe();
-  const [activeSection, setActiveSection] = useState<SectionKey>("sedes");
+  const [activeSection, setActiveSection] = useState<SectionKey>("branding");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [controlPanelSession, setControlPanelSession] = useState<ControlPanelSessionState>({ active: false, session: null });
+  const [otpRequestId, setOtpRequestId] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [actionReason, setActionReason] = useState("");
 
   const [sedes, setSedes] = useState<SedeRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
@@ -116,6 +171,13 @@ export default function SuperadminControlCenterPage() {
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [domains, setDomains] = useState<DomainRuleRow[]>([]);
   const [auditRows, setAuditRows] = useState<AuditRow[]>([]);
+  const [brandingPresets, setBrandingPresets] = useState<BrandingPresetRow[]>([]);
+  const [brandingConfig, setBrandingConfig] = useState<BrandingConfigRow | null>(null);
+  const [quotaRows, setQuotaRows] = useState<QuotaRow[]>([]);
+
+  useEffect(() => {
+    setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials);
+  }, []);
 
   const [createSedeCode, setCreateSedeCode] = useState("");
   const [createSedeName, setCreateSedeName] = useState("");
@@ -166,9 +228,33 @@ export default function SuperadminControlCenterPage() {
     return fieldErrors[field]?.[0] ?? null;
   }
 
+  function controlPanelHeaders(reason?: string) {
+    const headers: Record<string, string> = {};
+    if (controlPanelSession.session?.id) {
+      headers["X-Control-Panel-Session"] = controlPanelSession.session.id;
+    }
+    const finalReason = (reason ?? actionReason).trim();
+    if (finalReason) {
+      headers["X-Control-Panel-Reason"] = finalReason;
+    }
+    return headers;
+  }
+
+  function ensureReason(reason?: string): boolean {
+    if ((reason ?? actionReason).trim()) return true;
+    setFormErrors(["Debes indicar un motivo del cambio antes de modificar el panel."]);
+    return false;
+  }
+
   function notifySedesUpdated() {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("sedes:updated"));
+    }
+  }
+
+  function notifySystemThemeUpdated() {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("system-theme:refresh"));
     }
   }
 
@@ -180,17 +266,23 @@ export default function SuperadminControlCenterPage() {
   }
 
   async function loadRoles() {
-    const response = await api.get<RoleRow[] | Paginated<RoleRow>>("/api/roles/");
+    const response = await api.get<RoleRow[] | Paginated<RoleRow>>("/api/roles/", {
+      headers: controlPanelHeaders(),
+    });
     setRoles(toRows(response.data));
   }
 
   async function loadPermissions() {
-    const response = await api.get<PermissionRow[] | Paginated<PermissionRow>>("/api/permisos/");
+    const response = await api.get<PermissionRow[] | Paginated<PermissionRow>>("/api/permisos/", {
+      headers: controlPanelHeaders(),
+    });
     setPermissions(toRows(response.data));
   }
 
   async function loadAssignments() {
-    const response = await api.get<AssignmentRow[] | Paginated<AssignmentRow>>("/api/asignaciones/");
+    const response = await api.get<AssignmentRow[] | Paginated<AssignmentRow>>("/api/asignaciones/", {
+      headers: controlPanelHeaders(),
+    });
     setAssignments(toRows(response.data));
   }
 
@@ -204,20 +296,53 @@ export default function SuperadminControlCenterPage() {
 
     const response = await api.get<DomainRuleRow[] | Paginated<DomainRuleRow>>("/api/dominios-email/", {
       params,
+      headers: controlPanelHeaders(),
     });
     setDomains(toRows(response.data));
   }
 
   async function loadAudit() {
-    const response = await api.get<AuditResponse>("/api/auditoria/eventos/");
+    const response = await api.get<AuditResponse>("/api/auditoria/eventos/", {
+      headers: controlPanelHeaders(),
+    });
     setAuditRows(response.data?.results ?? []);
+  }
+
+  async function loadBranding() {
+    const [presetsResponse, configResponse, quotasResponse] = await Promise.all([
+      api.get<{ results: BrandingPresetRow[] }>("/api/control-panel/branding/presets/", {
+        headers: controlPanelHeaders(),
+      }),
+      api.get<{ configuracion: BrandingConfigRow }>("/api/control-panel/branding/config/", {
+        headers: controlPanelHeaders(),
+      }),
+      api.get<{ results: QuotaRow[] }>("/api/control-panel/quotas/", {
+        headers: controlPanelHeaders(),
+      }),
+    ]);
+    setBrandingPresets(presetsResponse.data.results ?? []);
+    setBrandingConfig(configResponse.data.configuracion ?? null);
+    setQuotaRows(quotasResponse.data.results ?? []);
+  }
+
+  async function loadControlPanelSessionStatus() {
+    const response = await api.get<ControlPanelSessionState>("/api/control-panel/session/status/", {
+      headers: controlPanelHeaders(),
+    });
+    setControlPanelSession({
+      active: Boolean(response.data?.active),
+      session: response.data?.session ?? null,
+    });
   }
 
   async function loadControlCenter() {
     setLoading(true);
     clearErrors();
     try {
-      await Promise.all([loadSedes(), loadRoles(), loadPermissions(), loadAssignments(), loadDomains(), loadAudit()]);
+      await loadSedes();
+      if (controlPanelSession.active && controlPanelSession.session?.id) {
+        await Promise.all([loadBranding(), loadRoles(), loadPermissions(), loadAssignments(), loadDomains(), loadAudit()]);
+      }
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -228,17 +353,32 @@ export default function SuperadminControlCenterPage() {
   useEffect(() => {
     if (loadingMe) return;
     if (me?.rol !== "superadmin") return;
-    loadControlCenter();
+    loadControlPanelSessionStatus()
+      .catch(() => {
+        setControlPanelSession({ active: false, session: null });
+      })
+      .finally(() => {
+        loadControlCenter();
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMe, me?.rol]);
 
   useEffect(() => {
     if (loadingMe) return;
     if (me?.rol !== "superadmin") return;
+    if (!controlPanelSession.active) return;
+    loadControlCenter();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlPanelSession.active, controlPanelSession.session?.id]);
+
+  useEffect(() => {
+    if (loadingMe) return;
+    if (me?.rol !== "superadmin") return;
     if (activeSection !== "dominios") return;
+    if (!controlPanelSession.active) return;
     loadDomains().catch(setApiErrors);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection, domainFilter, domainRoleFilter, domainSedeFilter, domainStatusFilter, domainScopeFilter]);
+  }, [activeSection, controlPanelSession.active, domainFilter, domainRoleFilter, domainSedeFilter, domainStatusFilter, domainScopeFilter]);
 
   const sedesByCode = useMemo(() => new Map(sedes.map((sede) => [sede.code, sede.name])), [sedes]);
 
@@ -258,12 +398,146 @@ export default function SuperadminControlCenterPage() {
     );
   }
 
+  async function requestControlPanelOtp() {
+    clearErrors();
+    setBusy(true);
+    try {
+      const response = await api.post<{ request_id: string }>("/api/control-panel/session/request-otp/", {});
+      setOtpRequestId(response.data.request_id || "");
+      setOtpCode("");
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyControlPanelOtp() {
+    clearErrors();
+    if (!otpRequestId || !otpCode.trim()) {
+      setFormErrors(["Solicita el OTP e ingresa el codigo para abrir la sesion reforzada."]);
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await api.post<ControlPanelSessionState>(
+        "/api/control-panel/session/verify-otp/",
+        { request_id: otpRequestId, otp: otpCode.trim() },
+      );
+      setControlPanelSession({
+        active: Boolean(response.data?.active),
+        session: response.data?.session ?? null,
+      });
+      setOtpRequestId("");
+      setOtpCode("");
+      await loadControlCenter();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openControlPanelWithPasskey() {
+    clearErrors();
+    if (!passkeySupported) {
+      setFormErrors(["Tu navegador no soporta Passkeys/WebAuthn para abrir la sesion reforzada."]);
+      return;
+    }
+    setBusy(true);
+    try {
+      const optionsResponse = await api.post<ControlPanelPasskeyOptionsResponse>(
+        "/api/control-panel/session/request-passkey/",
+        {},
+      );
+      const options = optionsResponse.data;
+      const publicKey: PublicKeyCredentialRequestOptions = {
+        challenge: stringToBytes(options.challenge),
+        rpId: options.rp_id,
+        timeout: options.timeout || 60000,
+        userVerification: "preferred",
+        allowCredentials: (options.allow_credentials || []).map((credential) => ({
+          type: "public-key",
+          id: stringToBytes(credential.credential_id),
+          transports: credential.transports as AuthenticatorTransport[] | undefined,
+        })),
+      };
+
+      const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
+      if (!assertion) {
+        throw new Error("No fue posible obtener una credencial passkey para el panel.");
+      }
+      const credentialId = toBase64Url(assertion.rawId);
+
+      const verifyResponse = await api.post<ControlPanelSessionState>(
+        "/api/control-panel/session/verify-passkey/",
+        {
+          request_id: options.request_id,
+          challenge: options.challenge,
+          credential_id: credentialId,
+        },
+      );
+      setControlPanelSession({
+        active: Boolean(verifyResponse.data?.active),
+        session: verifyResponse.data?.session ?? null,
+      });
+      await loadControlCenter();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function closeControlPanelSession() {
+    clearErrors();
+    setBusy(true);
+    try {
+      await api.post("/api/control-panel/session/close/", {}, { headers: controlPanelHeaders() });
+      setControlPanelSession({ active: false, session: null });
+      setBrandingConfig(null);
+      setBrandingPresets([]);
+      setQuotaRows([]);
+      setRoles([]);
+      setPermissions([]);
+      setAssignments([]);
+      setDomains([]);
+      setAuditRows([]);
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyBrandingPreset(slug: string) {
+    clearErrors();
+    if (!ensureReason()) return;
+    setBusy(true);
+    try {
+      await api.patch(
+        "/api/control-panel/branding/config/",
+        { branding_preset: slug },
+        {
+          headers: controlPanelHeaders(),
+        },
+      );
+      await Promise.all([loadBranding(), loadAudit()]);
+      notifySystemThemeUpdated();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitCreateSede() {
     clearErrors();
     if (!createSedeCode.trim() || !createSedeName.trim()) {
       setFormErrors(["Debes completar codigo y nombre de sede."]);
       return;
     }
+    if (!ensureReason()) return;
 
     setBusy(true);
     try {
@@ -271,7 +545,7 @@ export default function SuperadminControlCenterPage() {
         code: createSedeCode.trim().toLowerCase(),
         name: createSedeName.trim(),
         is_active: true,
-      });
+      }, { headers: controlPanelHeaders() });
       setCreateSedeCode("");
       setCreateSedeName("");
       await loadSedes();
@@ -294,13 +568,14 @@ export default function SuperadminControlCenterPage() {
   async function submitEditSede() {
     if (!editingSedeId) return;
     clearErrors();
+    if (!ensureReason()) return;
     setBusy(true);
     try {
       await api.patch(`/api/sedes/${editingSedeId}/`, {
         code: editingSedeCode.trim().toLowerCase(),
         name: editingSedeName.trim(),
         is_active: editingSedeActive,
-      });
+      }, { headers: controlPanelHeaders() });
       setEditingSedeId(null);
       await loadSedes();
       notifySedesUpdated();
@@ -313,9 +588,10 @@ export default function SuperadminControlCenterPage() {
 
   async function deactivateSede(row: SedeRow) {
     clearErrors();
+    if (!ensureReason()) return;
     setBusy(true);
     try {
-      await api.delete(`/api/sedes/${row.id}/`);
+      await api.delete(`/api/sedes/${row.id}/`, { headers: controlPanelHeaders() });
       if (editingSedeId === row.id) {
         setEditingSedeId(null);
       }
@@ -334,13 +610,14 @@ export default function SuperadminControlCenterPage() {
       setFormErrors(["Debes completar codigo y nombre del rol."]);
       return;
     }
+    if (!ensureReason()) return;
     setBusy(true);
     try {
       await api.post("/api/roles/", {
         code: roleCode.trim().toLowerCase(),
         name: roleName.trim(),
         is_system: false,
-      });
+      }, { headers: controlPanelHeaders() });
       setRoleCode("");
       setRoleName("");
       await loadRoles();
@@ -357,13 +634,14 @@ export default function SuperadminControlCenterPage() {
       setFormErrors(["Debes completar codigo y nombre del permiso."]);
       return;
     }
+    if (!ensureReason()) return;
     setBusy(true);
     try {
       await api.post("/api/permisos/", {
         code: permissionCode.trim().toLowerCase(),
         name: permissionName.trim(),
         description: permissionDescription.trim(),
-      });
+      }, { headers: controlPanelHeaders() });
       setPermissionCode("");
       setPermissionName("");
       setPermissionDescription("");
@@ -381,13 +659,14 @@ export default function SuperadminControlCenterPage() {
       setFormErrors(["Debes seleccionar rol, permiso y alcance."]);
       return;
     }
+    if (!ensureReason()) return;
     setBusy(true);
     try {
       await api.post("/api/asignaciones/", {
         role: assignmentRole,
         permission: assignmentPermission,
         scope: assignmentScope,
-      });
+      }, { headers: controlPanelHeaders() });
       await loadAssignments();
     } catch (error) {
       setApiErrors(error);
@@ -398,9 +677,10 @@ export default function SuperadminControlCenterPage() {
 
   async function removeAssignment(row: AssignmentRow) {
     clearErrors();
+    if (!ensureReason()) return;
     setBusy(true);
     try {
-      await api.delete(`/api/asignaciones/${row.id}/`);
+      await api.delete(`/api/asignaciones/${row.id}/`, { headers: controlPanelHeaders() });
       await loadAssignments();
     } catch (error) {
       setApiErrors(error);
@@ -482,13 +762,14 @@ export default function SuperadminControlCenterPage() {
     clearErrors();
     const payload = buildDomainPayload();
     if (!payload) return;
+    if (!ensureReason()) return;
 
     setBusy(true);
     try {
       if (domainFormId) {
-        await api.patch(`/api/dominios-email/${domainFormId}/`, payload);
+        await api.patch(`/api/dominios-email/${domainFormId}/`, payload, { headers: controlPanelHeaders() });
       } else {
-        await api.post("/api/dominios-email/", payload);
+        await api.post("/api/dominios-email/", payload, { headers: controlPanelHeaders() });
       }
       resetDomainForm();
       await loadDomains();
@@ -501,9 +782,14 @@ export default function SuperadminControlCenterPage() {
 
   async function toggleDomainRule(row: DomainRuleRow) {
     clearErrors();
+    if (!ensureReason()) return;
     setBusy(true);
     try {
-      await api.patch(`/api/dominios-email/${row.id}/`, { is_active: !row.is_active });
+      await api.patch(
+        `/api/dominios-email/${row.id}/`,
+        { is_active: !row.is_active },
+        { headers: controlPanelHeaders() },
+      );
       await loadDomains();
     } catch (error) {
       setApiErrors(error);
@@ -514,9 +800,10 @@ export default function SuperadminControlCenterPage() {
 
   async function deleteDomainRule(row: DomainRuleRow) {
     clearErrors();
+    if (!ensureReason()) return;
     setBusy(true);
     try {
-      await api.delete(`/api/dominios-email/${row.id}/`);
+      await api.delete(`/api/dominios-email/${row.id}/`, { headers: controlPanelHeaders() });
       if (domainFormId === row.id) {
         resetDomainForm();
       }
@@ -535,6 +822,92 @@ export default function SuperadminControlCenterPage() {
         <p className="text-sm text-text/70">
           Gestion centralizada de sedes, RBAC y visibilidad de auditoria.
         </p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.4fr,1fr]">
+        <div className="rounded-2xl border border-surface-border bg-surface p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-text">Sesion reforzada del panel</h2>
+              <p className="text-xs text-text/70">
+                {controlPanelSession.active
+                  ? `Activa hasta ${formatDate(controlPanelSession.session?.expires_at)}`
+                  : "Abre una sesion OTP para operar branding, permisos, dominios y auditoria."}
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                controlPanelSession.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-700"
+              }`}
+            >
+              {controlPanelSession.active ? "Activa" : "Cerrada"}
+            </span>
+          </div>
+
+          {!controlPanelSession.active ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-[auto,1fr,auto]">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={requestControlPanelOtp}
+                  disabled={busy}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {busy ? "Enviando..." : otpRequestId ? "Reenviar OTP" : "Solicitar OTP"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openControlPanelWithPasskey}
+                  disabled={busy || !passkeySupported}
+                  className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
+                >
+                  Abrir con Passkey
+                </button>
+              </div>
+              <input
+                className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                placeholder="Codigo OTP del panel"
+                value={otpCode}
+                onChange={(event) => setOtpCode(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={verifyControlPanelOtp}
+                disabled={busy || !otpRequestId}
+                className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
+              >
+                Verificar
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                Sesion: {controlPanelSession.session?.id?.slice(0, 8)}...
+              </div>
+              <button
+                type="button"
+                onClick={closeControlPanelSession}
+                disabled={busy}
+                className="rounded-xl border border-surface-border px-3 py-2 text-sm font-semibold hover:bg-primary/10 disabled:opacity-60"
+              >
+                Cerrar sesion reforzada
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-surface-border bg-surface p-4">
+          <h2 className="text-sm font-semibold text-text">Motivo del cambio</h2>
+          <p className="mt-1 text-xs text-text/70">
+            Se envia en cada mutacion del panel y queda registrado en auditoria.
+          </p>
+          <textarea
+            className="mt-3 min-h-24 w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+            placeholder="Ej: Activar branding del cliente para campus norte"
+            value={actionReason}
+            onChange={(event) => setActionReason(event.target.value)}
+          />
+        </div>
       </div>
 
       {formErrors.length > 0 ? (
@@ -569,6 +942,112 @@ export default function SuperadminControlCenterPage() {
         </aside>
 
         <section className="space-y-4 rounded-2xl border border-surface-border bg-surface p-4">
+          {activeSection === "branding" ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-surface-border bg-surface p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-text">Preset activo</h3>
+                    <p className="text-xs text-text/70">
+                      {brandingConfig
+                        ? `${brandingConfig.branding_preset_name} (${brandingConfig.branding_preset})`
+                        : "Abre la sesion reforzada para cargar el branding."}
+                    </p>
+                  </div>
+                  {brandingConfig?.updated_at ? (
+                    <span className="text-xs text-text/60">
+                      Actualizado {formatDate(brandingConfig.updated_at)}
+                    </span>
+                  ) : null}
+                </div>
+                {brandingConfig ? (
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    {Object.entries(brandingConfig.tokens).map(([token, value]) => (
+                      <div key={token} className="rounded-xl border border-surface-border p-3">
+                        <div className="flex items-center gap-3">
+                          <span className="h-8 w-8 rounded-full border border-surface-border" style={{ backgroundColor: value }} />
+                          <div>
+                            <p className="text-xs font-semibold text-text">{token}</p>
+                            <p className="font-mono text-xs text-text/70">{value}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {brandingPresets.map((preset) => {
+                    const selected = brandingConfig?.branding_preset === preset.slug;
+                    return (
+                      <article
+                        key={preset.id}
+                        className={`rounded-2xl border p-4 ${
+                          selected ? "border-primary bg-primary/5" : "border-surface-border bg-surface"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h4 className="text-sm font-semibold text-text">{preset.name}</h4>
+                            <p className="text-xs text-text/60">{preset.slug}</p>
+                          </div>
+                          {selected ? (
+                            <span className="rounded-full bg-primary px-2 py-1 text-xs font-semibold text-white">Activo</span>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                          {Object.entries(preset.tokens_json).map(([token, value]) => (
+                            <div key={token} className="rounded-xl border border-surface-border p-2">
+                              <div className="h-8 rounded-lg border border-surface-border" style={{ backgroundColor: value }} />
+                              <p className="mt-2 truncate text-[11px] font-medium text-text/70">{token}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 flex justify-end">
+                          <button
+                            type="button"
+                            disabled={busy || selected || !controlPanelSession.active}
+                            onClick={() => applyBrandingPreset(preset.slug)}
+                            className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                          >
+                            {selected ? "Aplicado" : "Aplicar preset"}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="rounded-2xl border border-surface-border bg-surface p-4">
+                  <h3 className="text-sm font-semibold text-text">Cuotas del panel</h3>
+                  <div className="mt-3 space-y-3">
+                    {quotaRows.map((row) => (
+                      <div key={row.category} className="rounded-xl border border-surface-border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-text">{row.category}</span>
+                          <span className="text-xs text-text/60">
+                            {row.used}/{row.limit}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/10">
+                          <div
+                            className="h-full rounded-full bg-primary"
+                            style={{ width: `${Math.min(100, Math.round((row.used / Math.max(1, row.limit)) * 100))}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-xs text-text/60">
+                          Restantes: {row.remaining} {row.last_action_at ? `| Ultimo cambio ${formatDate(row.last_action_at)}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {activeSection === "sedes" ? (
             <>
               <div className="grid gap-3 md:grid-cols-2">

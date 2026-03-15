@@ -62,6 +62,10 @@ apps/mobile-rn/.expo-shared/
 *.gz
 *.rar
 *.7z
+artifacts/
+apps/web/playwright-report/
+apps/web/test-results/
+apps/mobile-rn/temp_index.txt
 
 # Logs
 *.log

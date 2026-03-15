@@ -6,11 +6,12 @@
  * - Mostrar estado de carga al consultar o guardar.
  * - Informar errores de forma visible sin romper la navegacion.
  */
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { FlatList, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import { api, toUiErrorMessage } from "../../src/api/client";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
+import { EmptyState, FadeInCard, InputField, LoadingBlock, ModernButton, ModernScreen, Pill, TitleBlock, uiTheme } from "../../src/ui/modern";
 
 type EquipoItem = {
   id: number;
@@ -21,6 +22,12 @@ type EquipoItem = {
   motivo_rechazo?: string | null;
 };
 
+function estadoTone(estado: string) {
+  const value = String(estado || "").toUpperCase();
+  if (value.includes("APRO")) return { color: uiTheme.success, bg: `${uiTheme.success}18` };
+  if (value.includes("RECH")) return { color: uiTheme.danger, bg: `${uiTheme.danger}18` };
+  return { color: uiTheme.warn, bg: `${uiTheme.warn}18` };
+}
 export default function AprendizEquipos() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,9 +38,6 @@ export default function AprendizEquipos() {
   const [marca, setMarca] = useState("");
   const [modelo, setModelo] = useState("");
 
-  /**
-   * Carga el listado de equipos del usuario autenticado.
-   */
   async function cargar() {
     setLoading(true);
     try {
@@ -47,10 +51,6 @@ export default function AprendizEquipos() {
     }
   }
 
-  /**
-   * Crea un equipo y refresca listado.
-   * Usa `saving` para deshabilitar boton mientras la API responde.
-   */
   async function crear() {
     setMsg(null);
     if (!serial.trim() || !marca.trim() || !modelo.trim()) {
@@ -78,61 +78,111 @@ export default function AprendizEquipos() {
   }
 
   useEffect(() => {
-    cargar();
+    void cargar();
   }, []);
+
+  const availableSlots = useMemo(() => Math.max(0, 4 - items.length), [items.length]);
 
   return (
     <ModernScreen scroll>
-      <FadeInCard>
+      <FadeInCard delay={0} style={{ gap: 16 }}>
         <Pill text="MIS EQUIPOS" />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock title="Gestionar equipos" subtitle="Registra y consulta el estado de tus equipos." />
+        <View
+          style={{
+            borderRadius: 30,
+            backgroundColor: "rgba(15,118,110,0.1)",
+            borderWidth: 1,
+            borderColor: "rgba(15,118,110,0.16)",
+            padding: 18,
+            gap: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
+            <View style={{ flex: 1, gap: 8 }}>
+              <Text style={{ color: uiTheme.accentDeep, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+                Inventario personal
+              </Text>
+              <Text style={{ color: uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
+                Gestionar equipos
+              </Text>
+              <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
+                Registra tus equipos y revisa su estado de aprobacion antes de llegar al control de acceso.
+              </Text>
+            </View>
+            <View style={{ width: 54, height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.62)", borderWidth: 1, borderColor: "rgba(15,118,110,0.12)" }}>
+              <Ionicons name="laptop-outline" size={24} color={uiTheme.accentDeep} />
+            </View>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
+              <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Registrados</Text>
+              <Text style={{ color: uiTheme.ink, fontWeight: "900", fontSize: 22, marginTop: 6 }}>{items.length}</Text>
+            </View>
+            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
+              <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Cupos</Text>
+              <Text style={{ color: uiTheme.ink, fontWeight: "900", fontSize: 22, marginTop: 6 }}>{availableSlots}</Text>
+            </View>
+          </View>
         </View>
       </FadeInCard>
 
-      <FadeInCard delay={70}>
-        <View style={{ gap: 8 }}>
-          <InputField label="Serial" value={serial} onChangeText={setSerial} placeholder="ABC1234" />
-          <InputField label="Marca" value={marca} onChangeText={setMarca} placeholder="Dell" />
-          <InputField label="Modelo" value={modelo} onChangeText={setModelo} placeholder="Inspiron 15" />
-          <ModernButton label={saving ? "Guardando..." : "Registrar equipo"} disabled={saving} onPress={crear} />
-          {msg ? <Text style={{ color: msg.toLowerCase().includes("correctamente") ? "#15803d" : "#b91c1c" }}>{msg}</Text> : null}
+      <FadeInCard delay={70} style={{ gap: 12 }}>
+        <View style={{ gap: 6 }}>
+          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Registrar nuevo equipo</Text>
+          <TitleBlock title="Agrega un dispositivo" subtitle="Completa serial, marca y modelo para enviarlo a revision." />
         </View>
+
+        <InputField label="Serial" value={serial} onChangeText={setSerial} placeholder="ABC1234" />
+        <InputField label="Marca" value={marca} onChangeText={setMarca} placeholder="Dell" />
+        <InputField label="Modelo" value={modelo} onChangeText={setModelo} placeholder="Inspiron 15" />
+        <ModernButton label={saving ? "Guardando..." : "Registrar equipo"} disabled={saving} onPress={crear} />
+        {msg ? <Text style={{ color: msg.toLowerCase().includes("correctamente") ? uiTheme.success : uiTheme.danger, lineHeight: 20 }}>{msg}</Text> : null}
       </FadeInCard>
 
-      <FadeInCard delay={120}>
+      <FadeInCard delay={120} style={{ gap: 12 }}>
         <ModernButton label={loading ? "Actualizando..." : "Actualizar lista"} tone="light" onPress={cargar} disabled={loading} />
-        <View style={{ marginTop: 10 }}>
-          {loading ? (
-            <ActivityIndicator />
-          ) : (
-            <FlatList
-              data={items}
-              scrollEnabled={false}
-              keyExtractor={(i) => String(i.id)}
-              renderItem={({ item }) => (
+        {loading ? (
+          <LoadingBlock label="Consultando inventario personal" />
+        ) : (
+          <FlatList
+            data={items}
+            scrollEnabled={false}
+            keyExtractor={(i) => String(i.id)}
+            renderItem={({ item }) => {
+              const tone = estadoTone(item.estado);
+              return (
                 <View
                   style={{
-                    backgroundColor: "#f8fafc",
+                    backgroundColor: "rgba(255,255,255,0.78)",
                     borderWidth: 1,
-                    borderColor: "#e2e8f0",
-                    borderRadius: 12,
-                    padding: 10,
-                    marginBottom: 8,
+                    borderColor: "rgba(148,163,184,0.22)",
+                    borderRadius: 20,
+                    padding: 14,
+                    marginBottom: 10,
+                    gap: 6,
                   }}
                 >
-                  <Text style={{ fontWeight: "900", color: "#0f172a" }}>
-                    {item.marca} {item.modelo}
-                  </Text>
-                  <Text style={{ color: "#64748b" }}>Serial: {item.serial}</Text>
-                  <Text style={{ color: "#64748b" }}>Estado: {item.estado}</Text>
-                  {item.motivo_rechazo ? <Text style={{ color: "#b91c1c" }}>Motivo: {item.motivo_rechazo}</Text> : null}
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontWeight: "900", color: uiTheme.ink, flex: 1 }}>{item.marca} {item.modelo}</Text>
+                    <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: tone.bg, borderWidth: 1, borderColor: `${tone.color}26` }}>
+                      <Text style={{ color: tone.color, fontWeight: "900", fontSize: 11 }}>{item.estado}</Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: uiTheme.inkSoft }}>Serial: {item.serial}</Text>
+                  {item.motivo_rechazo ? <Text style={{ color: uiTheme.danger, lineHeight: 20 }}>Motivo: {item.motivo_rechazo}</Text> : null}
                 </View>
-              )}
-              ListEmptyComponent={<Text style={{ color: "#64748b" }}>Aun no tienes equipos registrados.</Text>}
-            />
-          )}
-        </View>
+              );
+            }}
+            ListEmptyComponent={
+              <EmptyState
+                icon="laptop-outline"
+                title="Sin equipos registrados"
+                subtitle="Agrega tu primer equipo para enviarlo a revision y mantener tu inventario personal al dia."
+              />
+            }
+          />
+        )}
       </FadeInCard>
     </ModernScreen>
   );

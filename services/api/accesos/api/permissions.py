@@ -1,8 +1,57 @@
 from __future__ import annotations
 
+from django.utils import timezone
 from rest_framework.permissions import BasePermission
 
 from accesos.domain.services.authorization import AuthorizationService
+from accesos.models import ControlPanelSession
+
+
+def _request_ip(request) -> str:
+    forwarded = str(request.META.get("HTTP_X_FORWARDED_FOR", "") or "").strip()
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return str(request.META.get("REMOTE_ADDR", "") or "").strip()
+
+
+def _request_user_agent(request) -> str:
+    return str(request.META.get("HTTP_USER_AGENT", "") or "").strip()
+
+
+def resolve_control_panel_session(request):
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return None
+
+    raw_id = str(request.META.get("HTTP_X_CONTROL_PANEL_SESSION", "") or "").strip()
+    if not raw_id:
+        return None
+
+    session = (
+        ControlPanelSession.objects.filter(
+            id=raw_id,
+            user=user,
+            revoked_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        )
+        .order_by("-granted_at")
+        .first()
+    )
+    if session is None:
+        return None
+
+    request_ip = _request_ip(request)
+    request_user_agent = _request_user_agent(request)
+    if session.ip_address and request_ip and session.ip_address != request_ip:
+        return None
+    if session.user_agent and request_user_agent and session.user_agent != request_user_agent:
+        return None
+
+    request.control_panel_session = session
+    if (timezone.now() - session.last_used_at).total_seconds() >= 30:
+        session.last_used_at = timezone.now()
+        session.save(update_fields=["last_used_at"])
+    return session
 
 
 class RequiresPermission(BasePermission):
@@ -62,3 +111,10 @@ class RequiresPermission(BasePermission):
         if not perm_code:
             return False
         return AuthorizationService.has_perm(user, perm_code, obj=obj)
+
+
+class RequiresControlPanelSession(BasePermission):
+    message = "Se requiere una sesion reforzada vigente del panel de control."
+
+    def has_permission(self, request, view) -> bool:
+        return resolve_control_panel_session(request) is not None

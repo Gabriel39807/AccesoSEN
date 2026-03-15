@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { View } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 
 import { useSessionStore } from "../../store/session";
@@ -7,9 +7,12 @@ import { toUiErrorMessage } from "../../api/client";
 import { Jornada, Sede } from "../../api/turnos";
 import { listSedes, type SedeItem } from "../../api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../lib/validators";
+import { FadeInCard, InputField, ModernButton, ModernScreen, NoticeBanner, Pill, TitleBlock } from "../../ui/modern";
+import { useSystemBranding } from "../../theme/system-branding";
 
 export function GuardLoginScreen() {
   const signInGuarda = useSessionStore((s) => s.signInGuarda);
+  const { config } = useSystemBranding();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -74,64 +77,63 @@ export function GuardLoginScreen() {
   }
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12, justifyContent: "center" }}>
-      <Text style={{ fontSize: 24, fontWeight: "800", textAlign: "center" }}>Personal de seguridad</Text>
-      <Text style={{ textAlign: "center", opacity: 0.7 }}>Ingresa tu documento y contrasena</Text>
+    <ModernScreen contentStyle={{ justifyContent: "center" }}>
+      <FadeInCard style={{ gap: 18 }}>
+        <Pill text="SEGURIDAD" />
+        <TitleBlock
+          title={config.nombre_institucion || "Control de seguridad"}
+          subtitle="Ingresa tu documento, selecciona sede y abre tu turno operativo."
+        />
 
-      <View style={{ backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#eee" }}>
-        <Text style={{ fontWeight: "700", marginBottom: 6 }}>Documento</Text>
-        <TextInput
+        <InputField
+          label="Documento"
           value={username}
           onChangeText={onUsernameChange}
           placeholder="1053444048"
           autoCapitalize="none"
           keyboardType="number-pad"
           maxLength={10}
-          style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 
-        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Contrasena</Text>
-        <TextInput
+        <InputField
+          label="Contrasena"
           value={password}
           onChangeText={onPasswordChange}
           placeholder="Ingresa tu contrasena"
           secureTextEntry
-          style={{ borderWidth: 1, borderColor: "#eee", padding: 12, borderRadius: 12 }}
         />
 
-        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Sede</Text>
-        <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12 }}>
-          <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
-            {sedes.map((item) => (
-              <Picker.Item key={item.id} label={item.name} value={item.code} />
-            ))}
-          </Picker>
+        <View style={{ gap: 8 }}>
+          <TitleBlock title="Sede" subtitle="Selecciona la sede donde vas a operar hoy." />
+          <View style={{ borderWidth: 1, borderColor: "rgba(148,163,184,0.3)", borderRadius: 20, overflow: "hidden" }}>
+            <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
+              {sedes.map((item) => (
+                <Picker.Item key={item.id} label={item.name} value={item.code} />
+              ))}
+            </Picker>
+          </View>
         </View>
 
-        <Text style={{ fontWeight: "700", marginTop: 12, marginBottom: 6 }}>Turno</Text>
-        <View style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 12 }}>
-          <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-            <Picker.Item label="Tarde" value="TARDE" />
-            <Picker.Item label="Noche" value="NOCHE" />
-          </Picker>
+        <View style={{ gap: 8 }}>
+          <TitleBlock title="Jornada" subtitle="Define el bloque de turno para el registro de accesos." />
+          <View style={{ borderWidth: 1, borderColor: "rgba(148,163,184,0.3)", borderRadius: 20, overflow: "hidden" }}>
+            <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
+              <Picker.Item label="Tarde" value="TARDE" />
+              <Picker.Item label="Noche" value="NOCHE" />
+            </Picker>
+          </View>
         </View>
 
-        {error ? <Text style={{ color: "red", marginTop: 10 }}>{error}</Text> : null}
+        {error ? <NoticeBanner tone="danger" text={error} /> : null}
 
-        <Pressable
+        <ModernButton
           disabled={loading || !sede}
           onPress={onSubmit}
-          style={{
-            marginTop: 14,
-            backgroundColor: loading ? "#6b7280" : "#16a34a",
-            padding: 14,
-            borderRadius: 999,
-            alignItems: "center",
-          }}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "800" }}>Iniciar turno</Text>}
-        </Pressable>
-      </View>
-    </View>
+          label={loading ? "Abriendo turno..." : "Iniciar turno"}
+          tone="primary"
+          icon="shield-checkmark-outline"
+        />
+      </FadeInCard>
+    </ModernScreen>
   );
 }
