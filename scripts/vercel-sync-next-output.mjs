@@ -35,10 +35,19 @@ function copyFile(sourceFile, targetFile, label) {
   console.log(`[vercel-build] Copied ${label}.`);
 }
 
+function copyFileIfExists(sourceFile, targetFile, label) {
+  if (!fs.existsSync(sourceFile)) {
+    console.log(`[vercel-build] Skipped ${label}; source file not present.`);
+    return;
+  }
+
+  copyFile(sourceFile, targetFile, label);
+}
+
 copyDir(sourceNext, targetNext, "apps/web/.next to root/.next");
 copyDir(sourceStandaloneNodeModules, targetNodeModules, "apps/web/.next/standalone/node_modules to root/node_modules");
-copyFile(sourceStandaloneServer, targetStandaloneServer, "apps/web/.next/standalone/server.js to root/server.js");
-copyFile(sourceStandalonePackageJson, targetStandalonePackageJson, "apps/web/.next/standalone/package.json to root/package.json");
+copyFileIfExists(sourceStandaloneServer, targetStandaloneServer, "apps/web/.next/standalone/server.js to root/server.js");
+copyFileIfExists(sourceStandalonePackageJson, targetStandalonePackageJson, "apps/web/.next/standalone/package.json to root/package.json");
 
 if (fs.existsSync(sourcePublic)) {
   copyDir(sourcePublic, targetPublic, "apps/web/public to root/public");
