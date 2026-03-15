@@ -1,7 +1,5 @@
 import type { NextConfig } from "next";
 
-const isVercelBuild = process.env.VERCEL === "1";
-
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -25,7 +23,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  ...(isVercelBuild ? {} : { output: "standalone" }),
+  output: "standalone",
   allowedDevOrigins: ["http://172.24.160.1:3000"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
