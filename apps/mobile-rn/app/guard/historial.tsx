@@ -93,7 +93,7 @@ export default function GuardHistorial() {
               <EmptyState
                 icon="search-outline"
                 title="Sin resultados"
-                subtitle="Ajusta el criterio de busqueda para encontrar ingresos, salidas o validaciones de equipos."
+                subtitle="Ajusta el criterio de búsqueda para encontrar ingresos, salidas o validaciones de equipos."
               />
             }
           />

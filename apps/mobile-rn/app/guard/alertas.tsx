@@ -63,7 +63,12 @@ export default function GuardAlertas() {
 
       <FadeInCard delay={70} style={{ gap: 12 }}>
         <ModernButton label={loading ? "Actualizando..." : "Actualizar"} tone="light" onPress={load} disabled={loading} />
-        {!loading ? <NoticeBanner tone="info" text={stats.unread > 0 ? `${stats.unread} alerta(s) pendiente(s) de lectura en este turno.` : "Todas las alertas visibles ya fueron atendidas o marcadas como leidas."} /> : null}
+        {!loading ? (
+          <NoticeBanner
+            tone="info"
+            text={stats.unread > 0 ? `${stats.unread} alerta(s) pendiente(s) de lectura en este turno.` : "Todas las alertas visibles ya fueron atendidas o marcadas como leídas."}
+          />
+        ) : null}
       </FadeInCard>
 
       <FadeInCard delay={120} style={{ gap: 12 }}>
@@ -106,7 +111,7 @@ export default function GuardAlertas() {
                   <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>{item.mensaje}</Text>
                   <Text style={{ color: uiTheme.muted }}>{new Date(item.created_at).toLocaleString()}</Text>
                   <ModernButton
-                    label={item.read_at ? "Marcada como leida" : "Marcar como leida"}
+                    label={item.read_at ? "Marcada como leída" : "Marcar como leída"}
                     tone={item.read_at ? "light" : "dark"}
                     onPress={async () => {
                       if (!item.read_at) await Notifs.marcarLeida(item.id);
@@ -120,7 +125,7 @@ export default function GuardAlertas() {
               <EmptyState
                 icon="notifications-off-outline"
                 title="Sin alertas activas"
-                subtitle="Las incidencias, advertencias y novedades del turno apareceran aqui para gestion inmediata."
+                subtitle="Las incidencias, advertencias y novedades del turno aparecerán aquí para gestión inmediata."
               />
             }
           />

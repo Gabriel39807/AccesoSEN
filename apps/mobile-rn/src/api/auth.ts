@@ -38,7 +38,7 @@ export async function login(username: string, password: string, expected_role?: 
   const r = await loginRequest(payload);
   await saveTokens(r.data.access, r.data.refresh);
 
-  // Primer login exitoso: deja habilitado el flujo biometrico si existe hardware.
+  // Primer login exitoso: deja habilitado el flujo biométrico si existe hardware.
   if (await isBiometricAvailable()) {
     await setBiometricEnabled(true);
   }
@@ -49,7 +49,7 @@ export async function login(username: string, password: string, expected_role?: 
 export async function loginWithBiometric() {
   const access = await refreshAccessToken({ requireBiometric: true });
   if (!access) {
-    throw new Error("No hay una sesion guardada para este dispositivo.");
+    throw new Error("No hay una sesión guardada para este dispositivo.");
   }
   return { access };
 }

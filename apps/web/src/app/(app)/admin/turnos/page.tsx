@@ -246,7 +246,7 @@ export default function AdminTurnosPage() {
       <PageHeader
         breadcrumb="ADMIN > TURNOS"
         title="Turnos"
-        description="Control de turnos de guardas y finalizacion manual por administrador."
+        description="Control de turnos de guardas y finalización manual por administración."
         actions={
           <Button onClick={refrescar} variant="secondary" disabled={reloading}>
             {reloading ? "Recargando..." : "Recargar"}
@@ -309,9 +309,9 @@ export default function AdminTurnosPage() {
             value={activo}
             onChange={(e) => setActivo(e.target.value as any)}
           >
-            <option value="">Activo (API)</option>
-            <option value="true">true</option>
-            <option value="false">false</option>
+            <option value="">Estado de actividad</option>
+            <option value="true">Solo activos</option>
+            <option value="false">Solo finalizados</option>
           </select>
 
           <select
@@ -433,7 +433,7 @@ export default function AdminTurnosPage() {
 
       <Modal
         open={openFinalizar}
-        title="Finalizar turno (Admin)"
+        title="Finalizar turno"
         onClose={() => {
           if (finalizando) return;
           setOpenFinalizar(false);
@@ -466,7 +466,7 @@ export default function AdminTurnosPage() {
             </div>
 
             <div className="text-sm text-gray-700">
-              Esto finalizara el turno inmediatamente. Usalo solo si el guarda olvido cerrar el turno.
+              Esto finalizará el turno inmediatamente. Úsalo solo si el guarda olvidó cerrarlo.
             </div>
 
             <div className="flex items-center justify-end gap-2">
@@ -483,7 +483,7 @@ export default function AdminTurnosPage() {
               </Button>
 
               <Button onClick={confirmarFinalizar} variant="primary" disabled={finalizando}>
-                {finalizando ? "Finalizando..." : "Si, finalizar"}
+                {finalizando ? "Finalizando..." : "Sí, finalizar"}
               </Button>
             </div>
           </div>

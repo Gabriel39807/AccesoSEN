@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { api } from "@/lib/api";
 import { useMe } from "@/hooks/useMe";
+import { api } from "@/lib/api";
 import { clearTokens } from "@/lib/auth";
 
 function cx(...c: Array<string | false | null | undefined>) {
@@ -24,7 +24,7 @@ export default function AdminTopNav() {
         { headers: { "X-Auth-Transport": "cookie" } }
       );
     } catch {
-      // best effort revocation
+      // Best effort revocation.
     }
     clearTokens();
     router.replace("/login");
@@ -40,7 +40,7 @@ export default function AdminTopNav() {
     { href: "/admin/equipos", label: "Equipos" },
     { href: "/admin/accesos", label: "Accesos" },
     { href: "/admin/turnos", label: "Turnos" },
-    ...(me?.rol === "superadmin" ? [{ href: "/admin/control-center", label: "Control Center" }] : []),
+    ...(me?.rol === "superadmin" ? [{ href: "/admin/control-center", label: "Centro de control" }] : []),
   ] as const;
 
   return (
@@ -80,11 +80,11 @@ export default function AdminTopNav() {
             onClick={logout}
             className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
           >
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
       </div>
-      <div className="mx-auto flex w-full max-w-7xl gap-1 px-4 pb-2 md:hidden sm:px-6">
+      <div className="mx-auto flex w-full max-w-7xl gap-1 px-4 pb-2 sm:px-6 md:hidden">
         {tabs.map((t) => {
           const active = pathname === t.href || pathname.startsWith(t.href + "/");
           return (

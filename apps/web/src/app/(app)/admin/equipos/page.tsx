@@ -318,7 +318,7 @@ export default function AdminEquiposPage() {
       <PageHeader
         breadcrumb="ADMIN > EQUIPOS"
         title="Equipos"
-        description="Revision y control de equipos registrados por los aprendices."
+        description="Revisión y control de equipos registrados por los aprendices."
         actions={
           <>
             <select
@@ -328,7 +328,7 @@ export default function AdminEquiposPage() {
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/pagina
+                  {n}/página
                 </option>
               ))}
             </select>
@@ -501,7 +501,7 @@ export default function AdminEquiposPage() {
                 <label className="text-xs text-gray-500">Motivo (solo si rechazas)</label>
                 <input
                   className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
-                  placeholder="Ej: Equipo sin etiqueta / serial no coincide…"
+                  placeholder="Ej: Equipo sin etiqueta o serial no coincide..."
                   value={motivo}
                   onChange={(e) => {
                     setMotivo(e.target.value);
@@ -528,7 +528,7 @@ export default function AdminEquiposPage() {
                 disabled={revisando}
                 className="rounded-xl px-4 py-2 bg-emerald-700 text-white hover:bg-emerald-800 shadow-sm transition disabled:opacity-60"
               >
-                {revisando ? "Guardando…" : "Guardar"}
+                {revisando ? "Guardando..." : "Guardar"}
               </button>
             </div>
           </div>

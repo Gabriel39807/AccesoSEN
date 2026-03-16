@@ -80,10 +80,10 @@ export function ScanQrScreen({ navigation }: Props) {
     return (
       <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <FadeInCard style={{ gap: 16 }}>
-          <Pill text="CAMARA" />
+          <Pill text="CÁMARA" />
           <TitleBlock
-            title="Permiso de camara requerido"
-            subtitle="Para escanear QR o codigo de barras debes permitir el acceso a la camara."
+            title="Permiso de cámara requerido"
+            subtitle="Para escanear QR o código de barras debes permitir el acceso a la cámara."
           />
           <ModernButton onPress={requestPermission} label="Dar permiso" icon="camera-outline" />
         </FadeInCard>
@@ -96,8 +96,8 @@ export function ScanQrScreen({ navigation }: Props) {
       <FadeInCard style={{ gap: 14 }}>
         <Pill text="ESCANEO" />
         <TitleBlock
-          title="Validacion de acceso"
-          subtitle="Alinea el QR o codigo dentro del marco. Si hace falta, puedes digitar el documento."
+          title="Validación de acceso"
+          subtitle="Alinea el QR o código dentro del marco. Si hace falta, puedes digitar el documento."
         />
         <View style={{ borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)", height: 360 }}>
           <CameraView
@@ -109,7 +109,7 @@ export function ScanQrScreen({ navigation }: Props) {
               setScanned(true);
               setIsProcessing(true);
               setDocumento((result.data || "").trim());
-              setMsg("Codigo detectado. Valida el documento o reinicia la lectura.");
+              setMsg("Código detectado. Valida el documento o reinicia la lectura.");
             }}
           />
           <View
@@ -123,13 +123,13 @@ export function ScanQrScreen({ navigation }: Props) {
               borderRadius: 14,
             }}
           >
-            <Text style={{ textAlign: "center", fontWeight: "700" }}>Alinea el QR o codigo de barras dentro del marco</Text>
+            <Text style={{ textAlign: "center", fontWeight: "700" }}>Alinea el QR o código de barras dentro del marco</Text>
           </View>
         </View>
       </FadeInCard>
 
       <FadeInCard style={{ gap: 14 }}>
-        <TitleBlock title="Documento manual" subtitle="Usa este campo cuando el QR este danado o no sea legible." />
+        <TitleBlock title="Documento manual" subtitle="Usa este campo cuando el QR esté dañado o no sea legible." />
         <TextInput
           value={documento}
           onChangeText={(value) => setDocumento(sanitizeDigits(value).slice(0, 10))}

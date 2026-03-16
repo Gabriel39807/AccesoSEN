@@ -65,7 +65,7 @@ export default function AprendizHistorialPage() {
   }, [equipos]);
 
   const tabs = [
-    { key: "ingreso", label: "Entradas" },
+    { key: "ingreso", label: "Ingresos" },
     { key: "todos", label: "Todos" },
     { key: "salida", label: "Salidas" },
   ] as const;
@@ -172,7 +172,7 @@ export default function AprendizHistorialPage() {
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-[0_6px_18px_rgba(2,6,23,0.04)]">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Entradas</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Ingresos</div>
             <div className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">{loading ? "-" : resumen.entradas}</div>
           </div>
           <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-[0_6px_18px_rgba(2,6,23,0.04)]">
@@ -252,4 +252,3 @@ export default function AprendizHistorialPage() {
     </div>
   );
 }
-

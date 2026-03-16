@@ -86,7 +86,7 @@ export default function GuardHome() {
               </Text>
               <Text style={{ color: "#ffffff", fontSize: 24, fontWeight: "900" }}>Control de acceso en tiempo real</Text>
               <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 20 }}>
-                Revisa volumen de movimientos, valida ingresos con rapidez y manten la jornada bajo una sola vista operativa.
+                Revisa el volumen de movimientos, valida ingresos con rapidez y mantén la jornada bajo una sola vista operativa.
               </Text>
             </View>
             <View style={{ width: 52, height: 52, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
@@ -130,7 +130,7 @@ export default function GuardHome() {
             </View>
           ))}
         </View>
-        <NoticeBanner tone="info" text="El escaner central es la via mas rapida para validar accesos y mantener el flujo sin fricciones en porteria." />
+        <NoticeBanner tone="info" text="El escáner central es la vía más rápida para validar accesos y mantener el flujo sin fricciones en portería." />
       </FadeInCard>
 
       <FadeInCard delay={120} style={{ gap: 10 }}>
@@ -159,7 +159,7 @@ export default function GuardHome() {
           }}
         />
         <ModernButton
-          label="Cerrar sesion"
+          label="Cerrar sesión"
           icon="log-out-outline"
           tone="dark"
           onPress={async () => {
@@ -209,7 +209,7 @@ export default function GuardHome() {
               <EmptyState
                 icon="reader-outline"
                 title="Sin movimientos recientes"
-                subtitle="Los ultimos ingresos y salidas validados durante el turno apareceran aqui."
+                subtitle="Los últimos ingresos y salidas validados durante el turno aparecerán aquí."
               />
             }
           />

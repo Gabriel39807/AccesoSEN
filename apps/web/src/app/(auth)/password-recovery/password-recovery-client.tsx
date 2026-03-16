@@ -16,12 +16,12 @@ type PasswordRule = {
 
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
-    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
-    { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
+    { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
+    { id: "upper", label: "Al menos 1 mayúscula", valid: /[A-Z]/.test(password) },
+    { id: "lower", label: "Al menos 1 minúscula", valid: /[a-z]/.test(password) },
+    { id: "num", label: "Al menos 1 número", valid: /[0-9]/.test(password) },
+    { id: "special", label: "Al menos 1 carácter especial", valid: /[^A-Za-z0-9]/.test(password) },
+    { id: "match", label: "Coincide con la confirmación", valid: confirmPassword.length > 0 && password === confirmPassword },
   ];
 }
 
@@ -50,11 +50,11 @@ export default function PasswordRecoveryClient() {
   async function onRequest(e: React.FormEvent) {
     e.preventDefault();
     if (!normalizedEmail) {
-      setError("Ingresa un correo para enviar el codigo.");
+      setError("Ingresa un correo para enviar el código.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      setError("El correo no tiene un formato valido.");
+      setError("El correo no tiene un formato válido.");
       return;
     }
     setLoading(true);
@@ -62,9 +62,9 @@ export default function PasswordRecoveryClient() {
     try {
       await api.post("/api/auth/password-reset/request/", { email: normalizedEmail });
       setStep("sent");
-      setNotice("Si la cuenta existe, enviamos un codigo de verificacion a tu correo.");
+      setNotice("Si la cuenta existe, enviamos un código de verificación a tu correo.");
     } catch (err: unknown) {
-      setError(toErrorMessage(err, "No se pudo enviar el codigo."));
+      setError(toErrorMessage(err, "No se pudo enviar el código."));
     } finally {
       setLoading(false);
     }
@@ -73,7 +73,7 @@ export default function PasswordRecoveryClient() {
   async function onVerify(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\d{5}$/.test(otp.trim())) {
-      setError("El codigo OTP debe tener 5 digitos.");
+      setError("El código OTP debe tener 5 dígitos.");
       return;
     }
     setLoading(true);
@@ -83,11 +83,11 @@ export default function PasswordRecoveryClient() {
         email: normalizedEmail,
         otp: otp.trim(),
       });
-      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "OTP invalido.");
+      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "OTP inválido.");
       setStep("reset");
-      setNotice("Codigo verificado. Ahora define tu nueva contrasena.");
+      setNotice("Código verificado. Ahora define tu nueva contraseña.");
     } catch (err: unknown) {
-      setError(toErrorMessage(err, "Codigo invalido o expirado."));
+      setError(toErrorMessage(err, "Código inválido o expirado."));
     } finally {
       setLoading(false);
     }
@@ -99,9 +99,9 @@ export default function PasswordRecoveryClient() {
     setError(null);
     try {
       await api.post("/api/auth/password-reset/request/", { email: normalizedEmail });
-      setNotice("Reenviamos un nuevo codigo al correo registrado.");
+      setNotice("Reenviamos un nuevo código al correo registrado.");
     } catch (err: unknown) {
-      setError(toErrorMessage(err, "No se pudo reenviar el codigo."));
+      setError(toErrorMessage(err, "No se pudo reenviar el código."));
     } finally {
       setLoading(false);
     }
@@ -110,7 +110,7 @@ export default function PasswordRecoveryClient() {
   async function onConfirm(e: React.FormEvent) {
     e.preventDefault();
     if (!allRulesValid) {
-      setError("La nueva contrasena no cumple todos los requisitos.");
+      setError("La nueva contraseña no cumple todos los requisitos.");
       return;
     }
     setLoading(true);
@@ -121,11 +121,11 @@ export default function PasswordRecoveryClient() {
         otp: otp.trim(),
         new_password: newPass,
       });
-      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contrasena.");
+      if (!r?.data?.permitido) throw new Error(r?.data?.motivo || "No se pudo cambiar la contraseña.");
       setStep("done");
-      setNotice("Contrasena actualizada correctamente.");
+      setNotice("Contraseña actualizada correctamente.");
     } catch (err: unknown) {
-      setError(toErrorMessage(err, "No se pudo cambiar la contrasena."));
+      setError(toErrorMessage(err, "No se pudo cambiar la contraseña."));
     } finally {
       setLoading(false);
     }
@@ -134,18 +134,19 @@ export default function PasswordRecoveryClient() {
   return (
     <AuthLayout
       role="aprendiz"
-      title="Recuperacion de contrasena"
-      subtitle="Protege tu cuenta con un flujo seguro de verificacion y cambio de clave."
+      title="Recuperación de contraseña"
+      subtitle="Protege tu cuenta con un flujo guiado de verificación y cambio de clave."
       badge="Soporte de acceso"
     >
       <AuthCard className="p-5 md:p-6">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Restablecer acceso</h2>
-          <p className="text-xs text-slate-500">Seguiremos un proceso corto para validar tu identidad.</p>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Recuperación segura</p>
+          <h2 className="mt-2 text-3xl font-bold leading-none text-slate-900">Restablecer acceso</h2>
+          <p className="mt-2 max-w-sm text-sm text-slate-500">Seguiremos un proceso breve para validar tu identidad y entregarte una nueva contraseña.</p>
         </div>
 
         {step === "request" ? (
-          <form onSubmit={onRequest} className="mt-5 space-y-4">
+          <form onSubmit={onRequest} className="mt-6 space-y-4">
             <AuthInput
               id="recovery-email"
               label="Correo"
@@ -155,20 +156,20 @@ export default function PasswordRecoveryClient() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
               error={null}
-              hint="Enviaremos un OTP al correo asociado a tu cuenta."
+              hint="Enviaremos un código de verificación al correo asociado a tu cuenta."
             />
             <AuthButton type="submit" loading={loading} loadingLabel="Enviando..." className="w-full">
-              Enviar codigo
+              Enviar código
             </AuthButton>
           </form>
         ) : null}
 
         {step === "sent" ? (
-          <form onSubmit={onVerify} className="mt-5 space-y-4">
-            <p className={`${styles.status} ${styles.statusInfo}`}>Revisa tu correo y escribe el codigo OTP de 5 digitos.</p>
+          <form onSubmit={onVerify} className="mt-6 space-y-4">
+            <p className={`${styles.status} ${styles.statusInfo}`}>Revisa tu correo y escribe el código de verificación de 5 dígitos.</p>
             <AuthInput
               id="recovery-otp"
-              label="Codigo OTP"
+              label="Código de verificación"
               placeholder="12345"
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 5))}
@@ -176,31 +177,31 @@ export default function PasswordRecoveryClient() {
               maxLength={5}
               className="text-center tracking-[0.36em]"
               error={null}
-              hint={`Codigo enviado a ${normalizedEmail || "tu correo"}.`}
+              hint={`Código enviado a ${normalizedEmail || "tu correo"}.`}
             />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <AuthButton type="submit" loading={loading} loadingLabel="Verificando..." className="w-full">
-                Verificar codigo
+                Verificar código
               </AuthButton>
               <AuthButton type="button" variant="secondary" onClick={resendCode} loading={loading} className="w-full">
-                Reenviar
+                Reenviar código
               </AuthButton>
             </div>
           </form>
         ) : null}
 
         {step === "reset" ? (
-          <form onSubmit={onConfirm} className="mt-5 space-y-4">
+          <form onSubmit={onConfirm} className="mt-6 space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="new-pass" className="block text-sm font-semibold text-slate-800">
-                Nueva contrasena
+                Nueva contraseña
               </label>
               <div className="relative">
                 <input
                   id="new-pass"
                   type={showPass1 ? "text" : "password"}
                   className={styles.input}
-                  placeholder="Nueva contrasena"
+                  placeholder="Nueva contraseña"
                   value={newPass}
                   onChange={(e) => setNewPass(e.target.value)}
                   autoComplete="new-password"
@@ -218,14 +219,14 @@ export default function PasswordRecoveryClient() {
 
             <div className="space-y-1.5">
               <label htmlFor="confirm-pass" className="block text-sm font-semibold text-slate-800">
-                Confirmar contrasena
+                Confirmar contraseña
               </label>
               <div className="relative">
                 <input
                   id="confirm-pass"
                   type={showPass2 ? "text" : "password"}
                   className={styles.input}
-                  placeholder="Confirmar contrasena"
+                  placeholder="Confirmar contraseña"
                   value={newPass2}
                   onChange={(e) => setNewPass2(e.target.value)}
                   autoComplete="new-password"
@@ -250,16 +251,16 @@ export default function PasswordRecoveryClient() {
             </div>
 
             <AuthButton type="submit" loading={loading} loadingLabel="Actualizando..." disabled={!allRulesValid} className="w-full">
-              Cambiar contrasena
+              Cambiar contraseña
             </AuthButton>
           </form>
         ) : null}
 
         {step === "done" ? (
-          <div className="mt-5 space-y-4">
-            <p className={`${styles.status} ${styles.statusSuccess}`}>Tu contrasena fue actualizada exitosamente.</p>
+          <div className="mt-6 space-y-4">
+            <p className={`${styles.status} ${styles.statusSuccess}`}>Tu contraseña fue actualizada correctamente.</p>
             <AuthButton type="button" className="w-full" onClick={() => router.push("/login")}>
-              Ir a iniciar sesion
+              Ir a iniciar sesión
             </AuthButton>
           </div>
         ) : null}
@@ -269,7 +270,7 @@ export default function PasswordRecoveryClient() {
 
         {step !== "done" ? (
           <AuthButton type="button" variant="secondary" className="mt-4 w-full" onClick={() => router.push("/login")}>
-            Volver al login
+            Volver al inicio de sesión
           </AuthButton>
         ) : null}
       </AuthCard>

@@ -1,10 +1,3 @@
-/**
- * Pantalla web para registrar un nuevo equipo de aprendiz.
- *
- * Responsabilidad:
- * - Validar datos minimos del equipo.
- * - Mostrar estado de guardado y errores de negocio amigables.
- */
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -28,10 +21,6 @@ export default function AprendizNuevoEquipoPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [msgTipo, setMsgTipo] = useState<"ok" | "err" | null>(null);
 
-  /**
-   * Envia el formulario de registro de equipo.
-   * Mantiene `saving` activo para reflejar estado de carga en el boton.
-   */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
@@ -51,10 +40,9 @@ export default function AprendizNuevoEquipoPage() {
         modelo: modelo.trim(),
       });
 
-      setMsg("✅ Equipo registrado. Queda en estado PENDIENTE hasta revisión.");
+      setMsg("Equipo registrado. Queda en estado pendiente hasta su revisión.");
       setMsgTipo("ok");
 
-      // Lleva de vuelta a la lista (con una pausa mínima para que el usuario vea el mensaje)
       setTimeout(() => router.push("/aprendiz/equipos"), 450);
     } catch (e: unknown) {
       setMsg(toErrorMessage(e, "No se pudo registrar el equipo."));
@@ -67,7 +55,7 @@ export default function AprendizNuevoEquipoPage() {
   return (
     <div className="grid gap-5 lg:grid-cols-3">
       <div className="rounded-3xl border bg-white p-5 shadow-sm lg:col-span-2">
-        <h2 className="text-lg font-extrabold text-zinc-900">Registrar nuevo equipo</h2>
+        <h2 className="text-lg font-extrabold text-zinc-900">Registrar equipo</h2>
         <p className="mt-1 text-sm text-zinc-600">
           Ingresa los datos del equipo tecnológico que llevarás al centro.
         </p>

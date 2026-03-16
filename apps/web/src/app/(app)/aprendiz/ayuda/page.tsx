@@ -65,8 +65,8 @@ export default function AprendizAyudaPage() {
       title: documentName.trim() || "Documento en vista previa",
       description:
         documentType === "doc" || documentType === "docx" || documentType === "xls" || documentType === "xlsx" || documentType === "ppt" || documentType === "pptx"
-          ? "Vista global basada en react-doc-viewer. Los archivos Office necesitan una URL publica accesible."
-          : "Vista global basada en react-doc-viewer para archivos compatibles.",
+          ? "Vista general basada en react-doc-viewer. Los archivos de Office necesitan una URL pública accesible."
+          : "Vista general basada en react-doc-viewer para archivos compatibles.",
     });
   }
 
@@ -78,7 +78,7 @@ export default function AprendizAyudaPage() {
         <div className="relative">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Centro de soporte</p>
           <h2 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">Ayuda y soporte</h2>
-          <p className="mt-1 text-sm text-zinc-600">Resuelve dudas frecuentes, abre un caso a soporte o prueba la vista previa global de documentos.</p>
+          <p className="mt-1 text-sm text-zinc-600">Resuelve dudas frecuentes, abre un caso con soporte o prueba la vista previa global de documentos.</p>
         </div>
       </section>
 
@@ -87,32 +87,32 @@ export default function AprendizAyudaPage() {
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-xl font-extrabold tracking-tight text-zinc-900">Preguntas frecuentes</h3>
             <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-              Respuestas rapidas
+              Respuestas rápidas
             </span>
           </div>
 
           <div className="space-y-3">
-            <FaqItem title="Como registro un equipo nuevo?">
+            <FaqItem title="¿Cómo registro un equipo nuevo?">
               <ol className="list-decimal space-y-1 pl-5">
                 <li>Ingresa a <span className="font-semibold">Mis equipos</span>.</li>
                 <li>Selecciona <span className="font-semibold">Registrar nuevo</span>.</li>
-                <li>Completa Serial, Marca y Modelo, luego guarda.</li>
+                <li>Completa serial, marca y modelo, luego guarda.</li>
               </ol>
             </FaqItem>
 
-            <FaqItem title="Como actualizo mi foto o numero de telefono?">
-              Esta opcion depende de la configuracion del backend. Si no puedes editar estos datos en perfil,
-              solicita actualizacion al area administrativa.
+            <FaqItem title="¿Cómo actualizo mi foto o número de teléfono?">
+              Esta opción depende de la configuración del backend. Si no puedes editar estos datos en perfil,
+              solicita la actualización al área administrativa.
             </FaqItem>
 
-            <FaqItem title="Olvide mi contrasena">
-              Ve a la opcion de recuperacion de contrasena en login, o contacta administracion con tu documento para
-              restablecer acceso.
+            <FaqItem title="Olvidé mi contraseña">
+              Ve a la opción de recuperación de contraseña en el inicio de sesión o contacta a administración con tu documento para
+              restablecer el acceso.
             </FaqItem>
 
-            <FaqItem title="Puedo ver documentos Word o PDF dentro del sistema?">
-              Si. Ahora SADI tiene un visor global. Para PDF e imagenes funciona directo. Para Word, Excel y PowerPoint,
-              la URL debe ser publica para que Microsoft Office Online pueda renderizarla dentro del visor.
+            <FaqItem title="¿Puedo ver documentos Word o PDF dentro del sistema?">
+              Sí. SADI tiene un visor global. Para PDF e imágenes funciona directamente. Para Word, Excel y PowerPoint,
+              la URL debe ser pública para que Microsoft Office Online pueda renderizarla dentro del visor.
             </FaqItem>
           </div>
         </section>
@@ -130,7 +130,7 @@ export default function AprendizAyudaPage() {
                 onChange={(e) => setMotivo(e.target.value)}
               >
                 <option>Otro motivo</option>
-                <option>Olvide mi contrasena</option>
+                <option>Olvidé mi contraseña</option>
                 <option>Problemas para registrar equipo</option>
                 <option>Datos personales</option>
               </select>
@@ -142,7 +142,7 @@ export default function AprendizAyudaPage() {
                 className="mt-1 w-full rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
                 value={asunto}
                 onChange={(e) => setAsunto(e.target.value)}
-                placeholder="Ej: No puedo iniciar sesion"
+                placeholder="Ej: No puedo iniciar sesión"
               />
             </div>
 
@@ -170,7 +170,7 @@ export default function AprendizAyudaPage() {
                   : "pointer-events-none bg-zinc-200 text-zinc-500"
               )}
             >
-              Enviar mensaje
+              Enviar solicitud
             </a>
           </div>
 
@@ -178,7 +178,7 @@ export default function AprendizAyudaPage() {
             <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Otros canales</div>
             <div className="mt-2 space-y-1.5">
               <div>
-                <span className="font-semibold">Linea de atencion:</span> (000) 000 0000
+                <span className="font-semibold">Línea de atención:</span> (000) 000 0000
               </div>
               <div>
                 <span className="font-semibold">Correo:</span> {supportEmail}
@@ -197,15 +197,15 @@ export default function AprendizAyudaPage() {
             </div>
             <h3 className="mt-3 text-2xl font-extrabold tracking-tight text-zinc-900">Vista previa de documentos</h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-              Este bloque usa la configuracion global del visor. Cualquier modulo puede reutilizarla con el hook
+              Este bloque usa la configuración global del visor. Cualquier módulo puede reutilizarla con el hook
               <span className="font-semibold text-zinc-800"> useDocumentViewer()</span>.
             </p>
           </div>
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 lg:max-w-md">
-            <div className="font-semibold">Importante para Word/Excel/PowerPoint</div>
+            <div className="font-semibold">Importante para Word, Excel y PowerPoint</div>
             <p className="mt-1">
-              Esos formatos se abren mediante Microsoft Office Online. Usa una URL publica HTTPS; una ruta local o privada no se podra embeber.
+              Estos formatos se abren mediante Microsoft Office Online. Usa una URL pública HTTPS; una ruta local o privada no se podrá incrustar.
             </p>
           </div>
         </div>
@@ -265,17 +265,17 @@ export default function AprendizAyudaPage() {
                 <Eye className="h-4 w-4" />
                 Abrir vista previa
               </button>
-              <p className="text-xs text-zinc-500">El visor se abre como modal global y se puede reutilizar en cualquier pagina.</p>
+              <p className="text-xs text-zinc-500">El visor se abre como modal global y puede reutilizarse en cualquier página.</p>
             </div>
           </div>
 
           <div className="rounded-[1.75rem] border border-zinc-200 bg-zinc-950 p-5 text-zinc-100 shadow-[0_12px_28px_rgba(2,6,23,0.18)]">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Notas de compatibilidad</div>
             <ul className="mt-4 space-y-3 text-sm text-zinc-300">
-              <li>PDF, texto e imagenes suelen renderizar sin depender de servicios externos.</li>
-              <li>DOC, DOCX, XLS, XLSX, PPT y PPTX necesitan una URL publica accesible desde Internet.</li>
-              <li>Si el archivo es privado, el boton &quot;Abrir aparte&quot; del modal sigue disponible para abrir la fuente original.</li>
-              <li>La politica CSP de la app ya fue actualizada para permitir el iframe del visor de Office.</li>
+              <li>PDF, texto e imágenes suelen renderizar sin depender de servicios externos.</li>
+              <li>DOC, DOCX, XLS, XLSX, PPT y PPTX necesitan una URL pública accesible desde Internet.</li>
+              <li>Si el archivo es privado, el botón “Abrir aparte” del modal sigue disponible para abrir la fuente original.</li>
+              <li>La política CSP de la app ya fue actualizada para permitir el iframe del visor de Office.</li>
             </ul>
           </div>
         </div>

@@ -27,7 +27,10 @@ export default function RootLayout() {
       <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <FadeInCard style={{ gap: 16 }}>
           <Pill text="INICIALIZANDO" />
-          <TitleBlock title="Preparando entorno seguro" subtitle="Estamos restaurando sesion, permisos y contexto operativo del dispositivo." />
+          <TitleBlock
+            title="Preparando entorno seguro"
+            subtitle="Estamos restaurando sesión, permisos y contexto operativo del dispositivo."
+          />
           <LoadingBlock label="Sincronizando acceso institucional" />
         </FadeInCard>
       </ModernScreen>

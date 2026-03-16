@@ -5,7 +5,17 @@ import { router } from "expo-router";
 
 import * as Auth from "../../src/api/auth";
 import { toUiErrorMessage } from "../../src/api/client";
-import { FadeInCard, InputField, LoadingBlock, ModernButton, ModernScreen, NoticeBanner, Pill, TitleBlock, uiTheme } from "../../src/ui/modern";
+import {
+  FadeInCard,
+  InputField,
+  LoadingBlock,
+  ModernButton,
+  ModernScreen,
+  NoticeBanner,
+  Pill,
+  TitleBlock,
+  uiTheme,
+} from "../../src/ui/modern";
 
 type PasswordRule = {
   id: string;
@@ -15,12 +25,12 @@ type PasswordRule = {
 
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
-    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
-    { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
+    { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
+    { id: "upper", label: "Al menos 1 mayúscula", valid: /[A-Z]/.test(password) },
+    { id: "lower", label: "Al menos 1 minúscula", valid: /[a-z]/.test(password) },
+    { id: "num", label: "Al menos 1 número", valid: /[0-9]/.test(password) },
+    { id: "special", label: "Al menos 1 carácter especial", valid: /[^A-Za-z0-9]/.test(password) },
+    { id: "match", label: "Coincide con la confirmación", valid: confirmPassword.length > 0 && password === confirmPassword },
   ];
 }
 
@@ -43,7 +53,7 @@ export default function FirstPasswordScreen() {
   async function onSubmit() {
     setMsg(null);
     if (!allRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setMsg("La nueva contraseña no cumple todos los requisitos.");
       return;
     }
 
@@ -76,14 +86,30 @@ export default function FirstPasswordScreen() {
         >
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
             <View style={{ flex: 1, gap: 8 }}>
-              <Text style={{ color: uiTheme.accentDeep, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-                Activacion de cuenta
+              <Text
+                style={{
+                  color: uiTheme.accentDeep,
+                  fontSize: 12,
+                  fontWeight: "800",
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                }}
+              >
+                Activación de cuenta
               </Text>
-              <Text style={{ color: uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
+              <Text
+                style={{
+                  color: uiTheme.ink,
+                  fontSize: 28,
+                  lineHeight: 32,
+                  fontWeight: "900",
+                  letterSpacing: -0.8,
+                }}
+              >
                 Actualiza tu clave inicial
               </Text>
               <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
-                Antes de continuar, reemplaza la contrasena temporal por una personal y segura para completar tu ingreso.
+                Antes de continuar, reemplaza la contraseña temporal por una personal y segura para completar tu ingreso.
               </Text>
             </View>
             <View
@@ -115,39 +141,65 @@ export default function FirstPasswordScreen() {
 
       <FadeInCard delay={70} style={{ gap: 14 }}>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Cambio obligatorio</Text>
-          <TitleBlock title="Configura tu nueva contrasena" subtitle="Usa una clave que cumpla todos los requisitos y confirme tu identidad." />
+          <Text
+            style={{
+              color: uiTheme.muted,
+              fontSize: 12,
+              fontWeight: "800",
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
+            Cambio obligatorio
+          </Text>
+          <TitleBlock
+            title="Configura tu nueva contraseña"
+            subtitle="Usa una clave que cumpla todos los requisitos y confirme tu identidad."
+          />
         </View>
 
         <InputField
-          label="Contrasena actual"
+          label="Contraseña actual"
           value={current}
           onChangeText={(v) => setCurrent(v.slice(0, 20))}
-          placeholder="Ultimos digitos del documento"
+          placeholder="Últimos dígitos del documento"
           secureTextEntry
         />
 
         <InputField
-          label="Nueva contrasena"
+          label="Nueva contraseña"
           value={next}
           onChangeText={(v) => setNext(v.slice(0, 20))}
-          placeholder="Minimo 8 caracteres"
+          placeholder="Mínimo 8 caracteres"
           secureTextEntry
         />
 
         <InputField
-          label="Confirmar contrasena"
+          label="Confirmar contraseña"
           value={confirm}
           onChangeText={(v) => setConfirm(v.slice(0, 20))}
-          placeholder="Repite la nueva contrasena"
+          placeholder="Repite la nueva contraseña"
           secureTextEntry
         />
 
-        <View style={{ borderRadius: 22, padding: 14, gap: 8, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
+        <View
+          style={{
+            borderRadius: 22,
+            padding: 14,
+            gap: 8,
+            backgroundColor: "rgba(255,255,255,0.72)",
+            borderWidth: 1,
+            borderColor: "rgba(148,163,184,0.22)",
+          }}
+        >
           <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Checklist de seguridad</Text>
           {rules.map((rule) => (
             <View key={rule.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name={rule.valid ? "checkmark-circle" : "ellipse-outline"} size={18} color={rule.valid ? uiTheme.success : uiTheme.muted} />
+              <Ionicons
+                name={rule.valid ? "checkmark-circle" : "ellipse-outline"}
+                size={18}
+                color={rule.valid ? uiTheme.success : uiTheme.muted}
+              />
               <Text style={{ color: rule.valid ? uiTheme.success : uiTheme.inkSoft }}>{rule.label}</Text>
             </View>
           ))}

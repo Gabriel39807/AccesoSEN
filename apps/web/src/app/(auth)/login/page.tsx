@@ -4,7 +4,7 @@
  * Responsabilidad:
  * - Autenticar administradores o aprendices.
  * - Aplicar bloqueo temporal y flujo passkey.
- * - Mostrar estados de carga/error claros durante toda la autenticacion.
+ * - Mostrar estados de carga/error claros durante toda la autenticación.
  */
 "use client";
 
@@ -51,7 +51,7 @@ function toBase64Url(buffer: ArrayBuffer) {
 }
 
 /**
- * Pantalla principal de inicio de sesion web.
+ * Pantalla principal de inicio de sesión web.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -85,19 +85,19 @@ export default function LoginPage() {
         ? {
             title: "Control institucional seguro",
             subtitle:
-              "Accede al panel de gestion de S.A.D.I con trazabilidad de ingresos y validacion de usuarios autorizados.",
+              "Accede al panel de gestión de S.A.D.I. con trazabilidad de ingresos, revisión operativa y validación de usuarios autorizados.",
             field: "Usuario o correo",
             placeholder: "superadmin o admin@institucion.local",
-            hint: "Puedes iniciar con username o correo de tu cuenta administrativa.",
+            hint: "Puedes ingresar con tu nombre de usuario o con el correo administrativo.",
             badge: "Acceso administrador",
           }
         : {
             title: "Ingreso de aprendices",
             subtitle:
-              "Valida tu identidad para consultar tus accesos y mantener la credencial activa en el sistema.",
+              "Valida tu identidad para consultar tus accesos, gestionar tus equipos y mantener tu credencial activa.",
             field: "Documento de identidad",
             placeholder: "Ingresa tu documento",
-            hint: "Solo numeros (entre 6 y 10 digitos).",
+            hint: "Solo números entre 6 y 10 dígitos.",
             badge: "Acceso aprendiz",
           },
     [role]
@@ -121,13 +121,13 @@ export default function LoginPage() {
   function validateLogin(): string | null {
     const user = username.trim();
     if (!user) return `Ingresa ${role === "admin" ? "tu usuario o correo" : "tu documento"}.`;
-    if (role === "admin" && user.length > 150) return "El usuario/correo supera el maximo permitido (150).";
+    if (role === "admin" && user.length > 150) return "El usuario o correo supera el máximo permitido (150).";
     if (role === "aprendiz") {
       const docError = validateDocument6to10(user);
       if (docError) return docError;
     }
-    if (!password) return "Ingresa tu contrasena.";
-    if (password.length > 20) return "La contrasena debe tener maximo 20 caracteres.";
+    if (!password) return "Ingresa tu contraseña.";
+    if (password.length > 20) return "La contraseña debe tener máximo 20 caracteres.";
     if (bloqueado) return `Cuenta bloqueada temporalmente. Intenta en ${lockRemainingSec}s.`;
     return null;
   }
@@ -145,7 +145,7 @@ export default function LoginPage() {
   }
 
   /**
-   * Envia credenciales por password y redirige segun rol permitido.
+   * Envía credenciales por contraseña y redirige según el rol permitido.
    */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -158,12 +158,16 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const tokenRes = await api.post("/api/token/", {
-        username: username.trim(),
-        password,
-        expected_role: roleForBackend(),
-        auth_transport: "cookie",
-      }, { timeout: 20000 });
+      const tokenRes = await api.post(
+        "/api/token/",
+        {
+          username: username.trim(),
+          password,
+          expected_role: roleForBackend(),
+          auth_transport: "cookie",
+        },
+        { timeout: 20000 }
+      );
       saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh || "" });
 
       const meRes = await api.get<MeResponse>("/api/me/", { timeout: 20000 });
@@ -171,13 +175,13 @@ export default function LoginPage() {
 
       if (role === "admin" && !["superadmin", "admin_sede"].includes(rol)) {
         await clearTokens();
-        setError("Este modulo solo permite credenciales de administrador.");
+        setError("Este módulo solo permite credenciales de administrador.");
         return;
       }
 
       if (role === "aprendiz" && rol !== "aprendiz") {
         await clearTokens();
-        setError("Este modulo solo permite credenciales de aprendiz.");
+        setError("Este módulo solo permite credenciales de aprendiz.");
         return;
       }
 
@@ -191,21 +195,21 @@ export default function LoginPage() {
       }
 
       await clearTokens();
-      setError("El rol guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
+      setError("El rol de guarda no está habilitado en la web. Usa la app móvil para control de acceso.");
     } catch (err: any) {
       applyLockFromError(err);
-      setError(toErrorMessage(err, "Credenciales invalidas."));
+      setError(toErrorMessage(err, "Credenciales inválidas."));
     } finally {
       setLoading(false);
     }
   }
 
   /**
-   * Inicia sesion usando passkey/webAuthn cuando esta soportado.
+   * Inicia sesión con passkey/WebAuthn cuando el navegador lo soporta.
    */
   async function onPasskeyLogin() {
     if (!passkeySupported) {
-      setError("Tu navegador no soporta Passkeys/WebAuthn.");
+      setError("Tu navegador no soporta passkeys/WebAuthn.");
       return;
     }
     if (bloqueado) {
@@ -216,10 +220,14 @@ export default function LoginPage() {
     setError(null);
     setPasskeyLoading(true);
     try {
-      const optionsRes = await api.post<PasskeyAuthOptionsResponse>("/api/auth/passkeys/auth/options/", {
-        username: username.trim(),
-        expected_role: roleForBackend(),
-      }, { timeout: 20000 });
+      const optionsRes = await api.post<PasskeyAuthOptionsResponse>(
+        "/api/auth/passkeys/auth/options/",
+        {
+          username: username.trim(),
+          expected_role: roleForBackend(),
+        },
+        { timeout: 20000 }
+      );
       const options = optionsRes.data;
 
       const publicKey: PublicKeyCredentialRequestOptions = {
@@ -240,13 +248,17 @@ export default function LoginPage() {
       }
       const credentialId = toBase64Url(assertion.rawId);
 
-      const tokenRes = await api.post("/api/auth/passkeys/auth/verify/", {
-        request_id: options.request_id,
-        challenge: options.challenge,
-        credential_id: credentialId,
-        expected_role: roleForBackend(),
-        auth_transport: "cookie",
-      }, { timeout: 20000 });
+      const tokenRes = await api.post(
+        "/api/auth/passkeys/auth/verify/",
+        {
+          request_id: options.request_id,
+          challenge: options.challenge,
+          credential_id: credentialId,
+          expected_role: roleForBackend(),
+          auth_transport: "cookie",
+        },
+        { timeout: 20000 }
+      );
       saveTokens({ access: tokenRes.data.access, refresh: tokenRes.data.refresh || "" });
 
       const meRes = await api.get<MeResponse>("/api/me/", { timeout: 20000 });
@@ -257,7 +269,7 @@ export default function LoginPage() {
         router.replace("/admin/usuarios");
       } else {
         await clearTokens();
-        setError("La passkey no corresponde al modulo actual.");
+        setError("La passkey no corresponde al módulo actual.");
       }
     } catch (err: any) {
       applyLockFromError(err);
@@ -270,20 +282,23 @@ export default function LoginPage() {
   return (
     <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge}>
       <AuthCard className="p-5 md:p-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Iniciar sesion</h2>
-            <p className="text-xs text-slate-500">Sistema de Administracion de Ingresos S.A.D.I</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Portal de acceso</p>
+            <h2 className="mt-2 text-3xl font-bold leading-none text-slate-900">Iniciar sesión</h2>
+            <p className="mt-2 max-w-sm text-sm text-slate-500">
+              Elige tu perfil, valida tu identidad y entra al módulo correcto sin pasos innecesarios.
+            </p>
           </div>
           <span
-            className="rounded-full border border-white/70 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-slate-600"
+            className="rounded-full border border-white/70 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-slate-600 shadow-sm"
             style={{ background: "var(--auth-accent-soft)" }}
           >
-            ACCESO
+            SESIÓN
           </span>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
           <RoleSwitch
             value={role}
             onChange={(nextRole) => {
@@ -292,14 +307,14 @@ export default function LoginPage() {
               setUsername("");
             }}
           />
-          <p className="mt-2 text-xs text-slate-600">
+          <p className="mt-3 text-sm text-slate-600">
             {role === "admin"
-              ? "Vista de gestion con enfoque en seguridad y monitoreo."
-              : "Vista de aprendizaje para ingreso y validacion de identidad."}
+              ? "Vista de gestión con foco en seguridad, trazabilidad y operación por sede."
+              : "Vista personal para validar identidad, revisar accesos y gestionar equipos."}
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="mt-5 space-y-4">
+        <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <AuthInput
             id="auth-username"
             label={roleCopy.field}
@@ -317,7 +332,7 @@ export default function LoginPage() {
 
           <div className="space-y-1.5">
             <label htmlFor="auth-password" className="block text-sm font-semibold text-slate-800">
-              contrasena
+              Contraseña
             </label>
             <div className="relative">
               <input
@@ -338,13 +353,14 @@ export default function LoginPage() {
                 {showPassword ? "Ocultar" : "Mostrar"}
               </button>
             </div>
+            <p className="text-xs text-slate-500">La contraseña se valida de forma segura y no se almacena en el navegador.</p>
           </div>
 
           {bloqueado ? <p className={`${styles.status} ${styles.statusError}`}>Cuenta bloqueada. Intenta en {lockRemainingSec}s.</p> : null}
           {error ? <p className={`${styles.status} ${styles.statusError}`}>{error}</p> : null}
 
           <AuthButton type="submit" loading={loading} loadingLabel="Ingresando..." className="w-full" disabled={bloqueado || passkeyLoading}>
-            Iniciar sesion
+            Entrar al sistema
           </AuthButton>
 
           <AuthButton
@@ -355,11 +371,11 @@ export default function LoginPage() {
             loading={passkeyLoading}
             disabled={!passkeySupported || bloqueado || loading}
           >
-            Iniciar con Passkey
+            Entrar con passkey
           </AuthButton>
 
           <AuthButton type="button" variant="secondary" className="w-full" onClick={() => router.push("/password-recovery")}>
-            Recuperar contrasena
+            Recuperar contraseña
           </AuthButton>
         </form>
       </AuthCard>

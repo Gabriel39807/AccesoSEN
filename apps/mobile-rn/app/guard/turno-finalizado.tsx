@@ -8,8 +8,8 @@ import { FadeInCard, ModernButton, ModernScreen, NoticeBanner, Pill, uiTheme } f
 
 const completionPoints = [
   "Resumen del turno consolidado correctamente.",
-  "No quedan validaciones pendientes en esta sesion.",
-  "Ya puedes salir del modulo operativo con seguridad.",
+  "No quedan validaciones pendientes en esta sesión.",
+  "Ya puedes salir del módulo operativo con seguridad.",
 ];
 
 export default function TurnoFinalizado() {
@@ -32,13 +32,13 @@ export default function TurnoFinalizado() {
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
             <View style={{ flex: 1, gap: 8 }}>
               <Text style={{ color: uiTheme.accentDeep, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-                Operacion completada
+                Operación completada
               </Text>
               <Text style={{ color: uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
-                El turno quedo cerrado y listo para relevo
+                El turno quedó cerrado y listo para relevo
               </Text>
               <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
-                El sistema confirmo tu salida operativa y dejo la jornada lista para continuar con el siguiente control.
+                El sistema confirmó tu salida operativa y dejó la jornada lista para continuar con el siguiente control.
               </Text>
             </View>
             <View style={{ width: 58, height: 58, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.62)", borderWidth: 1, borderColor: "rgba(15,118,110,0.12)" }}>
@@ -53,7 +53,7 @@ export default function TurnoFinalizado() {
             </View>
             <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
               <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Recomendado</Text>
-              <Text style={{ color: uiTheme.ink, fontWeight: "900", marginTop: 6 }}>Salir del modulo</Text>
+              <Text style={{ color: uiTheme.ink, fontWeight: "900", marginTop: 6 }}>Salir del módulo</Text>
             </View>
           </View>
         </View>
@@ -71,12 +71,12 @@ export default function TurnoFinalizado() {
             <Text style={{ color: uiTheme.inkSoft, flex: 1, lineHeight: 20 }}>{point}</Text>
           </View>
         ))}
-        <NoticeBanner tone="success" text="Si ya terminaste la jornada, lo mas seguro es cerrar sesion para evitar accesos involuntarios desde este dispositivo." />
+        <NoticeBanner tone="success" text="Si ya terminaste la jornada, lo más seguro es cerrar sesión para evitar accesos involuntarios desde este dispositivo." />
       </FadeInCard>
 
       <FadeInCard delay={120} style={{ gap: 10 }}>
         <ModernButton
-          label="Cerrar sesion y salir"
+          label="Cerrar sesión y salir"
           icon="log-out-outline"
           onPress={async () => {
             await signOut();

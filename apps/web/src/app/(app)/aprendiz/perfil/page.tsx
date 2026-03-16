@@ -20,12 +20,12 @@ type PasswordRule = {
 
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
-    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
-    { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
+    { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
+    { id: "upper", label: "Al menos 1 mayúscula", valid: /[A-Z]/.test(password) },
+    { id: "lower", label: "Al menos 1 minúscula", valid: /[a-z]/.test(password) },
+    { id: "num", label: "Al menos 1 número", valid: /[0-9]/.test(password) },
+    { id: "special", label: "Al menos 1 carácter especial", valid: /[^A-Za-z0-9]/.test(password) },
+    { id: "match", label: "Coincide con la confirmación", valid: confirmPassword.length > 0 && password === confirmPassword },
   ];
 }
 
@@ -160,12 +160,12 @@ export default function AprendizPerfilPage() {
       await api.post("/api/aprendiz/perfil/email-change/request/", {
         new_email: cleanEmail,
       });
-      setMsg("Enviamos un PIN al nuevo correo. Verificalo para aplicar el cambio.");
+      setMsg("Enviamos un código al nuevo correo. Verifícalo para aplicar el cambio.");
       setMsgTipo("ok");
       setEmailOtp("");
       await cargarPerfil();
     } catch (e: unknown) {
-      setMsg(toErrorMessage(e, "No se pudo enviar el PIN al nuevo correo."));
+      setMsg(toErrorMessage(e, "No se pudo enviar el código al nuevo correo."));
       setMsgTipo("err");
     } finally {
       setSendingEmailOtp(false);
@@ -181,7 +181,7 @@ export default function AprendizPerfilPage() {
       return;
     }
     if (!cleanOtp || cleanOtp.length !== 5) {
-      setMsg("Debes escribir un PIN valido de 5 digitos.");
+      setMsg("Debes escribir un código válido de 5 dígitos.");
       setMsgTipo("err");
       return;
     }
@@ -205,7 +205,7 @@ export default function AprendizPerfilPage() {
       setMsgTipo("ok");
       await cargarPerfil();
     } catch (e: unknown) {
-      setMsg(toErrorMessage(e, "No se pudo verificar el PIN del correo."));
+      setMsg(toErrorMessage(e, "No se pudo verificar el código del correo."));
       setMsgTipo("err");
     } finally {
       setConfirmingEmailOtp(false);
@@ -218,7 +218,7 @@ export default function AprendizPerfilPage() {
     setMsgTipo(null);
 
     if (!passwordRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setMsg("La nueva contraseña no cumple todos los requisitos.");
       setMsgTipo("err");
       return;
     }
@@ -228,13 +228,13 @@ export default function AprendizPerfilPage() {
       await api.patch(`/api/usuarios/${me.id}/`, {
         password: pw,
       });
-      setMsg("Contrasena actualizada.");
+      setMsg("Contraseña actualizada.");
       setMsgTipo("ok");
       setPwOpen(false);
       setPw("");
       setPw2("");
     } catch (e: unknown) {
-      setMsg(toErrorMessage(e, "No se pudo actualizar la contrasena."));
+      setMsg(toErrorMessage(e, "No se pudo actualizar la contraseña."));
       setMsgTipo("err");
     } finally {
       setSavingPassword(false);
@@ -275,7 +275,7 @@ export default function AprendizPerfilPage() {
               onClick={() => setPwOpen(true)}
               className="rounded-full bg-gradient-to-r from-sky-600 to-cyan-600 px-5 py-2 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(5,150,105,0.28)] transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
-              Cambiar contrasena
+              Cambiar contraseña
             </button>
           </div>
         </div>
@@ -324,7 +324,7 @@ export default function AprendizPerfilPage() {
               <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{perfil?.estado ?? me?.estado ?? "-"}</p>
             </div>
             <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4 text-sm text-zinc-700">
-              Usa una contrasena fuerte (minimo 8 caracteres), unica y evita compartirla.
+              Usa una contraseña fuerte, única y evita compartirla.
             </div>
           </div>
         </section>
@@ -356,7 +356,7 @@ export default function AprendizPerfilPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Telefono</label>
+                <label className="text-xs font-semibold text-zinc-700">Teléfono</label>
                 <input
                   className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
                   value={telefono}
@@ -369,7 +369,7 @@ export default function AprendizPerfilPage() {
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-xs font-semibold text-zinc-700">Nuevo correo (requiere PIN)</label>
+                <label className="text-xs font-semibold text-zinc-700">Nuevo correo (requiere código)</label>
                 <input
                   className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm"
                   value={newEmail}
@@ -382,13 +382,13 @@ export default function AprendizPerfilPage() {
                     disabled={sendingEmailOtp || confirmingEmailOtp}
                     className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60"
                   >
-                    {sendingEmailOtp ? "Enviando PIN..." : "Enviar PIN al nuevo correo"}
+                    {sendingEmailOtp ? "Enviando código..." : "Enviar código al nuevo correo"}
                   </button>
                   <input
                     className="w-full rounded-2xl border px-4 py-2 text-sm sm:max-w-[180px]"
                     value={emailOtp}
                     onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                    placeholder="PIN (5 digitos)"
+                    placeholder="Código (5 dígitos)"
                     inputMode="numeric"
                     maxLength={5}
                   />
@@ -397,12 +397,12 @@ export default function AprendizPerfilPage() {
                     disabled={confirmingEmailOtp || sendingEmailOtp}
                     className="rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
                   >
-                    {confirmingEmailOtp ? "Verificando..." : "Verificar PIN"}
+                    {confirmingEmailOtp ? "Verificando..." : "Verificar código"}
                   </button>
                 </div>
                 {perfil?.pending_email_change ? (
                   <p className="mt-2 text-xs text-amber-700">
-                    Hay un correo pendiente de verificacion: <span className="font-semibold">{perfil.pending_email_change}</span>
+                    Hay un correo pendiente de verificación: <span className="font-semibold">{perfil.pending_email_change}</span>
                   </p>
                 ) : null}
               </div>
@@ -457,8 +457,8 @@ export default function AprendizPerfilPage() {
           <div className="w-full max-w-lg rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contrasena</h3>
-                <p className="mt-1 text-sm text-zinc-600">Usa una clave fuerte y unica.</p>
+                <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contraseña</h3>
+                <p className="mt-1 text-sm text-zinc-600">Usa una clave fuerte y única.</p>
               </div>
               <button
                 onClick={() => setPwOpen(false)}
@@ -470,11 +470,11 @@ export default function AprendizPerfilPage() {
 
             <div className="mt-5 space-y-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Nueva contrasena</label>
+                <label className="text-xs font-semibold text-zinc-700">Nueva contraseña</label>
                 <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw} onChange={(e) => setPw(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contrasena</label>
+                <label className="text-xs font-semibold text-zinc-700">Confirmar nueva contraseña</label>
                 <input type="password" className="mt-1 w-full rounded-2xl border px-4 py-3 text-sm" value={pw2} onChange={(e) => setPw2(e.target.value)} />
               </div>
               <div className="rounded-2xl border bg-zinc-50 p-4 text-xs text-zinc-600">
@@ -495,7 +495,7 @@ export default function AprendizPerfilPage() {
                 disabled={savingPassword || !passwordRulesValid}
                 className="rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
               >
-                {savingPassword ? "Guardando..." : "Actualizar contrasena"}
+                {savingPassword ? "Guardando..." : "Actualizar contraseña"}
               </button>
               <button
                 onClick={() => setPwOpen(false)}
@@ -510,4 +510,3 @@ export default function AprendizPerfilPage() {
     </div>
   );
 }
-

@@ -21,6 +21,10 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
 
   const classByRole = role === "admin" ? styles.layoutAdmin : styles.layoutAprendiz;
   const tilt = useMemo(() => ({ tx: move.x * 14, ty: move.y * 14 }), [move.x, move.y]);
+  const trustPoints =
+    role === "admin"
+      ? ["Sesión auditada", "Acceso por rol", "Monitoreo por sede"]
+      : ["QR dinámico", "Historial personal", "Validación segura"];
 
   function onMove(event: React.MouseEvent) {
     const el = wrapperRef.current;
@@ -62,7 +66,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="mb-2 inline-flex rounded-full border border-slate-200/70 bg-white/70 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-600"
+              className="mb-3 inline-flex rounded-full border border-white/70 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-600 shadow-sm"
             >
               {badge}
             </motion.p>
@@ -70,7 +74,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className={`text-3xl font-extrabold leading-tight md:text-4xl ${styles.textStrong}`}
+              className={`max-w-xl text-4xl font-extrabold leading-[1.02] md:text-5xl ${styles.textStrong}`}
             >
               {title}
             </motion.h1>
@@ -78,15 +82,27 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className={`mt-2 text-sm leading-relaxed md:text-base ${styles.textSoft}`}
+              className={`mt-3 max-w-xl text-sm leading-relaxed md:text-base ${styles.textSoft}`}
             >
               {subtitle}
             </motion.p>
             <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.58 }}
+              className="mt-5 flex flex-wrap gap-2"
+            >
+              {trustPoints.map((point) => (
+                <span key={point} className={styles.metaChip}>
+                  {point}
+                </span>
+              ))}
+            </motion.div>
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
-              className="mt-5"
+              className="mt-6"
             >
               {children}
             </motion.div>

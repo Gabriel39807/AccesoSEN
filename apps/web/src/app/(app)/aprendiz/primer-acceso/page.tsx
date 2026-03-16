@@ -22,14 +22,14 @@ type ToastState = {
 
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
-    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
+    { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
+    { id: "upper", label: "Al menos 1 mayúscula", valid: /[A-Z]/.test(password) },
+    { id: "lower", label: "Al menos 1 minúscula", valid: /[a-z]/.test(password) },
+    { id: "num", label: "Al menos 1 número", valid: /[0-9]/.test(password) },
+    { id: "special", label: "Al menos 1 carácter especial", valid: /[^A-Za-z0-9]/.test(password) },
     {
       id: "match",
-      label: "Coincide con la confirmacion",
+      label: "Coincide con la confirmación",
       valid: confirmPassword.length > 0 && password === confirmPassword,
     },
   ];
@@ -48,7 +48,7 @@ function getPasswordStrength(password: string): {
   if (/[0-9]/.test(password)) score += 1;
   if (/[^A-Za-z0-9]/.test(password)) score += 1;
 
-  if (score <= 2) return { tone: "weak", label: "Debil", score };
+  if (score <= 2) return { tone: "weak", label: "Débil", score };
   if (score <= 4) return { tone: "medium", label: "Media", score };
   return { tone: "strong", label: "Fuerte", score };
 }
@@ -161,26 +161,26 @@ export default function PrimerAccesoPage() {
 
   const showErrors = submittedStep === step;
 
-  const identityError = showErrors && !identityConfirmed ? "Debes confirmar la verificacion de identidad." : null;
+  const identityError = showErrors && !identityConfirmed ? "Debes confirmar la verificación de identidad." : null;
 
   const emailError = showErrors && !isValidEmail(email) ? "Ingresa un correo valido." : null;
 
-  const currentPasswordError = showErrors && !currentPassword ? "Ingresa la contrasena inicial actual." : null;
-  const newPasswordError = showErrors && !allPasswordRulesValid ? "La nueva contrasena no cumple los requisitos." : null;
-  const termsError = showErrors && !acceptTerms ? "Debes aceptar los terminos de uso." : null;
+  const currentPasswordError = showErrors && !currentPassword ? "Ingresa la contraseña inicial actual." : null;
+  const newPasswordError = showErrors && !allPasswordRulesValid ? "La nueva contraseña no cumple los requisitos." : null;
+  const termsError = showErrors && !acceptTerms ? "Debes aceptar los términos de uso." : null;
 
   function validateStep(targetStep: Step): string | null {
     if (targetStep === 1) {
-      if (!identityConfirmed) return "Debes confirmar la verificacion de identidad.";
+      if (!identityConfirmed) return "Debes confirmar la verificación de identidad.";
       return null;
     }
     if (targetStep === 2) {
       if (!isValidEmail(email)) return "Ingresa un correo valido.";
       return null;
     }
-    if (!currentPassword) return "Ingresa la contrasena inicial actual.";
-    if (!allPasswordRulesValid) return "La nueva contrasena no cumple todos los requisitos.";
-    if (!acceptTerms) return "Debes aceptar los terminos de uso.";
+    if (!currentPassword) return "Ingresa la contraseña inicial actual.";
+    if (!allPasswordRulesValid) return "La nueva contraseña no cumple todos los requisitos.";
+    if (!acceptTerms) return "Debes aceptar los términos de uso.";
     return null;
   }
 
@@ -237,7 +237,7 @@ export default function PrimerAccesoPage() {
     }
 
     if (!me) {
-      const msg = "No se encontro informacion del aprendiz. Recarga e intenta de nuevo.";
+      const msg = "No se encontró información del aprendiz. Recarga e intenta de nuevo.";
       setStepError(msg);
       setToast({ type: "error", text: msg });
       return;
@@ -295,7 +295,7 @@ export default function PrimerAccesoPage() {
     return (
       <div className="mx-auto w-full max-w-xl rounded-3xl border border-red-200 bg-red-50/90 p-6 text-red-800 shadow-sm">
         <h1 className="text-lg font-extrabold">No se pudieron cargar tus datos</h1>
-        <p className="mt-2 text-sm">Recarga la pagina para continuar con el primer inicio de sesion.</p>
+        <p className="mt-2 text-sm">Recarga la página para continuar con el primer inicio de sesión.</p>
         <button
           type="button"
           onClick={() => router.refresh()}
@@ -328,7 +328,7 @@ export default function PrimerAccesoPage() {
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Onboarding SADI</p>
-            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">Primer inicio de sesion</h1>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900 sm:text-4xl">Primer inicio de sesión</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-600">
               Completa estos datos para activar tu cuenta y acceder al sistema.
             </p>
@@ -344,7 +344,7 @@ export default function PrimerAccesoPage() {
       <section className="grid gap-4 lg:grid-cols-12">
         <aside className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] lg:col-span-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Seguridad y acceso</p>
-          <h2 className="mt-1 text-xl font-extrabold tracking-tight text-zinc-900">Tu cuenta en proceso de activacion</h2>
+          <h2 className="mt-1 text-xl font-extrabold tracking-tight text-zinc-900">Tu cuenta en proceso de activación</h2>
           <p className="mt-2 text-sm text-zinc-600">Este proceso es obligatorio y solo toma unos minutos.</p>
 
           <div className="mt-5 space-y-3">
@@ -357,7 +357,7 @@ export default function PrimerAccesoPage() {
               <p className="mt-1 text-sm font-bold text-zinc-900">{me.username}</p>
             </div>
             <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-50/70 to-sky-50/65 p-4 text-xs text-zinc-600">
-              Protege tu cuenta. No compartas tu contrasena y valida tus datos antes de finalizar.
+              Protege tu cuenta. No compartas tu contraseña y valida tus datos antes de finalizar.
             </div>
           </div>
         </aside>
@@ -366,7 +366,7 @@ export default function PrimerAccesoPage() {
           {step === 1 ? (
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-extrabold tracking-tight text-zinc-900">Paso 1. Verificacion de identidad</h3>
+                <h3 className="text-xl font-extrabold tracking-tight text-zinc-900">Paso 1. Verificación de identidad</h3>
                 <p className="mt-1 text-sm text-zinc-600">Revisa tu documento y confirma que corresponde a tu cuenta.</p>
               </div>
 
@@ -480,12 +480,12 @@ export default function PrimerAccesoPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-xl font-extrabold tracking-tight text-zinc-900">Paso 3. Seguridad de la cuenta</h3>
-                <p className="mt-1 text-sm text-zinc-600">Crea una contrasena segura y acepta terminos para finalizar.</p>
+                <p className="mt-1 text-sm text-zinc-600">Crea una contraseña segura y acepta términos para finalizar.</p>
               </div>
 
               <div>
                 <label htmlFor="current_password" className="text-sm font-semibold text-zinc-800">
-                  Contrasena inicial actual
+                  Contraseña inicial actual
                 </label>
                 <input
                   id="current_password"
@@ -500,7 +500,7 @@ export default function PrimerAccesoPage() {
 
               <div>
                 <label htmlFor="new_password" className="text-sm font-semibold text-zinc-800">
-                  Nueva contrasena
+                  Nueva contraseña
                 </label>
                 <input
                   id="new_password"
@@ -513,7 +513,7 @@ export default function PrimerAccesoPage() {
 
                 <div className="mt-2 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Fuerza de contrasena</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Fuerza de contraseña</p>
                     <p
                       className={`text-xs font-semibold ${
                         passwordStrength.tone === "strong"
@@ -552,7 +552,7 @@ export default function PrimerAccesoPage() {
 
               <div>
                 <label htmlFor="confirm_password" className="text-sm font-semibold text-zinc-800">
-                  Confirmar nueva contrasena
+                  Confirmar nueva contraseña
                 </label>
                 <input
                   id="confirm_password"
@@ -564,7 +564,7 @@ export default function PrimerAccesoPage() {
                 />
                 {confirmPassword ? (
                   <p className={`mt-1 text-xs font-medium ${newPassword === confirmPassword ? "text-emerald-700" : "text-red-600"}`}>
-                    {newPassword === confirmPassword ? "Las contrasenas coinciden." : "La confirmacion no coincide."}
+                    {newPassword === confirmPassword ? "Las contraseñas coinciden." : "La confirmación no coincide."}
                   </p>
                 ) : null}
               </div>
@@ -576,7 +576,7 @@ export default function PrimerAccesoPage() {
                   onChange={(e) => setAcceptTerms(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
                 />
-                <span className="text-zinc-700">Acepto los terminos de uso y las politicas de seguridad de SADI.</span>
+                <span className="text-zinc-700">Acepto los términos de uso y las políticas de seguridad de SADI.</span>
               </label>
               <FieldError text={termsError} />
             </div>

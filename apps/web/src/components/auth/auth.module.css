@@ -2,15 +2,16 @@
   --auth-accent: #0f766e;
   --auth-accent-2: #0284c7;
   --auth-accent-soft: rgba(15, 118, 110, 0.18);
+  --auth-accent-strong: rgba(15, 118, 110, 0.32);
   --auth-ink: #0f172a;
   --auth-muted: #475569;
-  --auth-bg-a: #f6fbf8;
-  --auth-bg-b: #e8f3ef;
+  --auth-bg-a: #f8fbff;
+  --auth-bg-b: #edf5f1;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 84% 12%, rgba(14, 165, 233, 0.14), transparent 34%),
-    radial-gradient(circle at 18% 86%, rgba(16, 185, 129, 0.16), transparent 32%),
-    linear-gradient(140deg, var(--auth-bg-a) 0%, var(--auth-bg-b) 100%);
+    radial-gradient(circle at 84% 12%, rgba(14, 165, 233, 0.16), transparent 34%),
+    radial-gradient(circle at 18% 86%, rgba(16, 185, 129, 0.18), transparent 32%),
+    linear-gradient(140deg, var(--auth-bg-a) 0%, var(--auth-bg-b) 54%, #f4f6fb 100%);
   color: var(--auth-ink);
   position: relative;
   isolation: isolate;
@@ -27,17 +28,20 @@
 .layout::before {
   background:
     radial-gradient(circle at 16% 24%, rgba(14, 165, 233, 0.1), transparent 26%),
-    radial-gradient(circle at 80% 78%, rgba(16, 185, 129, 0.1), transparent 30%);
+    radial-gradient(circle at 80% 78%, rgba(16, 185, 129, 0.12), transparent 30%);
   filter: blur(8px);
   animation: auraDrift 12s ease-in-out infinite alternate;
   z-index: -2;
 }
 
 .layout::after {
-  background-image: linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
-  background-size: 34px 34px;
-  opacity: 0.28;
-  mask-image: radial-gradient(circle at center, black 32%, transparent 88%);
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.16), transparent 46%);
+  background-size: 34px 34px, 34px 34px, auto;
+  opacity: 0.3;
+  mask-image: radial-gradient(circle at center, black 34%, transparent 88%);
   z-index: -1;
 }
 
@@ -45,12 +49,14 @@
   --auth-accent: #0f766e;
   --auth-accent-2: #0ea5a4;
   --auth-accent-soft: rgba(15, 118, 110, 0.18);
+  --auth-accent-strong: rgba(15, 118, 110, 0.34);
 }
 
 .layoutAprendiz {
   --auth-accent: #0284c7;
   --auth-accent-2: #0ea5e9;
   --auth-accent-soft: rgba(2, 132, 199, 0.17);
+  --auth-accent-strong: rgba(2, 132, 199, 0.3);
 }
 
 .heroWrap {
@@ -202,13 +208,37 @@
   border-radius: 1.65rem;
   border: 1px solid rgba(148, 163, 184, 0.28);
   background:
-    radial-gradient(circle at 88% 0%, rgba(14, 165, 233, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.86));
+    radial-gradient(circle at 88% 0%, rgba(14, 165, 233, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
   box-shadow:
-    0 20px 60px rgba(15, 23, 42, 0.15),
+    0 24px 80px rgba(15, 23, 42, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
   animation: cardIn 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.45rem 0.78rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #334155;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.metaChip::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--auth-accent-2), var(--auth-accent));
+  box-shadow: 0 0 0 4px var(--auth-accent-soft);
 }
 
 .roleSwitch {
@@ -367,6 +397,7 @@
 
 .textStrong {
   color: #0f172a;
+  text-wrap: balance;
 }
 
 .textSoft {

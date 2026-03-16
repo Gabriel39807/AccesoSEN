@@ -68,7 +68,7 @@ export default function AprendizHistorial() {
                 Tus movimientos de acceso
               </Text>
               <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 20 }}>
-                Revisa entradas y salidas registradas, con fecha, hora y sede en una vista mucho mas clara.
+                Revisa entradas y salidas registradas, con fecha, hora y sede en una vista mucho más clara.
               </Text>
             </View>
             <View style={{ width: 54, height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
@@ -86,7 +86,7 @@ export default function AprendizHistorial() {
             <Text style={{ color: uiTheme.ink, fontSize: 22, fontWeight: "900", marginTop: 6 }}>{rows.length}</Text>
           </View>
           <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(15,118,110,0.08)", borderWidth: 1, borderColor: "rgba(15,118,110,0.16)" }}>
-            <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Ultimo estado</Text>
+            <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Último estado</Text>
             <Text style={{ color: uiTheme.accentDeep, fontSize: 16, fontWeight: "900", marginTop: 8 }}>{rows[0]?.tipo?.toUpperCase() || "SIN DATOS"}</Text>
           </View>
         </View>
@@ -134,8 +134,8 @@ export default function AprendizHistorial() {
             ListEmptyComponent={
               <EmptyState
                 icon="time-outline"
-                title="Aun no hay movimientos"
-                subtitle="Cuando registres tu primera entrada o salida, aparecera aqui con fecha, sede y hora."
+                title="Aún no hay movimientos"
+                subtitle="Cuando registres tu primera entrada o salida, aparecerá aquí con fecha, sede y hora."
               />
             }
           />

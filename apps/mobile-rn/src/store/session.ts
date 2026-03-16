@@ -129,11 +129,11 @@ export const useSessionStore = create<SessionState>()(
 
         if (rol === "guarda" && me.usuario.rol !== "guarda") {
           await clearTokens();
-          throw new Error("Esta sesion guardada no corresponde al modulo de guardia.");
+          throw new Error("Esta sesión guardada no corresponde al módulo de guardia.");
         }
         if (rol === "aprendiz" && me.usuario.rol !== "aprendiz") {
           await clearTokens();
-          throw new Error("Esta sesion guardada no corresponde al modulo de aprendiz.");
+          throw new Error("Esta sesión guardada no corresponde al módulo de aprendiz.");
         }
 
         if (rol === "guarda") {

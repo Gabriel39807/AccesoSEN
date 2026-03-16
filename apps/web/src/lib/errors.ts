@@ -7,18 +7,18 @@ export type NormalizedApiErrors = {
 
 const FIELD_LABELS: Record<string, string> = {
   username: "nombre de usuario",
-  password: "contrasena",
+  password: "contraseña",
   email: "correo",
   documento: "documento",
-  telefono: "telefono",
+  telefono: "teléfono",
   rol: "rol",
   estado: "estado",
   sede_principal: "sede principal",
-  programa_formacion: "programa de formacion",
+  programa_formacion: "programa de formación",
   jornada: "jornada",
-  otp: "codigo OTP",
-  new_password: "nueva contrasena",
-  current_password: "contrasena actual",
+  otp: "código de verificación",
+  new_password: "nueva contraseña",
+  current_password: "contraseña actual",
 };
 
 function firstText(value: unknown): string | null {
@@ -135,7 +135,7 @@ export function normalizeApiErrors(
       /network|failed to fetch|timeout|socket|econnrefused|ecconnreset|load failed/i.test(String(wrapped.message || "")));
 
   if (isNetworkLike) {
-    addUnique(out.formErrors, "No se pudo conectar con el servidor. Revisa tu red o intenta mas tarde.");
+    addUnique(out.formErrors, "No se pudo conectar con el servidor. Revisa tu red o intenta más tarde.");
     return out;
   }
 
@@ -188,13 +188,13 @@ export function normalizeApiErrors(
   const hasFormErrors = out.formErrors.length > 0;
   if (!hasFieldErrors && !hasFormErrors) {
     if (status === 401 || status === 403) {
-      addUnique(out.formErrors, "No tienes permisos para esta accion.");
+      addUnique(out.formErrors, "No tienes permisos para esta acción.");
     } else if (status === 404) {
       addUnique(out.formErrors, "Servicio no encontrado (404).");
     } else if (status === 409) {
       addUnique(out.formErrors, "Conflicto de datos (409). Verifica duplicados e intenta nuevamente.");
     } else if (status === 422) {
-      addUnique(out.formErrors, "Hay errores de validacion. Revisa los campos e intenta nuevamente.");
+      addUnique(out.formErrors, "Hay errores de validación. Revisa los campos e intenta nuevamente.");
     } else if (status === 423) {
       addUnique(out.formErrors, "Cuenta bloqueada temporalmente. Intenta nuevamente en unos minutos.");
     } else if (status === 429) {
@@ -225,7 +225,7 @@ export function formatFieldLabel(field: string): string {
   return FIELD_LABELS[field] || field.replaceAll("_", " ");
 }
 
-export function toErrorMessage(input: unknown, fallback = "Ocurrio un error inesperado. Intenta nuevamente."): string {
+export function toErrorMessage(input: unknown, fallback = "Ocurrió un error inesperado. Intenta nuevamente."): string {
   const normalized = normalizeApiErrors(input, fallback);
   if (normalized.formErrors.length > 0) return normalized.formErrors[0];
 

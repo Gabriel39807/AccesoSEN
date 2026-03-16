@@ -14,13 +14,13 @@ export function TurnoFinalizadoScreen() {
         <Pill text="TURNO CERRADO" />
         <TitleBlock
           title="Turno finalizado"
-          subtitle={`${config.nombre_institucion || "La institucion"} registro correctamente el cierre de tu jornada.`}
+          subtitle={`${config.nombre_institucion || "La institución"} registró correctamente el cierre de tu jornada.`}
         />
         <TitleBlock
-          title="Todo quedo auditado"
-          subtitle="Gracias por tu labor en el control de acceso. Puedes cerrar sesion de forma segura."
+          title="Todo quedó auditado"
+          subtitle="Gracias por tu labor en el control de acceso. Puedes cerrar sesión de forma segura."
         />
-        <ModernButton onPress={signOut} label="Cerrar sesion" icon="log-out-outline" />
+        <ModernButton onPress={signOut} label="Cerrar sesión" icon="log-out-outline" />
       </FadeInCard>
     </ModernScreen>
   );

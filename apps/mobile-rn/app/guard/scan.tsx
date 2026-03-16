@@ -1,9 +1,9 @@
 /**
- * Scanner de guarda para QR/codigo de barras.
+ * Scanner de guarda para QR/código de barras.
  *
  * Responsabilidad:
- * - Leer codigo de documento.
- * - Bloquear lecturas concurrentes mientras se procesa una validacion.
+ * - Leer código de documento.
+ * - Bloquear lecturas concurrentes mientras se procesa una validación.
  * - Permitir reinicio manual seguro con "Leer otro QR".
  */
 import React, { useMemo, useState } from "react";
@@ -43,7 +43,7 @@ export default function ScanScreen() {
 
   const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
   const msgTone = msg?.toLowerCase().includes("detectado") ? "info" : "danger";
-  const scanStateText = loading ? "Validando lectura" : scanned ? "Lectura bloqueada hasta confirmar o reiniciar" : "Camara lista para capturar credenciales";
+  const scanStateText = loading ? "Validando lectura" : scanned ? "Lectura bloqueada hasta confirmar o reiniciar" : "Cámara lista para capturar credenciales";
   const scanStateColor = loading ? uiTheme.accentDeep : scanned ? uiTheme.warn : uiTheme.success;
 
   async function validar(doc: string) {
@@ -89,7 +89,7 @@ export default function ScanScreen() {
     return (
       <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <FadeInCard>
-          <LoadingBlock label="Preparando acceso a la camara" />
+          <LoadingBlock label="Preparando acceso a la cámara" />
         </FadeInCard>
       </ModernScreen>
     );
@@ -99,7 +99,7 @@ export default function ScanScreen() {
     return (
       <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <FadeInCard>
-          <TitleBlock title="Permiso de camara" subtitle="Para escanear QR o codigo de barras debes habilitar la camara." />
+          <TitleBlock title="Permiso de cámara" subtitle="Para escanear QR o código de barras debes habilitar la cámara." />
           <View style={{ marginTop: 10 }}>
             <ModernButton label="Dar permiso" onPress={requestPermission} />
           </View>
@@ -112,7 +112,7 @@ export default function ScanScreen() {
     <ModernScreen scroll bottomAccessory={<GuardBottomNav />}>
       <FadeInCard delay={0} style={{ gap: 14 }}>
         <Pill text="SCANNER INTELIGENTE" />
-        <TitleBlock title="Escanear" subtitle="Alinea el QR o el codigo dentro del marco para validar el acceso sin friccion." />
+        <TitleBlock title="Escanear" subtitle="Alinea el QR o el código dentro del marco para validar el acceso sin fricción." />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: scanStateColor }} />
           <Text style={{ color: scanStateColor, fontWeight: "900", fontSize: 12, letterSpacing: 0.6, textTransform: "uppercase" }}>{scanStateText}</Text>
@@ -130,7 +130,7 @@ export default function ScanScreen() {
               setScanned(true);
               setIsProcessing(true);
               setDocumento((res.data || "").trim());
-              setMsg("Codigo detectado. Pulsa Validar o Leer otro QR.");
+              setMsg("Código detectado. Pulsa Validar o Leer otro QR.");
             }}
           />
           <View pointerEvents="none" style={[styles.overlayFrame, scanned ? styles.overlayFrameScanned : null]} />

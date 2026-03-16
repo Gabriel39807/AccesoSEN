@@ -34,42 +34,42 @@ type FieldErrors = Record<string, string>;
 
 function mapCodeToMessage(code?: string, fallback?: string) {
   const map: Record<string, string> = {
-    INVALID_CREDENTIALS: "Usuario o contrasena invalidos.",
-    ACCOUNT_LOCKED_15MIN: "Tu cuenta esta temporalmente bloqueada. Intenta en 15 minutos.",
-    ACCOUNT_DISABLED_SECURITY: "Tu cuenta esta deshabilitada por seguridad. Contacta al administrador.",
-    PASSWORD_RESET_REQUIRED: "Debes recuperar tu contrasena antes de iniciar sesion.",
-    OTP_INVALID: "El codigo OTP no es valido.",
-    OTP_EXPIRED: "El codigo OTP expiro. Solicita uno nuevo.",
-    OTP_TOO_MANY_ATTEMPTS: "Demasiados intentos con OTP. Solicita uno nuevo.",
+    INVALID_CREDENTIALS: "Usuario o contraseña inválidos.",
+    ACCOUNT_LOCKED_15MIN: "Tu cuenta está temporalmente bloqueada. Intenta en 15 minutos.",
+    ACCOUNT_DISABLED_SECURITY: "Tu cuenta está deshabilitada por seguridad. Contacta al administrador.",
+    PASSWORD_RESET_REQUIRED: "Debes recuperar tu contraseña antes de iniciar sesión.",
+    OTP_INVALID: "El código de verificación no es válido.",
+    OTP_EXPIRED: "El código de verificación venció. Solicita uno nuevo.",
+    OTP_TOO_MANY_ATTEMPTS: "Demasiados intentos con el código. Solicita uno nuevo.",
     TURNO_REQUIRED: "Debes iniciar turno para continuar.",
     TURNO_ALREADY_ACTIVE: "Ya tienes un turno activo.",
     ACCESO_INCONSISTENTE_EQUIPO: "Inconsistencia de equipos en el registro de acceso.",
     EQUIPO_LIMIT_REACHED: "Solo puedes registrar hasta 4 equipos.",
-    MAX_ADMINS_PER_SEDE: "La sede ya alcanzo el limite de administradores.",
+    MAX_ADMINS_PER_SEDE: "La sede ya alcanzó el límite de administradores.",
     PASSKEY_INVALID: "No se pudo validar la passkey.",
     NETWORK_ERROR: "No se pudo conectar al servidor.",
     VALIDATION_ERROR: "Revisa los datos ingresados.",
-    NOT_AUTHENTICATED: "Tu sesion expiro. Inicia sesion nuevamente.",
-    PERMISSION_DENIED: "No tienes permisos para esta accion.",
+    NOT_AUTHENTICATED: "Tu sesión venció. Inicia sesión nuevamente.",
+    PERMISSION_DENIED: "No tienes permisos para esta acción.",
   };
-  return (code && map[code]) || fallback || "Ocurrio un error. Intenta nuevamente.";
+  return (code && map[code]) || fallback || "Ocurrió un error. Intenta nuevamente.";
 }
 
 const FIELD_LABELS: Record<string, string> = {
   username: "nombre de usuario",
-  password: "contrasena",
+  password: "contraseña",
   email: "correo",
   new_email: "nuevo correo",
   documento: "documento",
-  telefono: "telefono",
+  telefono: "teléfono",
   rol: "rol",
   estado: "estado",
   sede_principal: "sede principal",
-  programa_formacion: "programa de formacion",
+  programa_formacion: "programa de formación",
   jornada: "jornada",
-  otp: "codigo OTP",
-  new_password: "nueva contrasena",
-  current_password: "contrasena actual",
+  otp: "código de verificación",
+  new_password: "nueva contraseña",
+  current_password: "contraseña actual",
   serial: "serial",
   marca: "marca",
   modelo: "modelo",
@@ -144,7 +144,7 @@ export function toUiFieldErrors(input: unknown): FieldErrors {
   return out;
 }
 
-export function toUiErrorMessage(input: unknown, fallback = "Ocurrio un error. Intenta nuevamente."): string {
+export function toUiErrorMessage(input: unknown, fallback = "Ocurrió un error. Intenta nuevamente."): string {
   const responseData =
     typeof input === "object" && input !== null && "response" in input
       ? (input as { response?: { data?: unknown } }).response?.data
@@ -199,8 +199,8 @@ export async function refreshAccessToken(options?: { requireBiometric?: boolean 
       if (!refresh) return null;
 
       if (requireBiometric) {
-        const ok = await authenticateBiometric("Confirma tu identidad para renovar la sesion");
-        if (!ok) throw new UiError("No se pudo validar la biometria. Usa tu contrasena.", "BIOMETRIC_AUTH_FAILED");
+        const ok = await authenticateBiometric("Confirma tu identidad para renovar la sesión");
+        if (!ok) throw new UiError("No se pudo validar la biometría. Usa tu contraseña.", "BIOMETRIC_AUTH_FAILED");
       }
 
       const deviceId = await getOrCreateDeviceId();
@@ -257,7 +257,7 @@ api.interceptors.response.use(
 
     if (!error.response) {
       if (error.code === "ECONNABORTED") {
-        throw new UiError("El servidor esta tardando demasiado. Intenta de nuevo.", "NETWORK_ERROR");
+        throw new UiError("El servidor está tardando demasiado. Intenta de nuevo.", "NETWORK_ERROR");
       }
       throw new UiError(toUiErrorMessage(error, mapCodeToMessage("NETWORK_ERROR")), "NETWORK_ERROR");
     }
@@ -278,7 +278,7 @@ api.interceptors.response.use(
     if (status === 404) throw new UiError(uiMessage, code || "NOT_FOUND", detail, status);
     if (status === 429) throw new UiError(uiMessage, code || "RATE_LIMIT", detail, status);
     if (status >= 500) {
-      throw new UiError(toUiErrorMessage({ response: { data } }, "Error del servidor. Intenta mas tarde."), "SERVER_ERROR", detail, status);
+      throw new UiError(toUiErrorMessage({ response: { data } }, "Error del servidor. Intenta más tarde."), "SERVER_ERROR", detail, status);
     }
     throw new UiError(uiMessage, code || "VALIDATION_ERROR", detail, status);
   }

@@ -117,13 +117,13 @@ type AuditResponse = {
 };
 
 const sections: Array<{ key: SectionKey; label: string }> = [
-  { key: "branding", label: "Branding" },
+  { key: "branding", label: "Identidad visual" },
   { key: "sedes", label: "Sedes" },
   { key: "roles", label: "Roles" },
   { key: "permisos", label: "Permisos" },
   { key: "asignaciones", label: "Asignaciones" },
   { key: "dominios", label: "Dominios" },
-  { key: "auditoria", label: "Auditoria" },
+  { key: "auditoria", label: "Auditoría" },
 ];
 
 function toRows<T>(payload: T[] | Paginated<T>): T[] {
@@ -818,9 +818,9 @@ export default function SuperadminControlCenterPage() {
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-surface-border bg-surface p-4">
-        <h1 className="text-2xl font-bold text-primary">Superadmin / Control Center</h1>
+        <h1 className="text-2xl font-bold text-primary">Superadmin / Centro de control</h1>
         <p className="text-sm text-text/70">
-          Gestion centralizada de sedes, RBAC y visibilidad de auditoria.
+          Gestión centralizada de sedes, RBAC y visibilidad de auditoría.
         </p>
       </div>
 
@@ -828,11 +828,11 @@ export default function SuperadminControlCenterPage() {
         <div className="rounded-2xl border border-surface-border bg-surface p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-text">Sesion reforzada del panel</h2>
+              <h2 className="text-sm font-semibold text-text">Sesión reforzada del panel</h2>
               <p className="text-xs text-text/70">
                 {controlPanelSession.active
                   ? `Activa hasta ${formatDate(controlPanelSession.session?.expires_at)}`
-                  : "Abre una sesion OTP para operar branding, permisos, dominios y auditoria."}
+                  : "Abre una sesión reforzada para operar identidad visual, permisos, dominios y auditoría."}
               </p>
             </div>
             <span
@@ -853,7 +853,7 @@ export default function SuperadminControlCenterPage() {
                   disabled={busy}
                   className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
                 >
-                  {busy ? "Enviando..." : otpRequestId ? "Reenviar OTP" : "Solicitar OTP"}
+                  {busy ? "Enviando..." : otpRequestId ? "Reenviar código" : "Enviar código"}
                 </button>
                 <button
                   type="button"
@@ -861,12 +861,12 @@ export default function SuperadminControlCenterPage() {
                   disabled={busy || !passkeySupported}
                   className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
                 >
-                  Abrir con Passkey
+                  Abrir con passkey
                 </button>
               </div>
               <input
                 className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                placeholder="Codigo OTP del panel"
+                placeholder="Código de verificación del panel"
                 value={otpCode}
                 onChange={(event) => setOtpCode(event.target.value)}
               />
@@ -882,7 +882,7 @@ export default function SuperadminControlCenterPage() {
           ) : (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <div className="rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
-                Sesion: {controlPanelSession.session?.id?.slice(0, 8)}...
+                Sesión: {controlPanelSession.session?.id?.slice(0, 8)}...
               </div>
               <button
                 type="button"
@@ -890,7 +890,7 @@ export default function SuperadminControlCenterPage() {
                 disabled={busy}
                 className="rounded-xl border border-surface-border px-3 py-2 text-sm font-semibold hover:bg-primary/10 disabled:opacity-60"
               >
-                Cerrar sesion reforzada
+                Cerrar sesión reforzada
               </button>
             </div>
           )}
@@ -899,11 +899,11 @@ export default function SuperadminControlCenterPage() {
         <div className="rounded-2xl border border-surface-border bg-surface p-4">
           <h2 className="text-sm font-semibold text-text">Motivo del cambio</h2>
           <p className="mt-1 text-xs text-text/70">
-            Se envia en cada mutacion del panel y queda registrado en auditoria.
+            Se envía en cada mutación del panel y queda registrado en auditoría.
           </p>
           <textarea
             className="mt-3 min-h-24 w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-            placeholder="Ej: Activar branding del cliente para campus norte"
+            placeholder="Ej: Activar identidad visual del cliente para campus norte"
             value={actionReason}
             onChange={(event) => setActionReason(event.target.value)}
           />
@@ -951,12 +951,12 @@ export default function SuperadminControlCenterPage() {
                     <p className="text-xs text-text/70">
                       {brandingConfig
                         ? `${brandingConfig.branding_preset_name} (${brandingConfig.branding_preset})`
-                        : "Abre la sesion reforzada para cargar el branding."}
+                        : "Abre la sesión reforzada para cargar la identidad visual."}
                     </p>
                   </div>
                   {brandingConfig?.updated_at ? (
                     <span className="text-xs text-text/60">
-                      Actualizado {formatDate(brandingConfig.updated_at)}
+                      Actualizado: {formatDate(brandingConfig.updated_at)}
                     </span>
                   ) : null}
                 </div>
@@ -1038,7 +1038,7 @@ export default function SuperadminControlCenterPage() {
                           />
                         </div>
                         <p className="mt-2 text-xs text-text/60">
-                          Restantes: {row.remaining} {row.last_action_at ? `| Ultimo cambio ${formatDate(row.last_action_at)}` : ""}
+                          Restantes: {row.remaining} {row.last_action_at ? `| Último cambio ${formatDate(row.last_action_at)}` : ""}
                         </p>
                       </div>
                     ))}
@@ -1052,7 +1052,7 @@ export default function SuperadminControlCenterPage() {
             <>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <label className="text-xs text-text/70">Codigo de sede</label>
+                  <label className="text-xs text-text/70">Código de sede</label>
                   <input
                     className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
                     value={createSedeCode}
@@ -1094,7 +1094,7 @@ export default function SuperadminControlCenterPage() {
                   <thead className="bg-primary/10 text-primary">
                     <tr className="text-left">
                       <th className="px-3 py-2">Nombre</th>
-                      <th className="px-3 py-2">Codigo</th>
+                      <th className="px-3 py-2">Código</th>
                       <th className="px-3 py-2">Estado</th>
                       <th className="px-3 py-2">Creada</th>
                       <th className="px-3 py-2 text-right">Acciones</th>
@@ -1146,7 +1146,7 @@ export default function SuperadminControlCenterPage() {
                       className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
                       value={editingSedeCode}
                       onChange={(event) => setEditingSedeCode(event.target.value)}
-                      placeholder="codigo"
+                      placeholder="código"
                     />
                     <input
                       className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
@@ -1190,7 +1190,7 @@ export default function SuperadminControlCenterPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <input
                   className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="codigo del rol"
+                  placeholder="código del rol"
                   value={roleCode}
                   onChange={(event) => setRoleCode(event.target.value)}
                 />
@@ -1215,7 +1215,7 @@ export default function SuperadminControlCenterPage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-primary/10 text-primary">
                     <tr className="text-left">
-                      <th className="px-3 py-2">Codigo</th>
+                      <th className="px-3 py-2">Código</th>
                       <th className="px-3 py-2">Nombre</th>
                       <th className="px-3 py-2">Sistema</th>
                     </tr>
@@ -1239,7 +1239,7 @@ export default function SuperadminControlCenterPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <input
                   className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="codigo del permiso"
+                  placeholder="código del permiso"
                   value={permissionCode}
                   onChange={(event) => setPermissionCode(event.target.value)}
                 />
@@ -1252,7 +1252,7 @@ export default function SuperadminControlCenterPage() {
               </div>
               <textarea
                 className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                placeholder="descripcion (opcional)"
+                placeholder="descripción (opcional)"
                 value={permissionDescription}
                 onChange={(event) => setPermissionDescription(event.target.value)}
               />
@@ -1270,9 +1270,9 @@ export default function SuperadminControlCenterPage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-primary/10 text-primary">
                     <tr className="text-left">
-                      <th className="px-3 py-2">Codigo</th>
+                      <th className="px-3 py-2">Código</th>
                       <th className="px-3 py-2">Nombre</th>
-                      <th className="px-3 py-2">Descripcion</th>
+                      <th className="px-3 py-2">Descripción</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1372,7 +1372,7 @@ export default function SuperadminControlCenterPage() {
           {activeSection === "dominios" ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                Active domain rules are enforced across the entire product.
+                Las reglas de dominio activas se aplican en todo el producto.
               </div>
 
               <div className="grid gap-3 md:grid-cols-5">
@@ -1387,7 +1387,7 @@ export default function SuperadminControlCenterPage() {
                   value={domainScopeFilter}
                   onChange={(event) => setDomainScopeFilter(event.target.value as "" | DomainScope)}
                 >
-                  <option value="">Todos los scopes</option>
+                  <option value="">Todos los alcances</option>
                   <option value="GLOBAL">GLOBAL</option>
                   <option value="SEDE">SEDE</option>
                   <option value="ROLE">ROLE</option>
@@ -1445,7 +1445,7 @@ export default function SuperadminControlCenterPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs text-text/70">Scope</label>
+                    <label className="text-xs text-text/70">Alcance</label>
                     <select
                       className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
                       value={domainFormScope}
@@ -1509,7 +1509,7 @@ export default function SuperadminControlCenterPage() {
                       onClick={resetDomainForm}
                       className="rounded-xl border border-surface-border px-3 py-2 text-sm hover:bg-primary/10"
                     >
-                      Cancelar edicion
+                      Cancelar edición
                     </button>
                   ) : null}
                   <button
@@ -1528,7 +1528,7 @@ export default function SuperadminControlCenterPage() {
                   <thead className="bg-primary/10 text-primary">
                     <tr className="text-left">
                       <th className="px-3 py-2">Dominio</th>
-                      <th className="px-3 py-2">Scope</th>
+                      <th className="px-3 py-2">Alcance</th>
                       <th className="px-3 py-2">Rol</th>
                       <th className="px-3 py-2">Sede</th>
                       <th className="px-3 py-2">Estado</th>
@@ -1540,7 +1540,7 @@ export default function SuperadminControlCenterPage() {
                     {domains.length === 0 ? (
                       <tr className="border-t border-surface-border">
                         <td className="px-3 py-4 text-text/70" colSpan={7}>
-                          No hay reglas de dominios para los filtros seleccionados.
+                          No hay reglas de dominio para los filtros seleccionados.
                         </td>
                       </tr>
                     ) : (
@@ -1599,7 +1599,7 @@ export default function SuperadminControlCenterPage() {
                 onClick={loadAudit}
                 className="rounded-xl border border-surface-border px-3 py-2 text-sm font-semibold hover:bg-primary/10"
               >
-                Recargar auditoria
+                Recargar auditoría
               </button>
 
               <div className="overflow-x-auto rounded-2xl border border-surface-border">

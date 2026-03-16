@@ -340,7 +340,7 @@ export default function AdminAccesosPage() {
             >
               {[10, 20, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  {n}/pagina
+                  {n}/página
                 </option>
               ))}
             </select>
@@ -547,7 +547,7 @@ export default function AdminAccesosPage() {
 
       <Modal
         open={openDetalle}
-        title={selected ? `Detalle acceso #${selected.id}` : "Detalle"}
+        title={selected ? `Detalle del acceso #${selected.id}` : "Detalle"}
         onClose={() => {
           setOpenDetalle(false);
           setSelected(null);

@@ -4,8 +4,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { useMe } from "@/hooks/useMe";
-import { clearTokens } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { clearTokens } from "@/lib/auth";
+import SidebarItem from "./dashboard/SidebarItem";
+import StatusChip from "./dashboard/StatusChip";
 import {
   IconHelp,
   IconHistory,
@@ -16,8 +18,6 @@ import {
   IconRefresh,
   IconUser,
 } from "./dashboard/DashboardIcons";
-import SidebarItem from "./dashboard/SidebarItem";
-import StatusChip from "./dashboard/StatusChip";
 
 type EstadoResponse = {
   estado?: "DENTRO" | "FUERA" | "SIN_REGISTROS";
@@ -27,7 +27,7 @@ type EstadoResponse = {
 
 function prettyTitle(pathname: string) {
   const p = pathname.split("?")[0];
-  if (p === "/aprendiz" || p === "/aprendiz/inicio") return "Panel Aprendiz";
+  if (p === "/aprendiz" || p === "/aprendiz/inicio") return "Panel aprendiz";
   if (p.startsWith("/aprendiz/equipos/nuevo")) return "Registrar equipo";
   if (p.startsWith("/aprendiz/equipos/")) return "Detalle del equipo";
   if (p.startsWith("/aprendiz/equipos")) return "Mis equipos";
@@ -54,6 +54,7 @@ export default function AprendizShell({
 
   useEffect(() => {
     let mounted = true;
+
     async function run() {
       try {
         const res = await api.get<EstadoResponse>("/api/accesos/estado/");
@@ -62,7 +63,8 @@ export default function AprendizShell({
         if (mounted) setEstado(null);
       }
     }
-    run();
+
+    void run();
     return () => {
       mounted = false;
     };
@@ -76,7 +78,7 @@ export default function AprendizShell({
         { headers: { "X-Auth-Transport": "cookie" } }
       );
     } catch {
-      // best effort revocation
+      // Best effort revocation.
     }
     clearTokens();
     router.replace("/login");
@@ -102,6 +104,7 @@ export default function AprendizShell({
     { href: "/aprendiz/perfil", label: "Mi perfil", icon: <IconUser className="h-4 w-4" /> },
     { href: "/aprendiz/ayuda", label: "Ayuda", icon: <IconHelp className="h-4 w-4" /> },
   ] as const;
+
   const isPrimerAcceso = pathname.startsWith("/aprendiz/primer-acceso");
 
   return (
@@ -116,7 +119,9 @@ export default function AprendizShell({
           <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/75 bg-white/75 px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.06)] backdrop-blur-xl">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">SADI</div>
-              <p className="truncate text-sm text-zinc-600">{loadingMe ? "Cargando perfil..." : `Hola, ${nombreBonito || "Aprendiz"}`}</p>
+              <p className="truncate text-sm text-zinc-600">
+                {loadingMe ? "Cargando perfil..." : `Hola, ${nombreBonito || "Aprendiz"}`}
+              </p>
             </div>
             <button
               onClick={logout}
@@ -136,12 +141,12 @@ export default function AprendizShell({
             <div className="mb-6">
               <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">SADI</div>
               <div className="text-lg font-extrabold tracking-tight text-zinc-900">SADI</div>
-              <div className="mt-1 text-xs text-zinc-500">Sistema de Control de Acceso</div>
+              <div className="mt-1 text-xs text-zinc-500">Sistema de control de acceso</div>
             </div>
 
             <div className="mb-5 rounded-2xl border border-sky-100/90 bg-gradient-to-br from-sky-50/70 to-cyan-50/55 p-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Estado de acceso</div>
-              <div className="mt-1 text-xs text-zinc-600">Consulta rapida de tu estado actual en porteria.</div>
+              <div className="mt-1 text-xs text-zinc-600">Consulta rápida de tu estado actual en portería.</div>
               <div className="mt-3">
                 <StatusChip status={estado?.estado} />
               </div>
@@ -163,7 +168,7 @@ export default function AprendizShell({
                 className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
               >
                 <IconLogout className="h-4 w-4" />
-                Cerrar sesion
+                Cerrar sesión
               </button>
               <div className="mt-4 text-xs text-zinc-400">SADI © 2026</div>
             </div>
@@ -173,7 +178,7 @@ export default function AprendizShell({
             <div className="sticky top-4 z-20 rounded-3xl border border-white/70 bg-white/72 px-4 py-4 shadow-[0_8px_30px_rgba(2,6,23,0.08)] backdrop-blur-xl sm:px-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Panel Aprendiz</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Panel aprendiz</div>
                   <h1 className="truncate text-xl font-extrabold tracking-tight text-zinc-900 sm:text-2xl">{title}</h1>
                   <p className="truncate text-xs text-zinc-500">
                     {loadingMe ? "Cargando perfil..." : `Hola, ${nombreBonito || "Aprendiz"}`}
@@ -206,6 +211,7 @@ export default function AprendizShell({
           </div>
         </div>
       )}
+
       <style jsx global>{`
         @keyframes fadeIn {
           from {

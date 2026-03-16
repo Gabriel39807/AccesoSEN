@@ -26,7 +26,7 @@ function ResultHero({
 
   return (
     <FadeInCard delay={0} style={{ gap: 16 }}>
-      <Pill text={tone === "success" ? "ACCESO AUTORIZADO" : "RESULTADO DE VALIDACION"} />
+      <Pill text={tone === "success" ? "ACCESO AUTORIZADO" : "RESULTADO DE VALIDACIÓN"} />
       <View
         style={{
           borderRadius: 30,
@@ -93,7 +93,7 @@ export default function ConfirmacionScreen() {
     try {
       setLoading(true);
       await Accesos.registrarPorDocumento({ documento, tipo, equipos: selected });
-      Alert.alert("Listo", `Se registro ${tipo} correctamente.`);
+      Alert.alert("Listo", `Se registró ${tipo} correctamente.`);
       router.replace("/guard/home");
     } catch (e: any) {
       const motivo = toUiErrorMessage(e, "No se pudo registrar el acceso.");
@@ -110,7 +110,7 @@ export default function ConfirmacionScreen() {
       <ModernScreen contentStyle={{ justifyContent: "center" }}>
         <ResultHero
           title="Usuario no encontrado"
-          subtitle="La informacion escaneada no corresponde a un usuario registrado en SADI."
+          subtitle="La información escaneada no corresponde a un usuario registrado en SADI."
           tone="danger"
           icon="close-circle-outline"
         />
@@ -145,7 +145,7 @@ export default function ConfirmacionScreen() {
           <SkeletonLine width="68%" height={26} />
           <SkeletonLine width="82%" height={14} />
           <SkeletonCard rows={2} />
-          <LoadingBlock label="Preparando validacion del acceso" />
+          <LoadingBlock label="Preparando validación del acceso" />
         </FadeInCard>
       </ModernScreen>
     );
@@ -167,7 +167,7 @@ export default function ConfirmacionScreen() {
           Equipos asociados
         </Text>
         <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
-          Marca los equipos que acompanaran este movimiento antes de registrar el ingreso o la salida.
+          Marca los equipos que acompañarán este movimiento antes de registrar el ingreso o la salida.
         </Text>
 
         <FlatList

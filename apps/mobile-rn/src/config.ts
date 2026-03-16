@@ -13,7 +13,7 @@ import Constants from "expo-constants";
 // - https://api.tu-dominio.com
 const DEV_DEFAULT_API_URL = "http://127.0.0.1:8000";
 const IS_DEV_RUNTIME = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
-const RAW_INSTITUTION_NAME = process.env.EXPO_PUBLIC_INSTITUTION_NAME || "Institucion";
+const RAW_INSTITUTION_NAME = process.env.EXPO_PUBLIC_INSTITUTION_NAME || "Institución";
 const RAW_SEDE_LABEL = process.env.EXPO_PUBLIC_SEDE_LABEL || "La Sede";
 const RAW_SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
 const RAW_SUPABASE_PUBLISHABLE_KEY =
@@ -59,7 +59,7 @@ function normalizeApiUrl(value: string): string {
 export const API_URL = normalizeApiUrl(RAW_API_URL);
 export const SUPABASE_URL = RAW_SUPABASE_URL.trim().replace(/\/+$/, "");
 export const SUPABASE_PUBLISHABLE_KEY = RAW_SUPABASE_PUBLISHABLE_KEY.trim();
-export const INSTITUTION_NAME = RAW_INSTITUTION_NAME.trim() || "Institucion";
+export const INSTITUTION_NAME = RAW_INSTITUTION_NAME.trim() || "Institución";
 export const SEDE_LABEL = RAW_SEDE_LABEL.trim() || "La Sede";
 
 if (!IS_DEV_RUNTIME && !API_URL) {

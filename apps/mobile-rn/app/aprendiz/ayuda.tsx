@@ -12,11 +12,11 @@ const faqs = [
   },
   {
     title: "Si olvidaste la clave",
-    detail: "Usa la recuperacion con OTP desde el login para restablecer tu acceso sin depender de terceros.",
+    detail: "Usa la recuperación con código desde el inicio de sesión para restablecer tu acceso sin depender de terceros.",
     icon: "key-outline" as const,
   },
   {
-    title: "Validacion en porteria",
+    title: "Validación en portería",
     detail: "Ten listo tu QR y verifica que los equipos aprobados correspondan a los que vas a movilizar.",
     icon: "qr-code-outline" as const,
   },
@@ -25,12 +25,12 @@ const faqs = [
 const supportChannels = [
   {
     label: "Mesa institucional",
-    detail: "Respuesta para bloqueos de acceso, correo y validacion de identidad.",
+    detail: "Respuesta para bloqueos de acceso, correo y validación de identidad.",
     icon: "mail-unread-outline" as const,
     action: () => Linking.openURL("mailto:soporte@institucion.local"),
   },
   {
-    label: "Bienestar o coordinacion",
+    label: "Bienestar o coordinación",
     detail: "Canal recomendado cuando el incidente afecta tu ingreso o permanencia en sede.",
     icon: "people-outline" as const,
     action: () => Linking.openURL("mailto:coordinacion@institucion.local"),
@@ -61,7 +61,7 @@ export default function AprendizAyuda() {
                 Resuelve incidencias sin salir del flujo
               </Text>
               <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 20 }}>
-                Consulta las pautas clave para acceso, credenciales y validacion antes de escalar un caso.
+                Consulta las pautas clave para acceso, credenciales y validación antes de escalar un caso.
               </Text>
             </View>
             <View style={{ width: 54, height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
@@ -80,14 +80,17 @@ export default function AprendizAyuda() {
               <Text style={{ color: "rgba(255,255,255,0.58)", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>
                 Tiempo ideal
               </Text>
-              <Text style={{ color: "#ffffff", fontWeight: "900", marginTop: 6 }}>Menos friccion en porteria</Text>
+              <Text style={{ color: "#ffffff", fontWeight: "900", marginTop: 6 }}>Menos fricción en portería</Text>
             </View>
           </View>
         </View>
       </FadeInCard>
 
       <FadeInCard delay={70} style={{ gap: 12 }}>
-        <TitleBlock title="Que revisar primero" subtitle="Empieza por los puntos que suelen resolver el problema sin abrir un caso adicional." />
+        <TitleBlock
+          title="Qué revisar primero"
+          subtitle="Empieza por los puntos que suelen resolver el problema sin abrir un caso adicional."
+        />
         {faqs.map((faq) => (
           <View
             key={faq.title}
@@ -112,7 +115,10 @@ export default function AprendizAyuda() {
       </FadeInCard>
 
       <FadeInCard delay={120} style={{ gap: 12 }}>
-        <TitleBlock title="Canales de soporte" subtitle="Escala por el canal correcto segun el tipo de incidencia para reducir tiempos de respuesta." />
+        <TitleBlock
+          title="Canales de soporte"
+          subtitle="Escala por el canal correcto según el tipo de incidencia para reducir tiempos de respuesta."
+        />
         <NoticeBanner tone="info" text="Si el problema es solo de acceso, intenta primero recuperar tu clave o regenerar el QR antes de reportarlo." />
         {supportChannels.map((channel) => (
           <View

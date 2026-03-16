@@ -1599,7 +1599,7 @@ export default function AdminUsuariosPage() {
         >
           <div className="space-y-4">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              Flujo: 1) Selecciona archivo. 2) Validar. 3) Importar. Duplicados por Documento siempre se omiten por seguridad.
+              Flujo: 1) Selecciona el archivo. 2) Valida. 3) Importa. Los duplicados por documento siempre se omiten por seguridad.
             </div>
 
             {importBanner ? (
@@ -1643,7 +1643,7 @@ export default function AdminUsuariosPage() {
                   <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="text-xs text-emerald-700">Validos</div>
+                  <div className="text-xs text-emerald-700">Válidos</div>
                   <div className="text-xl font-semibold text-emerald-800">{importResumen.validos}</div>
                 </div>
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
@@ -1714,7 +1714,7 @@ export default function AdminUsuariosPage() {
                     Cancelar y corregir Excel
                   </button>
                   <span className="text-xs text-amber-800">
-                    Estado: {allowSkipFileDuplicates ? "Omitir duplicados confirmado" : "Pendiente decision"}
+                    Estado: {allowSkipFileDuplicates ? "Omisión de duplicados confirmada" : "Decisión pendiente"}
                   </span>
                 </div>
               </div>
@@ -1723,7 +1723,7 @@ export default function AdminUsuariosPage() {
             {importPreviewRows.length > 0 ? (
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800">
-                  Preview de filas validas ({importPreviewRows.length} de {importProgress.total})
+                  Vista previa de filas válidas ({importPreviewRows.length} de {importProgress.total})
                 </div>
                 <div className="max-h-56 overflow-auto bg-white">
                   <table className="min-w-full text-sm">

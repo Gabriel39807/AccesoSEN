@@ -1,10 +1,10 @@
 /**
- * Pantalla movil de equipos del aprendiz.
+ * Pantalla móvil de equipos del aprendiz.
  *
  * Responsabilidad:
  * - Registrar equipos del aprendiz.
  * - Mostrar estado de carga al consultar o guardar.
- * - Informar errores de forma visible sin romper la navegacion.
+ * - Informar errores de forma visible sin romper la navegación.
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { FlatList, Text, View } from "react-native";
@@ -28,6 +28,7 @@ function estadoTone(estado: string) {
   if (value.includes("RECH")) return { color: uiTheme.danger, bg: `${uiTheme.danger}18` };
   return { color: uiTheme.warn, bg: `${uiTheme.warn}18` };
 }
+
 export default function AprendizEquipos() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -103,10 +104,10 @@ export default function AprendizEquipos() {
                 Inventario personal
               </Text>
               <Text style={{ color: uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
-                Gestionar equipos
+                Gestiona tus equipos
               </Text>
               <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
-                Registra tus equipos y revisa su estado de aprobacion antes de llegar al control de acceso.
+                Registra tus equipos y revisa su estado de aprobación antes de llegar al control de acceso.
               </Text>
             </View>
             <View style={{ width: 54, height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.62)", borderWidth: 1, borderColor: "rgba(15,118,110,0.12)" }}>
@@ -130,7 +131,7 @@ export default function AprendizEquipos() {
       <FadeInCard delay={70} style={{ gap: 12 }}>
         <View style={{ gap: 6 }}>
           <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Registrar nuevo equipo</Text>
-          <TitleBlock title="Agrega un dispositivo" subtitle="Completa serial, marca y modelo para enviarlo a revision." />
+          <TitleBlock title="Agrega un dispositivo" subtitle="Completa serial, marca y modelo para enviarlo a revisión." />
         </View>
 
         <InputField label="Serial" value={serial} onChangeText={setSerial} placeholder="ABC1234" />
@@ -178,7 +179,7 @@ export default function AprendizEquipos() {
               <EmptyState
                 icon="laptop-outline"
                 title="Sin equipos registrados"
-                subtitle="Agrega tu primer equipo para enviarlo a revision y mantener tu inventario personal al dia."
+                subtitle="Agrega tu primer equipo para enviarlo a revisión y mantener tu inventario personal al día."
               />
             }
           />

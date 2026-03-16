@@ -51,7 +51,7 @@ export function GuardHomeScreen({ navigation }: Props) {
         <Pill text="PANEL ACTIVO" />
         <TitleBlock
           title={config.nombre_institucion || "Panel de seguridad"}
-          subtitle="Operacion de ingresos, validacion documental y control de turno."
+          subtitle="Operación de ingresos, validación documental y control de turno."
         />
         <TitleBlock
           title={user?.first_name ? `${user.first_name} ${user.last_name ?? ""}`.trim() : user?.username || "Guardia"}
@@ -73,7 +73,7 @@ export function GuardHomeScreen({ navigation }: Props) {
       </FadeInCard>
 
       <FadeInCard style={{ gap: 12 }}>
-        <TitleBlock title="Registros recientes" subtitle="Ultimos movimientos capturados desde este dispositivo." />
+        <TitleBlock title="Registros recientes" subtitle="Últimos movimientos capturados desde este dispositivo." />
         <FlatList
           data={recientes}
           keyExtractor={(item) => String(item.id)}
@@ -95,8 +95,8 @@ export function GuardHomeScreen({ navigation }: Props) {
           ListEmptyComponent={
             <EmptyState
               icon="time-outline"
-              title="Aun no hay registros"
-              subtitle="Cuando captures ingresos o salidas apareceran aqui para seguimiento rapido."
+              title="Aún no hay registros"
+              subtitle="Cuando captures ingresos o salidas aparecerán aquí para seguimiento rápido."
             />
           }
         />

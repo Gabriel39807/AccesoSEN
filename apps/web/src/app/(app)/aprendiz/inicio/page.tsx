@@ -159,7 +159,7 @@ export default function AprendizInicioPage() {
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <StatusChip status={estado?.estado} labelPrefix="Estado actual" />
-            <p className="text-xs text-zinc-500">Ultimo registro: {fmt(estado?.ultima_fecha)}</p>
+            <p className="text-xs text-zinc-500">Último registro: {fmt(estado?.ultima_fecha)}</p>
             <button
               onClick={cargar}
               className="rounded-full border border-zinc-200 bg-white px-4 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-sky-300 hover:text-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
@@ -171,7 +171,7 @@ export default function AprendizInicioPage() {
 
         {error ? (
           <div className="mt-4 rounded-2xl border border-red-200 bg-red-50/90 p-4 text-sm text-red-700">
-            <div className="font-semibold">No pudimos cargar la informacion.</div>
+            <div className="font-semibold">No pudimos cargar la información.</div>
             <div className="mt-1">{error}</div>
             <button
               onClick={cargar}
@@ -190,19 +190,19 @@ export default function AprendizInicioPage() {
         <StatCard label="Rechazados" value={stats.rechazados} icon={<IconBell className="h-5 w-5" />} loading={loading} tone="danger" />
       </section>
 
-      <SectionCard title="Accesos rapidos" subtitle="Atajos para tus tareas mas usadas">
+      <SectionCard title="Accesos rápidos" subtitle="Atajos para tus tareas más usadas">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <QuickActionCard
             href="/aprendiz/equipos/nuevo"
             title="Registrar nuevo equipo"
-            description="Carga marca, modelo y serial para iniciar validacion."
+            description="Carga marca, modelo y serial para iniciar validación."
             icon={<IconLaptop className="h-5 w-5" />}
             featured
           />
           <QuickActionCard
             href="/aprendiz/accesos"
             title="Historial de ingresos"
-            description="Consulta tus ultimos movimientos y sedes."
+            description="Consulta tus últimos movimientos y sedes."
             icon={<IconHistory className="h-5 w-5" />}
           />
           <QuickActionCard
@@ -218,7 +218,7 @@ export default function AprendizInicioPage() {
         <div className="xl:col-span-6">
           <SectionCard
             title="Mis equipos"
-            subtitle="Vista rapida de tus equipos mas recientes"
+            subtitle="Vista rápida de tus equipos más recientes"
             className="h-full"
             action={
               <Link href="/aprendiz/equipos" className="text-sm font-semibold text-sky-700 transition hover:text-sky-800">
@@ -240,7 +240,7 @@ export default function AprendizInicioPage() {
             {!loading && equiposPreview.length === 0 ? (
               <div className="sm:col-span-2">
                 <EmptyState
-                  title="Aun no tienes equipos registrados"
+                  title="Aún no tienes equipos registrados"
                   description="Registra tu primer equipo para poder gestionar ingresos y salidas."
                   actionLabel="Registrar equipo"
                   actionHref="/aprendiz/equipos/nuevo"
@@ -282,7 +282,7 @@ export default function AprendizInicioPage() {
         <div className="xl:col-span-6">
           <SectionCard
             title="Notificaciones recientes"
-            subtitle="Tus ultimos accesos y avisos del sistema"
+            subtitle="Tus últimos accesos y avisos del sistema"
             className="h-full"
             action={
               <Link href="/aprendiz/accesos" className="text-sm font-semibold text-sky-700 transition hover:text-sky-800">
@@ -303,7 +303,7 @@ export default function AprendizInicioPage() {
               {!loading && accesosPreview.length === 0 ? (
                 <EmptyState
                   title="No hay movimientos recientes"
-                  description="Cuando registres ingresos o salidas apareceran en esta seccion."
+                  description="Cuando registres ingresos o salidas aparecerán en esta sección."
                 />
               ) : null}
 
@@ -324,7 +324,7 @@ export default function AprendizInicioPage() {
                 ))}
 
               <div className="rounded-2xl border border-cyan-100 bg-gradient-to-r from-cyan-50/90 to-sky-50/90 p-4 text-sm text-zinc-700">
-                <span className="font-semibold">Recordatorio:</span> actualiza tus datos en la seccion Mi perfil.
+                <span className="font-semibold">Recordatorio:</span> actualiza tus datos en la sección Mi perfil.
               </div>
             </div>
           </SectionCard>
@@ -333,4 +333,3 @@ export default function AprendizInicioPage() {
     </div>
   );
 }
-

@@ -48,7 +48,7 @@ export default function CierreTurno() {
   }, [id, reloadKey]);
 
   async function confirmarCierre() {
-    Alert.alert("Confirmar cierre", "Seguro que deseas finalizar el turno?", [
+    Alert.alert("Confirmar cierre", "¿Seguro que deseas finalizar el turno?", [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Finalizar",
@@ -128,7 +128,7 @@ export default function CierreTurno() {
       </FadeInCard>
 
       <FadeInCard delay={70} style={{ gap: 12 }}>
-        <NoticeBanner tone="info" text="Revisa este consolidado antes de cerrar. Despues del cierre, el turno actual dejara de estar operativo para nuevas validaciones." />
+        <NoticeBanner tone="info" text="Revisa este consolidado antes de cerrar. Después del cierre, el turno actual dejará de estar operativo para nuevas validaciones." />
         <Text style={{ color: uiTheme.inkSoft }}>Inicio: {new Date(data.turno.inicio).toLocaleString()}</Text>
         {data.turno.fin ? <Text style={{ color: uiTheme.inkSoft }}>Fin: {new Date(data.turno.fin).toLocaleString()}</Text> : null}
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -157,7 +157,7 @@ export default function CierreTurno() {
         <View style={{ borderRadius: 20, padding: 14, backgroundColor: "rgba(255,255,255,0.78)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
           <Text style={{ color: uiTheme.ink, fontWeight: "900", fontSize: 16 }}>Antes de confirmar</Text>
           <Text style={{ color: uiTheme.inkSoft, lineHeight: 20, marginTop: 6 }}>
-            Verifica que los movimientos del turno sean correctos. Esta accion cerrara el periodo operativo actual y te llevara al cierre final de jornada.
+            Verifica que los movimientos del turno sean correctos. Esta acción cerrará el periodo operativo actual y te llevará al cierre final de jornada.
           </Text>
         </View>
         <ModernButton label="Confirmar cierre" icon="checkmark-done-outline" tone="danger" onPress={confirmarCierre} />

@@ -88,7 +88,7 @@ export default function Navbar() {
             onClick={logout}
             className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm font-medium text-text transition hover:bg-primary/10 hover:text-primary"
           >
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
       </div>

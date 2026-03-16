@@ -58,7 +58,7 @@ export function GuardLoginScreen() {
       return;
     }
     if (!password || password.length > 20) {
-      setError("La contrasena debe tener maximo 20 caracteres.");
+      setError("La contraseña debe tener máximo 20 caracteres.");
       return;
     }
     if (!sede) {
@@ -70,7 +70,7 @@ export function GuardLoginScreen() {
     try {
       await signInGuarda({ username: username.trim(), password, sede, jornada });
     } catch (e: any) {
-      setError(toUiErrorMessage(e, "No se pudo iniciar sesion."));
+      setError(toUiErrorMessage(e, "No se pudo iniciar sesión."));
     } finally {
       setLoading(false);
     }
@@ -96,10 +96,10 @@ export function GuardLoginScreen() {
         />
 
         <InputField
-          label="Contrasena"
+          label="Contraseña"
           value={password}
           onChangeText={onPasswordChange}
-          placeholder="Ingresa tu contrasena"
+          placeholder="Ingresa tu contraseña"
           secureTextEntry
         />
 

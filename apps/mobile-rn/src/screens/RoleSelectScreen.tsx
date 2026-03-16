@@ -12,7 +12,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, "RoleSelect">;
 const roleCards = [
   {
     label: "Personal de seguridad",
-    detail: "Control de acceso, lectura QR y operacion de porteria.",
+    detail: "Control de acceso, lectura QR y operación de portería.",
     icon: "shield-account" as const,
     border: "rgba(56, 189, 248, 0.2)",
     iconBg: "rgba(56, 189, 248, 0.15)",
@@ -21,7 +21,7 @@ const roleCards = [
   },
   {
     label: "Aprendiz",
-    detail: "Gestion de equipos, QR personal y seguimiento de accesos.",
+    detail: "Gestión de equipos, QR personal y seguimiento de accesos.",
     icon: "account-school" as const,
     border: "rgba(16, 185, 129, 0.2)",
     iconBg: "rgba(16, 185, 129, 0.15)",
@@ -30,7 +30,7 @@ const roleCards = [
   },
   {
     label: "Administrador",
-    detail: "Panel de gestion, permisos y configuracion institucional.",
+    detail: "Panel de gestión, permisos y configuración institucional.",
     icon: "briefcase-account" as const,
     border: "rgba(139, 92, 246, 0.2)",
     iconBg: "rgba(139, 92, 246, 0.15)",
@@ -45,7 +45,7 @@ export function RoleSelectScreen({ navigation }: Props) {
   return (
     <ModernScreen contentStyle={{ justifyContent: "center" }}>
       <FadeInCard style={{ gap: 18 }}>
-        <Pill text="ACCESO MOVIL" />
+        <Pill text="ACCESO MÓVIL" />
         <TitleBlock
           title="Selecciona tu rol"
           subtitle={config.nombre_institucion || "Sistema de Acceso Digital Institucional"}

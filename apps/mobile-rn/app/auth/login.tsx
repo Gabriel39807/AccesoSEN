@@ -1,9 +1,9 @@
 /**
- * Login movil para roles aprendiz/guarda.
+ * Login móvil para roles aprendiz/guarda.
  *
  * Responsabilidad:
  * - Validar credenciales y sede/turno para guardas.
- * - Exponer acceso con biometria cuando existe sesion persistida.
+ * - Exponer acceso con biometría cuando existe sesión persistida.
  * - Mantener feedback visual de carga/error durante todo el flujo.
  */
 import React, { useEffect, useState } from "react";
@@ -19,7 +19,15 @@ import { listSedes, type SedeItem } from "../../src/api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
 import { isBiometricAvailable } from "../../src/auth/biometric";
 import { hasRefreshToken, isBiometricEnabled } from "../../src/storage/tokens";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock, uiTheme } from "../../src/ui/modern";
+import {
+  FadeInCard,
+  InputField,
+  ModernButton,
+  ModernScreen,
+  Pill,
+  TitleBlock,
+  uiTheme,
+} from "../../src/ui/modern";
 
 type RoleKey = "guarda" | "aprendiz";
 
@@ -37,8 +45,9 @@ type RoleContent = {
 const roleCopy: Record<RoleKey, RoleContent> = {
   guarda: {
     eyebrow: "SEGURIDAD OPERATIVA",
-    title: "Entrada de control para porteria",
-    subtitle: "Accede a escaneo, validacion y seguimiento del turno desde una interfaz mas seria y precisa.",
+    title: "Entrada de control para portería",
+    subtitle:
+      "Accede al escaneo, la validación y el seguimiento del turno desde una interfaz más seria y precisa.",
     featureA: "Escaneo directo",
     featureB: "Turno contextual",
     accentBg: "rgba(15,23,42,0.92)",
@@ -48,8 +57,9 @@ const roleCopy: Record<RoleKey, RoleContent> = {
   aprendiz: {
     eyebrow: "ACCESO PERSONAL",
     title: "Tu identidad digital en SADI",
-    subtitle: "Consulta estado, QR y equipos desde una entrada clara, moderna y mucho mejor resuelta visualmente.",
-    featureA: "QR dinamico",
+    subtitle:
+      "Consulta estado, QR y equipos desde una entrada clara, moderna y mucho mejor resuelta visualmente.",
+    featureA: "QR dinámico",
     featureB: "Perfil y equipos",
     accentBg: "rgba(15,118,110,0.1)",
     accentBorder: "rgba(15,118,110,0.16)",
@@ -59,8 +69,8 @@ const roleCopy: Record<RoleKey, RoleContent> = {
 
 const trustItems = [
   { label: "RBAC", detail: "Permisos desde backend" },
-  { label: "OTP", detail: "Recuperacion verificada" },
-  { label: "QR", detail: "Acceso firmado y dinamico" },
+  { label: "Código", detail: "Recuperación verificada" },
+  { label: "QR", detail: "Acceso firmado y dinámico" },
 ];
 
 function RoleSwitch({ active }: { active: RoleKey }) {
@@ -89,8 +99,14 @@ function RoleSwitch({ active }: { active: RoleKey }) {
             })}
           >
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              <Ionicons name={option.icon} size={18} color={isActive ? uiTheme.accentDeep : uiTheme.muted} />
-              <Text style={{ color: isActive ? uiTheme.accentDeep : uiTheme.inkSoft, fontWeight: "900" }}>{option.label}</Text>
+              <Ionicons
+                name={option.icon}
+                size={18}
+                color={isActive ? uiTheme.accentDeep : uiTheme.muted}
+              />
+              <Text style={{ color: isActive ? uiTheme.accentDeep : uiTheme.inkSoft, fontWeight: "900" }}>
+                {option.label}
+              </Text>
             </View>
           </Pressable>
         );
@@ -98,6 +114,7 @@ function RoleSwitch({ active }: { active: RoleKey }) {
     </View>
   );
 }
+
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ rol?: RoleKey }>();
   const rol = (params.rol ?? "guarda") as RoleKey;
@@ -112,7 +129,7 @@ export default function LoginScreen() {
 
   const [sede, setSede] = useState<Sede>("");
   const [sedes, setSedes] = useState<SedeItem[]>([]);
-  const [jornada, setJornada] = useState<Jornada>("MAÑANA");
+  const [jornada, setJornada] = useState<Jornada>("MANANA");
 
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);
@@ -158,7 +175,7 @@ export default function LoginScreen() {
       } catch {
         if (!mounted) return;
         setSedes([]);
-        setSedeLoadHint("No se pudieron cargar las sedes. Revisa la conexion con el servidor.");
+        setSedeLoadHint("No se pudieron cargar las sedes. Revisa la conexión con el servidor.");
       }
     })();
     return () => {
@@ -178,10 +195,14 @@ export default function LoginScreen() {
         if (!mounted) return;
         setShowBiometricButton(Boolean(available));
         setBiometricReady(Boolean(available && hasRefresh && enabled));
-        if (!available) setBiometricHint("Este dispositivo no tiene biometria disponible.");
-        else if (!hasRefresh) setBiometricHint("La huella se habilita despues de iniciar sesion al menos una vez.");
-        else if (!enabled) setBiometricHint("La huella esta desactivada para esta sesion.");
-        else setBiometricHint(null);
+        if (!available) setBiometricHint("Este dispositivo no tiene biometría disponible.");
+        else if (!hasRefresh) {
+          setBiometricHint("La huella se habilita después de iniciar sesión al menos una vez.");
+        } else if (!enabled) {
+          setBiometricHint("La huella está desactivada para esta sesión.");
+        } else {
+          setBiometricHint(null);
+        }
       } catch {
         if (!mounted) return;
         setShowBiometricButton(false);
@@ -203,7 +224,7 @@ export default function LoginScreen() {
       return;
     }
     if (!password || password.length > 20) {
-      setError("La contrasena debe tener maximo 20 caracteres.");
+      setError("La contraseña debe tener máximo 20 caracteres.");
       return;
     }
     if (rol === "guarda" && !sede) {
@@ -227,7 +248,7 @@ export default function LoginScreen() {
         router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
       }
     } catch (e: any) {
-      setError(toUiErrorMessage(e, "No se pudo iniciar sesion."));
+      setError(toUiErrorMessage(e, "No se pudo iniciar sesión."));
       const code = e?.code as string | undefined;
       const secondsRemaining = Number(e?.detail?.seconds_remaining || 0);
       if (code === "ACCOUNT_LOCKED_15MIN") {
@@ -260,7 +281,7 @@ export default function LoginScreen() {
         router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
       }
     } catch (e: any) {
-      setError(toUiErrorMessage(e, "No se pudo validar la huella. Usa tu contrasena."));
+      setError(toUiErrorMessage(e, "No se pudo validar la huella. Usa tu contraseña."));
     } finally {
       setBiometricLoading(false);
     }
@@ -284,10 +305,26 @@ export default function LoginScreen() {
         >
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
             <View style={{ flex: 1, gap: 8 }}>
-              <Text style={{ color: rol === "guarda" ? "rgba(255,255,255,0.66)" : uiTheme.accentDeep, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-                SADI Movil
+              <Text
+                style={{
+                  color: rol === "guarda" ? "rgba(255,255,255,0.66)" : uiTheme.accentDeep,
+                  fontSize: 12,
+                  fontWeight: "800",
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
+                }}
+              >
+                SADI Móvil
               </Text>
-              <Text style={{ color: rol === "guarda" ? "#ffffff" : uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
+              <Text
+                style={{
+                  color: rol === "guarda" ? "#ffffff" : uiTheme.ink,
+                  fontSize: 28,
+                  lineHeight: 32,
+                  fontWeight: "900",
+                  letterSpacing: -0.8,
+                }}
+              >
                 {roleMeta.title}
               </Text>
               <Text style={{ color: rol === "guarda" ? "rgba(255,255,255,0.76)" : uiTheme.inkSoft, lineHeight: 20 }}>
@@ -311,17 +348,65 @@ export default function LoginScreen() {
           </View>
 
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: rol === "guarda" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.62)" }}>
-              <Text style={{ color: rol === "guarda" ? "rgba(255,255,255,0.62)" : uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 18,
+                padding: 12,
+                backgroundColor: rol === "guarda" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.62)",
+              }}
+            >
+              <Text
+                style={{
+                  color: rol === "guarda" ? "rgba(255,255,255,0.62)" : uiTheme.muted,
+                  fontSize: 11,
+                  fontWeight: "800",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
                 Prioridad
               </Text>
-              <Text style={{ color: rol === "guarda" ? "#ffffff" : uiTheme.ink, fontSize: 16, fontWeight: "900", marginTop: 6 }}>{roleMeta.featureA}</Text>
+              <Text
+                style={{
+                  color: rol === "guarda" ? "#ffffff" : uiTheme.ink,
+                  fontSize: 16,
+                  fontWeight: "900",
+                  marginTop: 6,
+                }}
+              >
+                {roleMeta.featureA}
+              </Text>
             </View>
-            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: rol === "guarda" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.62)" }}>
-              <Text style={{ color: rol === "guarda" ? "rgba(255,255,255,0.62)" : uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>
+            <View
+              style={{
+                flex: 1,
+                borderRadius: 18,
+                padding: 12,
+                backgroundColor: rol === "guarda" ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.62)",
+              }}
+            >
+              <Text
+                style={{
+                  color: rol === "guarda" ? "rgba(255,255,255,0.62)" : uiTheme.muted,
+                  fontSize: 11,
+                  fontWeight: "800",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
                 Contexto
               </Text>
-              <Text style={{ color: rol === "guarda" ? "#ffffff" : uiTheme.ink, fontSize: 16, fontWeight: "900", marginTop: 6 }}>{roleMeta.featureB}</Text>
+              <Text
+                style={{
+                  color: rol === "guarda" ? "#ffffff" : uiTheme.ink,
+                  fontSize: 16,
+                  fontWeight: "900",
+                  marginTop: 6,
+                }}
+              >
+                {roleMeta.featureB}
+              </Text>
             </View>
           </View>
         </View>
@@ -329,8 +414,21 @@ export default function LoginScreen() {
 
       <FadeInCard delay={70} style={{ gap: 14 }}>
         <View style={{ gap: 6 }}>
-          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Credenciales</Text>
-          <TitleBlock title="Inicia sesion" subtitle="Escribe tus datos y continua con una autenticacion segura y clara." />
+          <Text
+            style={{
+              color: uiTheme.muted,
+              fontSize: 12,
+              fontWeight: "800",
+              letterSpacing: 1,
+              textTransform: "uppercase",
+            }}
+          >
+            Credenciales
+          </Text>
+          <TitleBlock
+            title="Inicia sesión"
+            subtitle="Escribe tus datos y continúa con una autenticación segura y clara."
+          />
         </View>
 
         <InputField
@@ -344,7 +442,7 @@ export default function LoginScreen() {
         />
 
         <InputField
-          label="Contrasena"
+          label="Contraseña"
           value={password}
           onChangeText={onPasswordChange}
           placeholder="********"
@@ -353,20 +451,57 @@ export default function LoginScreen() {
 
         <View style={{ flexDirection: "row", gap: 10 }}>
           <View style={{ flex: 1 }}>
-            <ModernButton label={show ? "Ocultar" : "Mostrar"} icon={show ? "eye-off-outline" : "eye-outline"} tone="light" onPress={() => setShow((v) => !v)} />
+            <ModernButton
+              label={show ? "Ocultar" : "Mostrar"}
+              icon={show ? "eye-off-outline" : "eye-outline"}
+              tone="light"
+              onPress={() => setShow((v) => !v)}
+            />
           </View>
           <View style={{ flex: 1 }}>
-            <ModernButton label="Recuperar clave" icon="mail-open-outline" tone="light" onPress={() => router.push({ pathname: "/auth/password-recovery" } as any)} />
+            <ModernButton
+              label="Recuperar clave"
+              icon="mail-open-outline"
+              tone="light"
+              onPress={() => router.push({ pathname: "/auth/password-recovery" } as any)}
+            />
           </View>
         </View>
 
         {rol === "guarda" ? (
           <View style={{ gap: 12 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: uiTheme.muted, letterSpacing: 1, textTransform: "uppercase" }}>Contexto operativo</Text>
-            <View style={{ gap: 10, padding: 14, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "800",
+                color: uiTheme.muted,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+              }}
+            >
+              Contexto operativo
+            </Text>
+            <View
+              style={{
+                gap: 10,
+                padding: 14,
+                borderRadius: 22,
+                backgroundColor: "rgba(255,255,255,0.72)",
+                borderWidth: 1,
+                borderColor: "rgba(148,163,184,0.22)",
+              }}
+            >
               <View style={{ gap: 6 }}>
                 <Text style={{ fontWeight: "800", color: uiTheme.ink }}>Sede</Text>
-                <View style={{ borderWidth: 1, borderColor: "rgba(148,163,184,0.3)", borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(248,250,252,0.96)" }}>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "rgba(148,163,184,0.3)",
+                    borderRadius: 18,
+                    overflow: "hidden",
+                    backgroundColor: "rgba(248,250,252,0.96)",
+                  }}
+                >
                   <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
                     {sedes.map((item) => (
                       <Picker.Item key={item.id} label={item.name} value={item.code} />
@@ -377,9 +512,17 @@ export default function LoginScreen() {
 
               <View style={{ gap: 6 }}>
                 <Text style={{ fontWeight: "800", color: uiTheme.ink }}>Turno</Text>
-                <View style={{ borderWidth: 1, borderColor: "rgba(148,163,184,0.3)", borderRadius: 18, overflow: "hidden", backgroundColor: "rgba(248,250,252,0.96)" }}>
+                <View
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "rgba(148,163,184,0.3)",
+                    borderRadius: 18,
+                    overflow: "hidden",
+                    backgroundColor: "rgba(248,250,252,0.96)",
+                  }}
+                >
                   <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-                    <Picker.Item label="Manana" value="MAÑANA" />
+                    <Picker.Item label="Mañana" value="MANANA" />
                     <Picker.Item label="Tarde" value="TARDE" />
                     <Picker.Item label="Noche" value="NOCHE" />
                   </Picker>
@@ -390,7 +533,15 @@ export default function LoginScreen() {
         ) : null}
 
         {bloqueado ? (
-          <View style={{ borderRadius: 18, padding: 14, backgroundColor: "rgba(185,28,28,0.08)", borderWidth: 1, borderColor: "rgba(185,28,28,0.16)" }}>
+          <View
+            style={{
+              borderRadius: 18,
+              padding: 14,
+              backgroundColor: "rgba(185,28,28,0.08)",
+              borderWidth: 1,
+              borderColor: "rgba(185,28,28,0.16)",
+            }}
+          >
             <Text style={{ color: uiTheme.danger, fontWeight: "900" }}>
               Bloqueado temporalmente. Intenta en {lockRemainingSec}s.
             </Text>
@@ -398,19 +549,29 @@ export default function LoginScreen() {
         ) : null}
 
         {error ? <Text style={{ color: uiTheme.danger, lineHeight: 20 }}>{error}</Text> : null}
-        {rol === "guarda" && sedeLoadHint ? <Text style={{ color: uiTheme.danger, lineHeight: 20 }}>{sedeLoadHint}</Text> : null}
+        {rol === "guarda" && sedeLoadHint ? (
+          <Text style={{ color: uiTheme.danger, lineHeight: 20 }}>{sedeLoadHint}</Text>
+        ) : null}
 
         <ModernButton
-          label={loading ? "Ingresando..." : "Continuar"} icon="arrow-forward-outline"
+          label={loading ? "Ingresando..." : "Continuar"}
+          icon="arrow-forward-outline"
           disabled={loading || biometricLoading || bloqueado || (rol === "guarda" && (!sede || sedes.length === 0))}
           onPress={onSubmit}
         />
 
         {showBiometricButton ? (
           <ModernButton
-            label={biometricLoading ? "Validando huella..." : "Entrar con huella"} icon="finger-print-outline"
+            label={biometricLoading ? "Validando huella..." : "Entrar con huella"}
+            icon="finger-print-outline"
             tone="light"
-            disabled={loading || biometricLoading || bloqueado || !biometricReady || (rol === "guarda" && (!sede || sedes.length === 0))}
+            disabled={
+              loading ||
+              biometricLoading ||
+              bloqueado ||
+              !biometricReady ||
+              (rol === "guarda" && (!sede || sedes.length === 0))
+            }
             onPress={onBiometricSubmit}
           />
         ) : null}
@@ -420,7 +581,17 @@ export default function LoginScreen() {
       </FadeInCard>
 
       <FadeInCard delay={120} style={{ gap: 12 }}>
-        <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Senales de confianza</Text>
+        <Text
+          style={{
+            color: uiTheme.muted,
+            fontSize: 12,
+            fontWeight: "800",
+            letterSpacing: 1,
+            textTransform: "uppercase",
+          }}
+        >
+          Señales de confianza
+        </Text>
         <View style={{ flexDirection: "row", gap: 10 }}>
           {trustItems.map((item) => (
             <View
@@ -435,7 +606,9 @@ export default function LoginScreen() {
               }}
             >
               <Text style={{ color: uiTheme.ink, fontSize: 18, fontWeight: "900" }}>{item.label}</Text>
-              <Text style={{ color: uiTheme.inkSoft, marginTop: 6, fontSize: 12, lineHeight: 17 }}>{item.detail}</Text>
+              <Text style={{ color: uiTheme.inkSoft, marginTop: 6, fontSize: 12, lineHeight: 17 }}>
+                {item.detail}
+              </Text>
             </View>
           ))}
         </View>

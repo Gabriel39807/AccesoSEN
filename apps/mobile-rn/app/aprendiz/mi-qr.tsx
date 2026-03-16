@@ -15,9 +15,9 @@ type QrResponse = {
 };
 
 const qrHighlights = [
-  { title: "Dinamico", detail: "Se genera desde tu perfil actual." },
-  { title: "Verificable", detail: "Se valida en porteria antes del acceso." },
-  { title: "Rapido", detail: "Listo para mostrar apenas abras esta vista." },
+  { title: "Dinámico", detail: "Se genera desde tu perfil actual." },
+  { title: "Verificable", detail: "Se valida en portería antes del acceso." },
+  { title: "Rápido", detail: "Listo para mostrar apenas abras esta vista." },
 ];
 
 export default function MiQrScreen() {
@@ -63,10 +63,10 @@ export default function MiQrScreen() {
                 Identidad digital
               </Text>
               <Text style={{ color: "#ffffff", fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
-                Codigo de acceso personal
+                Código de acceso personal
               </Text>
               <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 20 }}>
-                Generado a partir de tu perfil para presentarlo en porteria de forma clara, segura y rapida.
+                Generado a partir de tu perfil para presentarlo en portería de forma clara, segura y rápida.
               </Text>
             </View>
             <View
@@ -98,7 +98,7 @@ export default function MiQrScreen() {
 
       <FadeInCard delay={70} style={{ gap: 10 }}>
         <ModernButton label={loading ? "Actualizando..." : "Actualizar QR"} icon="refresh-outline" tone="light" onPress={cargar} disabled={loading} />
-        {loading ? <LoadingBlock label="Generando codigo de acceso" /> : null}
+        {loading ? <LoadingBlock label="Generando código de acceso" /> : null}
         {msg ? <NoticeBanner tone="danger" text={msg} /> : null}
       </FadeInCard>
 
@@ -137,7 +137,7 @@ export default function MiQrScreen() {
           <EmptyState
             icon="qr-code-outline"
             title="QR no disponible"
-            subtitle="Todavia no fue posible generar tu codigo. Intenta actualizar nuevamente en unos segundos."
+            subtitle="Todavía no fue posible generar tu código. Intenta actualizar nuevamente en unos segundos."
           />
         </FadeInCard>
       ) : null}

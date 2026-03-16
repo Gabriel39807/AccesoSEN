@@ -20,7 +20,7 @@ type SystemBrandingContextValue = {
 };
 
 const DEFAULT_CONFIG: SystemBrandingConfig = {
-  nombre_institucion: "Institucion",
+  nombre_institucion: "Institución",
   branding_preset: null,
   color_aprendiz_light: "#14B8A6",
   color_aprendiz_dark: "#0F766E",

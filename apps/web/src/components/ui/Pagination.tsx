@@ -42,7 +42,7 @@ export default function Pagination({
           Anterior
         </button>
         <div className="min-w-32 text-center text-sm text-slate-600">
-          Pagina <span className="font-semibold text-slate-900">{page}</span> /{" "}
+          Página <span className="font-semibold text-slate-900">{page}</span> /{" "}
           <span className="font-semibold text-slate-900">{totalPages}</span>
         </div>
         <button
@@ -57,4 +57,3 @@ export default function Pagination({
     </div>
   );
 }
-

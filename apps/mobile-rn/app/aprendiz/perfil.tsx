@@ -15,12 +15,12 @@ type PasswordRule = {
 
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
-    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
-    { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
+    { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
+    { id: "upper", label: "Al menos 1 mayúscula", valid: /[A-Z]/.test(password) },
+    { id: "lower", label: "Al menos 1 minúscula", valid: /[a-z]/.test(password) },
+    { id: "num", label: "Al menos 1 número", valid: /[0-9]/.test(password) },
+    { id: "special", label: "Al menos 1 carácter especial", valid: /[^A-Za-z0-9]/.test(password) },
+    { id: "match", label: "Coincide con la confirmación", valid: confirmPassword.length > 0 && password === confirmPassword },
   ];
 }
 
@@ -32,7 +32,7 @@ export default function AprendizPerfil() {
 
   const [telefono, setTelefono] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [emailOtp, setEmailOtp] = useState("");
+  const [emailCode, setEmailCode] = useState("");
 
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -72,7 +72,7 @@ export default function AprendizPerfil() {
       setTelefono(r.perfil.telefono || "");
       setMsg(r.mensaje || "Perfil actualizado.");
     } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo actualizar el telefono."));
+      setMsg(toUiErrorMessage(e, "No se pudo actualizar el teléfono."));
     } finally {
       setSaving(false);
     }
@@ -83,7 +83,7 @@ export default function AprendizPerfil() {
     setSaving(true);
     try {
       const r = await Auth.requestAprendizEmailChange(newEmail);
-      setMsg(r.mensaje || "Enviamos OTP al nuevo correo.");
+      setMsg(r.mensaje || "Enviamos un código al nuevo correo.");
     } catch (e: any) {
       setMsg(toUiErrorMessage(e, "No se pudo solicitar el cambio de correo."));
     } finally {
@@ -95,10 +95,10 @@ export default function AprendizPerfil() {
     setMsg(null);
     setSaving(true);
     try {
-      const r = await Auth.confirmAprendizEmailChange(newEmail, emailOtp);
+      const r = await Auth.confirmAprendizEmailChange(newEmail, emailCode);
       setPerfil(r.perfil);
       setNewEmail("");
-      setEmailOtp("");
+      setEmailCode("");
       setMsg(r.mensaje || "Correo actualizado.");
     } catch (e: any) {
       setMsg(toUiErrorMessage(e, "No se pudo confirmar el cambio de correo."));
@@ -110,7 +110,7 @@ export default function AprendizPerfil() {
   async function actualizarClave() {
     setMsg(null);
     if (!allRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
+      setMsg("La nueva contraseña no cumple todos los requisitos.");
       return;
     }
     setSaving(true);
@@ -120,10 +120,10 @@ export default function AprendizPerfil() {
       setCurrent("");
       setNext("");
       setConfirm("");
-      setMsg("Contrasena actualizada correctamente.");
+      setMsg("Contraseña actualizada correctamente.");
       await loadPerfil();
     } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo actualizar la contrasena."));
+      setMsg(toUiErrorMessage(e, "No se pudo actualizar la contraseña."));
     } finally {
       setSaving(false);
     }
@@ -193,21 +193,24 @@ export default function AprendizPerfil() {
       <FadeInCard delay={70} style={{ gap: 14 }}>
         <View style={{ gap: 6 }}>
           <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Contacto</Text>
-          <TitleBlock title="Actualiza tus datos" subtitle="Solo puedes editar telefono y solicitar cambio de correo mediante OTP." />
+          <TitleBlock
+            title="Actualiza tus datos"
+            subtitle="Solo puedes editar teléfono y solicitar el cambio de correo mediante código de verificación."
+          />
         </View>
 
         <InputField
-          label="Telefono"
+          label="Teléfono"
           value={telefono}
           onChangeText={(v) => setTelefono(sanitizeDigits(v).slice(0, 10))}
           placeholder="3001234567"
           keyboardType="phone-pad"
           maxLength={10}
         />
-        <ModernButton label={saving ? "Guardando..." : "Guardar telefono"} disabled={saving} onPress={guardarTelefono} />
+        <ModernButton label={saving ? "Guardando..." : "Guardar teléfono"} disabled={saving} onPress={guardarTelefono} />
 
         <View style={{ borderRadius: 22, padding: 14, gap: 10, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
-          <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Cambio de correo con OTP</Text>
+          <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Cambio de correo con código</Text>
           <InputField
             label="Nuevo correo"
             value={newEmail}
@@ -217,16 +220,16 @@ export default function AprendizPerfil() {
             keyboardType="email-address"
           />
           <ModernButton
-            label={saving ? "Enviando..." : "Enviar OTP correo"}
+            label={saving ? "Enviando..." : "Enviar código al correo"}
             tone="light"
             disabled={saving || !newEmail.trim()}
             onPress={solicitarCambioCorreo}
           />
 
           <InputField
-            label="OTP de correo"
-            value={emailOtp}
-            onChangeText={(v) => setEmailOtp(v.replace(/[^\d]/g, "").slice(0, 5))}
+            label="Código de verificación"
+            value={emailCode}
+            onChangeText={(v) => setEmailCode(v.replace(/[^\d]/g, "").slice(0, 5))}
             placeholder="12345"
             keyboardType="numeric"
             maxLength={5}
@@ -234,7 +237,7 @@ export default function AprendizPerfil() {
           <ModernButton
             label={saving ? "Confirmando..." : "Confirmar cambio de correo"}
             tone="dark"
-            disabled={saving || !newEmail.trim() || emailOtp.trim().length !== 5}
+            disabled={saving || !newEmail.trim() || emailCode.trim().length !== 5}
             onPress={confirmarCambioCorreo}
           />
         </View>
@@ -243,12 +246,15 @@ export default function AprendizPerfil() {
       <FadeInCard delay={120} style={{ gap: 14 }}>
         <View style={{ gap: 6 }}>
           <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Seguridad</Text>
-          <TitleBlock title="Cambiar contrasena" subtitle="Requiere tu contrasena actual y valida la nueva con las reglas de seguridad." />
+          <TitleBlock
+            title="Cambiar contraseña"
+            subtitle="Requiere tu contraseña actual y valida la nueva con las reglas de seguridad."
+          />
         </View>
 
-        <InputField label="Contrasena actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
-        <InputField label="Nueva contrasena" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
-        <InputField label="Confirmar contrasena" value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="********" />
+        <InputField label="Contraseña actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
+        <InputField label="Nueva contraseña" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
+        <InputField label="Confirmar contraseña" value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="********" />
 
         <View style={{ borderRadius: 22, padding: 14, gap: 8, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
           <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Checklist de seguridad</Text>
@@ -262,7 +268,7 @@ export default function AprendizPerfil() {
 
         {msg ? <Text style={{ color: msg.toLowerCase().includes("actualizada") || msg.toLowerCase().includes("actualizado") ? uiTheme.success : uiTheme.danger, lineHeight: 20 }}>{msg}</Text> : null}
 
-        <ModernButton label={saving ? "Guardando..." : "Actualizar contrasena"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
+        <ModernButton label={saving ? "Guardando..." : "Actualizar contraseña"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
         {saving || loadingPerfil ? <ActivityIndicator style={{ marginTop: 4 }} color={uiTheme.accent} /> : null}
       </FadeInCard>
     </ModernScreen>

@@ -18,6 +18,12 @@ function statusClasses(status: StatusChipState) {
   return `${base} border-zinc-200/90 bg-zinc-100/80 text-zinc-700`;
 }
 
+function statusLabel(status: StatusChipState) {
+  if (status === "DENTRO") return "Dentro del centro";
+  if (status === "FUERA") return "Fuera del centro";
+  return "Sin registros";
+}
+
 export default function StatusChip({
   status,
   labelPrefix,
@@ -37,9 +43,8 @@ export default function StatusChip({
         )}
       />
       <span className="whitespace-nowrap">
-        {labelPrefix ? `${labelPrefix}: ${safeStatus}` : safeStatus}
+        {labelPrefix ? `${labelPrefix}: ${statusLabel(safeStatus)}` : statusLabel(safeStatus)}
       </span>
     </span>
   );
 }
-

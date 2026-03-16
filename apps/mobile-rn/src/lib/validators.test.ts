@@ -19,12 +19,12 @@ describe("mobile validators smoke", () => {
   });
 
   it("rejects invalid manual scan values", () => {
-    expect(validateScanValue("123")).toBe("El documento debe tener entre 6 y 10 digitos.");
-    expect(validateDocument6to10("abcd")).toBe("El documento debe tener entre 6 y 10 digitos.");
+    expect(validateScanValue("123")).toBe("El documento debe tener entre 6 y 10 dígitos.");
+    expect(validateDocument6to10("abcd")).toBe("El documento debe tener entre 6 y 10 dígitos.");
   });
 
   it("enforces 10-digit phone numbers", () => {
     expect(validatePhone10("3001234567")).toBeNull();
-    expect(validatePhone10("30012")).toBe("El telefono debe tener exactamente 10 digitos.");
+    expect(validatePhone10("30012")).toBe("El teléfono debe tener exactamente 10 dígitos.");
   });
 });

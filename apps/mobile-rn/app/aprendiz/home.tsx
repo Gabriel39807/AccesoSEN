@@ -23,9 +23,9 @@ function normalizeEstado(raw?: string | null): "dentro" | "fuera" | "sin_registr
 }
 
 function stateCopy(estado: "dentro" | "fuera" | "sin_registros" | null) {
-  if (estado === "dentro") return { label: "Dentro", color: uiTheme.success, note: "Tu ultimo registro indica presencia activa en la sede.", hero: "Acceso activo y trazable" };
+  if (estado === "dentro") return { label: "Dentro", color: uiTheme.success, note: "Tu último registro indica presencia activa en la sede.", hero: "Acceso activo y trazable" };
   if (estado === "fuera") return { label: "Fuera", color: uiTheme.warn, note: "No hay un ingreso activo en este momento.", hero: "Listo para tu siguiente ingreso" };
-  if (estado === "sin_registros") return { label: "Sin registros", color: uiTheme.muted, note: "Aun no hay movimientos recientes asociados a tu perfil.", hero: "Aun no hay trazabilidad reciente" };
+  if (estado === "sin_registros") return { label: "Sin registros", color: uiTheme.muted, note: "Aún no hay movimientos recientes asociados a tu perfil.", hero: "Aún no hay trazabilidad reciente" };
   return { label: "No disponible", color: uiTheme.muted, note: "No fue posible consultar el estado actual.", hero: "Estado temporalmente no disponible" };
 }
 
@@ -119,22 +119,22 @@ export default function AprendizHome() {
               <Ionicons name="hardware-chip-outline" size={18} color={uiTheme.accentDeep} />
             </View>
             <Text style={{ color: uiTheme.ink, fontWeight: "900", fontSize: 22 }}>4</Text>
-            <Text style={{ color: uiTheme.inkSoft, lineHeight: 18 }}>Equipos maximos que puedes administrar desde tu perfil.</Text>
+            <Text style={{ color: uiTheme.inkSoft, lineHeight: 18 }}>Equipos máximos que puedes administrar desde tu perfil.</Text>
           </View>
           <View style={{ flex: 1, borderRadius: 22, padding: 14, backgroundColor: "rgba(15,23,42,0.92)", borderWidth: 1, borderColor: "rgba(15,23,42,0.16)", gap: 8 }}>
             <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)" }}>
               <Ionicons name="qr-code-outline" size={18} color="#ffffff" />
             </View>
             <Text style={{ color: "#ffffff", fontWeight: "900", fontSize: 22 }}>QR</Text>
-            <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 18 }}>Tu identificacion dinamica para control rapido en porteria.</Text>
+            <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 18 }}>Tu identificación dinámica para control rápido en portería.</Text>
           </View>
         </View>
-        <NoticeBanner tone="info" text="Mantener tus equipos y tu QR al dia reduce validaciones manuales y hace el ingreso mas fluido." />
+        <NoticeBanner tone="info" text="Mantener tus equipos y tu QR al día reduce validaciones manuales y hace el ingreso más fluido." />
       </FadeInCard>
 
       <FadeInCard delay={130} style={{ gap: 12 }}>
         <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-          Acciones rapidas
+          Acciones rápidas
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           {quickActions.map((action) => (
@@ -144,7 +144,7 @@ export default function AprendizHome() {
           ))}
           <View style={{ width: "48%" }}>
             <ModernButton
-              label="Cerrar sesion"
+              label="Cerrar sesión"
               tone="dark"
               icon="log-out-outline"
               onPress={async () => {

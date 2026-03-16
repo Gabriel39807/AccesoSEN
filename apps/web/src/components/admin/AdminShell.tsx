@@ -25,7 +25,7 @@ export default function AdminShell({
         { headers: { "X-Auth-Transport": "cookie" } }
       );
     } catch {
-      // best effort revocation
+      // Best effort revocation.
     }
     clearTokens();
     router.replace("/login");
@@ -42,7 +42,7 @@ export default function AdminShell({
     { href: "/admin/accesos", label: "Accesos", icon: <IconHistory className="h-4 w-4" /> },
     { href: "/admin/turnos", label: "Turnos", icon: <IconClock className="h-4 w-4" /> },
     ...(me?.rol === "superadmin"
-      ? [{ href: "/admin/control-center", label: "Control Center", icon: <IconUser className="h-4 w-4" /> }]
+      ? [{ href: "/admin/control-center", label: "Centro de control", icon: <IconUser className="h-4 w-4" /> }]
       : []),
   ] as const;
 
@@ -57,14 +57,16 @@ export default function AdminShell({
         <aside className="sticky top-5 hidden h-[calc(100vh-2.5rem)] w-64 shrink-0 rounded-3xl border border-white/65 bg-white/65 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.08)] backdrop-blur-xl lg:flex lg:flex-col xl:w-[17rem]">
           <div className="mb-6">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">SADI</div>
-            <div className="text-lg font-extrabold tracking-tight text-zinc-900">SADI</div>
-            <div className="mt-1 text-xs text-zinc-500">Panel administrador</div>
+            <div className="text-lg font-extrabold tracking-tight text-zinc-900">Panel administrativo</div>
+            <div className="mt-1 text-xs text-zinc-500">Operación centralizada por sede y por rol.</div>
           </div>
 
           <div className="mb-5 rounded-2xl border border-sky-100/90 bg-gradient-to-br from-sky-50/70 to-cyan-50/55 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Sesion actual</div>
-            <div className="mt-1 text-xs text-zinc-600">Gestion centralizada de usuarios, equipos y accesos.</div>
-            <div className="mt-3 truncate text-sm font-semibold text-zinc-900">{loadingMe ? "Cargando..." : nombreBonito || "Administrador"}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Sesión actual</div>
+            <div className="mt-1 text-xs text-zinc-600">Gestiona usuarios, equipos, accesos y turnos desde un solo lugar.</div>
+            <div className="mt-3 truncate text-sm font-semibold text-zinc-900">
+              {loadingMe ? "Cargando..." : nombreBonito || "Administrador"}
+            </div>
             <div className="mt-1 text-xs text-zinc-500">{loadingMe ? "" : `Rol: ${me?.rol ?? "admin"}`}</div>
           </div>
 
@@ -89,9 +91,9 @@ export default function AdminShell({
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white/70 px-4 py-3 text-sm font-semibold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
             >
               <IconLogout className="h-4 w-4" />
-              Cerrar sesion
+              Cerrar sesión
             </button>
-            <div className="mt-4 text-xs text-zinc-400">SADI 2026</div>
+            <div className="mt-4 text-xs text-zinc-400">SADI © 2026</div>
           </div>
         </aside>
 
