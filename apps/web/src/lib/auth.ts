@@ -1,25 +1,18 @@
 export type Tokens = { access: string; refresh: string };
 
-const ACCESS_KEY = "sadi_access";
-const REFRESH_KEY = "sadi_refresh";
+import { COOKIE_AUTH_MODE } from "./api-config.ts";
+
 let accessTokenMemory: string | null = null;
 
-/**
- * Acceso seguro a localStorage:
- * - Evita crashes en SSR (Server Components)
- * - Evita crashes si el navegador bloquea storage (modo incógnito / políticas)
- */
-function getStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
+export const AUTH_WEB_FLOW = "access-memory-plus-refresh-cookie";
+
+export function saveTokens(tokens: Tokens) {
+  const access = String(tokens?.access || "").trim() || null;
+  accessTokenMemory = access;
 }
 
-export function saveTokens(t: Tokens) {
-  accessTokenMemory = String(t?.access || "").trim() || null;
+export function setAccessToken(access: string | null) {
+  accessTokenMemory = access && access.trim() ? access.trim() : null;
 }
 
 export function getAccessToken(): string | null {
@@ -27,23 +20,10 @@ export function getAccessToken(): string | null {
 }
 
 export function getRefreshToken(): string | null {
-  const storage = getStorage();
-  if (!storage) return null;
-  try {
-    return storage.getItem(REFRESH_KEY);
-  } catch {
-    return null;
-  }
+  if (COOKIE_AUTH_MODE) return null;
+  return null;
 }
 
 export function clearTokens() {
   accessTokenMemory = null;
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(ACCESS_KEY);
-    storage.removeItem(REFRESH_KEY);
-  } catch {
-    // noop
-  }
 }

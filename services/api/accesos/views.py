@@ -12,7 +12,7 @@ import io
 import logging
 import secrets
 import time
-from datetime import date, timedelta
+from datetime import date
 from uuid import uuid4
 
 import qrcode
@@ -20,7 +20,6 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
-from django.forms.models import model_to_dict
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -37,6 +36,21 @@ from .domain.services.authorization import AuthorizationService
 from .domain.services.email_domain_service import EmailDomainService
 from .domain.services.policy_service import PolicyService
 from .domain.services.qr_service import QRParseError, QRService
+from .control_panel_support import (
+    active_control_panel_session_payload,
+    consume_control_panel_quota,
+    control_panel_otp_cache_key,
+    control_panel_passkey_cache_key,
+    control_panel_quota_state,
+    create_control_panel_session,
+    ensure_control_panel_quota_response,
+    json_safe,
+    record_control_panel_audit,
+    request_user_agent,
+    require_control_panel_reason_response,
+    require_control_panel_session_response,
+    snapshot_model,
+)
 from .error_codes import ErrorCode
 from .import_services import (
     ImportServiceError,
@@ -127,9 +141,16 @@ from .serializers import (
     UsuarioSerializer,
     ValidarDocumentoSerializer,
 )
+from .webauthn_flow import (
+    PASSKEY_AUTH_CHALLENGE_TTL,
+    PASSKEY_REGISTER_CHALLENGE_TTL,
+    resolve_webauthn_origin,
+    resolve_webauthn_rp_id,
+    webauthn_auth_cache_key,
+    webauthn_register_cache_key,
+)
+from .webauthn_guards import control_panel_passkey_disabled_response, passkey_auth_disabled_response
 
-PASSKEY_REGISTER_CHALLENGE_TTL = 10 * 60
-PASSKEY_AUTH_CHALLENGE_TTL = 5 * 60
 CONTROL_PANEL_SESSION_TTL_SEC = max(60, int(getattr(settings, "CONTROL_PANEL_SESSION_TTL_SEC", 15 * 60) or 15 * 60))
 CONTROL_PANEL_OTP_TTL_SEC = max(60, int(getattr(settings, "CONTROL_PANEL_OTP_TTL_SEC", 5 * 60) or 5 * 60))
 MAX_ADMINS_PER_SEDE = 4
@@ -141,151 +162,6 @@ GEMINI_RATE_LIMIT_ATTEMPTS = max(1, int(getattr(settings, "GEMINI_RATE_LIMIT_ATT
 GEMINI_RATE_LIMIT_WINDOW_SEC = max(10, int(getattr(settings, "GEMINI_RATE_LIMIT_WINDOW_SEC", 60) or 60))
 GEMINI_RATE_LIMIT_LOCK_SEC = max(10, int(getattr(settings, "GEMINI_RATE_LIMIT_LOCK_SEC", 60) or 60))
 logger = logging.getLogger(__name__)
-
-
-def _webauthn_register_cache_key(user_id: int, request_id: str) -> str:
-    return f"sadi:webauthn:register:{user_id}:{request_id}"
-
-
-def _webauthn_auth_cache_key(request_id: str) -> str:
-    return f"sadi:webauthn:auth:{request_id}"
-
-
-def _control_panel_otp_cache_key(user_id: int, request_id: str) -> str:
-    return f"sadi:control-panel:otp:{user_id}:{request_id}"
-
-
-def _control_panel_passkey_cache_key(user_id: int, request_id: str) -> str:
-    return f"sadi:control-panel:passkey:{user_id}:{request_id}"
-
-
-def _control_panel_reason(request) -> str:
-    raw_reason = str(request.headers.get("X-Control-Panel-Reason", "") or "").strip()
-    if not raw_reason:
-        raw_reason = str(request.query_params.get("reason", "") or "").strip()
-    return raw_reason
-
-
-def _require_control_panel_reason_response(request):
-    reason = _control_panel_reason(request)
-    if reason:
-        return None
-    return error_response(
-        code=ErrorCode.VALIDATION_ERROR,
-        message="Debes indicar un motivo del cambio en X-Control-Panel-Reason.",
-        status_code=status.HTTP_400_BAD_REQUEST,
-        field="reason",
-    )
-
-
-def _json_safe(value):
-    if isinstance(value, dict):
-        return {str(key): _json_safe(val) for key, val in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, date):
-        return value.isoformat()
-    if hasattr(value, "isoformat"):
-        try:
-            return value.isoformat()
-        except Exception:
-            return value
-    return value
-
-
-def _snapshot_model(instance, serializer_class=None):
-    if instance is None:
-        return None
-    if serializer_class is not None:
-        return _json_safe(serializer_class(instance).data)
-    return _json_safe(model_to_dict(instance))
-
-
-def _control_panel_quota_state(user: Usuario, category: str):
-    limit = _control_panel_category_limit(category)
-    today = timezone.localdate()
-    counter = ControlPanelQuotaCounter.objects.filter(user=user, category=category, window_start=today).first()
-    used = int(getattr(counter, "count", 0) or 0)
-    remaining = max(0, limit - used)
-    return {
-        "category": category,
-        "limit": limit,
-        "used": used,
-        "remaining": remaining,
-        "window_start": today.isoformat(),
-        "last_action_at": (
-            getattr(counter, "last_action_at", None).isoformat() if getattr(counter, "last_action_at", None) else None
-        ),
-    }
-
-
-def _ensure_control_panel_quota_response(user: Usuario, category: str):
-    state = _control_panel_quota_state(user, category)
-    if state["used"] < state["limit"]:
-        return None
-    return error_response(
-        code=ErrorCode.VALIDATION_ERROR,
-        message=f"Se alcanzo la cuota diaria para {category}.",
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail=state,
-        field="quota",
-    )
-
-
-def _consume_control_panel_quota(user: Usuario, category: str):
-    today = timezone.localdate()
-    with transaction.atomic():
-        counter, _ = ControlPanelQuotaCounter.objects.select_for_update().get_or_create(
-            user=user,
-            category=category,
-            window_start=today,
-            defaults={"count": 0},
-        )
-        limit = _control_panel_category_limit(category)
-        if counter.count >= limit:
-            return None
-        counter.count += 1
-        counter.last_action_at = timezone.now()
-        counter.save(update_fields=["count", "last_action_at"])
-        return counter
-
-
-def _record_control_panel_audit(
-    *,
-    request,
-    category: str,
-    action: str,
-    target_type: str,
-    target_id,
-    before_json,
-    after_json,
-):
-    session = getattr(request, "control_panel_session", None) or resolve_control_panel_session(request)
-    return ControlPanelAuditEvent.objects.create(
-        actor=getattr(request, "user", None),
-        session=session,
-        action=action,
-        category=category,
-        target_type=target_type,
-        target_id=str(target_id or ""),
-        before_json=_json_safe(before_json),
-        after_json=_json_safe(after_json),
-        reason=_control_panel_reason(request),
-        ip_address=str(get_client_ip(request) or ""),
-    )
-
-
-def _control_panel_category_limit(category: str) -> int:
-    setting_by_category = {
-        ControlPanelQuotaCounter.Category.BRANDING: ("CONTROL_PANEL_BRANDING_DAILY_LIMIT", 10),
-        ControlPanelQuotaCounter.Category.DOMAINS: ("CONTROL_PANEL_DOMAINS_DAILY_LIMIT", 5),
-        ControlPanelQuotaCounter.Category.POLICIES: ("CONTROL_PANEL_POLICIES_DAILY_LIMIT", 3),
-        ControlPanelQuotaCounter.Category.PERMISSIONS: ("CONTROL_PANEL_PERMISSIONS_DAILY_LIMIT", 2),
-        ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT: ("CONTROL_PANEL_SEDE_DAILY_LIMIT", 5),
-    }
-    setting_name, default = setting_by_category.get(category, ("CONTROL_PANEL_GENERIC_DAILY_LIMIT", 1))
-    return max(1, int(getattr(settings, setting_name, default) or default))
-
 
 def _apply_branding_preset_to_config(*, preset: BrandingPreset, config: ConfiguracionSistema):
     tokens = dict(getattr(preset, "tokens_json", {}) or {})
@@ -306,45 +182,6 @@ def _effective_config_payload(config: ConfiguracionSistema, *, preset: BrandingP
             payload[key] = value
         payload["branding_preset"] = preset.slug
     return payload
-
-
-def _request_host_without_port(request) -> str:
-    if request is None:
-        return ""
-    host = str(request.get_host() or "").strip()
-    if not host:
-        return ""
-    return host.split(":")[0].strip()
-
-
-def _request_origin(request) -> str:
-    if request is None:
-        return ""
-    host = str(request.get_host() or "").strip()
-    if not host:
-        return ""
-    proto = str(request.META.get("HTTP_X_FORWARDED_PROTO", "") or "").split(",")[0].strip().lower()
-    if proto not in {"http", "https"}:
-        proto = str(getattr(request, "scheme", "http") or "http").lower()
-    return f"{proto}://{host}"
-
-
-def _request_user_agent(request) -> str:
-    return str(request.META.get("HTTP_USER_AGENT", "") or "").strip()
-
-
-def _resolve_webauthn_rp_id(request) -> str:
-    configured = str(getattr(settings, "WEBAUTHN_RP_ID", "") or "").strip()
-    if configured:
-        return configured
-    return _request_host_without_port(request)
-
-
-def _resolve_webauthn_origin(request) -> str:
-    configured = str(getattr(settings, "WEBAUTHN_ORIGIN", "") or "").strip()
-    if configured:
-        return configured
-    return _request_origin(request)
 
 
 def _scope_sede_id(user: Usuario) -> int | None:
@@ -398,58 +235,6 @@ def _require_permission_response(user: Usuario | None, perm_code: str, *, messag
     return error_response(
         code=ErrorCode.PERMISSION_DENIED,
         message=message,
-        status_code=status.HTTP_403_FORBIDDEN,
-    )
-
-
-def _active_control_panel_session_payload(session: ControlPanelSession | None) -> dict:
-    if not session:
-        return {"active": False, "session": None}
-    return {
-        "active": True,
-        "session": {
-            "id": str(session.id),
-            "verified_by": session.verified_by,
-            "granted_at": session.granted_at.isoformat() if session.granted_at else None,
-            "expires_at": session.expires_at.isoformat() if session.expires_at else None,
-            "last_used_at": session.last_used_at.isoformat() if session.last_used_at else None,
-        },
-    }
-
-
-def _revoke_active_control_panel_sessions(user: Usuario):
-    if not user:
-        return
-    ControlPanelSession.objects.filter(
-        user=user,
-        revoked_at__isnull=True,
-        expires_at__gt=timezone.now(),
-    ).update(revoked_at=timezone.now())
-
-
-def _create_control_panel_session(request, user: Usuario, *, verified_by: str) -> ControlPanelSession:
-    _revoke_active_control_panel_sessions(user)
-    runtime_role = AuthorizationService.runtime_role_for_user(user)
-    return ControlPanelSession.objects.create(
-        user=user,
-        verified_by=verified_by,
-        expires_at=timezone.now() + timedelta(seconds=CONTROL_PANEL_SESSION_TTL_SEC),
-        ip_address=str(get_client_ip(request) or ""),
-        user_agent=_request_user_agent(request),
-        scope_snapshot={
-            "runtime_role": runtime_role,
-            "permissions": sorted(list(AuthorizationService.role_codes(user))),
-        },
-    )
-
-
-def _require_control_panel_session_response(request, user: Usuario | None):
-    session = resolve_control_panel_session(request)
-    if session is not None:
-        return None
-    return error_response(
-        code=ErrorCode.PERMISSION_DENIED,
-        message="Se requiere una sesion reforzada vigente del panel de control.",
         status_code=status.HTTP_403_FORBIDDEN,
     )
 
@@ -890,31 +675,31 @@ class ConfiguracionSistemaView(APIView):
         )
         if denied:
             return denied
-        denied = _require_control_panel_session_response(request, user)
+        denied = require_control_panel_session_response(request, user)
         if denied:
             return denied
-        denied = _require_control_panel_reason_response(request)
+        denied = require_control_panel_reason_response(request)
         if denied:
             return denied
-        denied = _ensure_control_panel_quota_response(user, ControlPanelQuotaCounter.Category.BRANDING)
+        denied = ensure_control_panel_quota_response(user, ControlPanelQuotaCounter.Category.BRANDING)
         if denied:
             return denied
 
         cfg = ConfiguracionSistema.get_solo()
-        before_json = _snapshot_model(cfg, ConfiguracionSistemaSerializer)
+        before_json = snapshot_model(cfg, ConfiguracionSistemaSerializer)
         serializer = ConfiguracionSistemaSerializer(cfg, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        finalized = _consume_control_panel_quota(user, ControlPanelQuotaCounter.Category.BRANDING)
+        finalized = consume_control_panel_quota(user, ControlPanelQuotaCounter.Category.BRANDING)
         if finalized is None:
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
                 message="Se alcanzo la cuota diaria para branding.",
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=_control_panel_quota_state(user, ControlPanelQuotaCounter.Category.BRANDING),
+                detail=control_panel_quota_state(user, ControlPanelQuotaCounter.Category.BRANDING),
                 field="quota",
             )
-        _record_control_panel_audit(
+        record_control_panel_audit(
             request=request,
             category=ControlPanelQuotaCounter.Category.BRANDING,
             action=ControlPanelAuditEvent.Action.UPDATE,
@@ -931,7 +716,7 @@ class ControlPanelSessionStatusView(APIView):
 
     def get(self, request):
         session = resolve_control_panel_session(request)
-        return ok_response(_active_control_panel_session_payload(session))
+        return ok_response(active_control_panel_session_payload(session))
 
 
 class ControlPanelBrandingPresetListView(APIView):
@@ -945,7 +730,7 @@ class ControlPanelBrandingPresetListView(APIView):
         )
         if denied:
             return denied
-        denied = _require_control_panel_session_response(request, request.user)
+        denied = require_control_panel_session_response(request, request.user)
         if denied:
             return denied
         presets = BrandingPreset.objects.filter(is_active=True).order_by("name")
@@ -963,7 +748,7 @@ class ControlPanelBrandingConfigView(APIView):
         )
         if denied:
             return denied
-        denied = _require_control_panel_session_response(request, request.user)
+        denied = require_control_panel_session_response(request, request.user)
         if denied:
             return denied
         config = TenantBrandingConfig.get_solo()
@@ -977,13 +762,13 @@ class ControlPanelBrandingConfigView(APIView):
         )
         if denied:
             return denied
-        denied = _require_control_panel_session_response(request, request.user)
+        denied = require_control_panel_session_response(request, request.user)
         if denied:
             return denied
-        denied = _require_control_panel_reason_response(request)
+        denied = require_control_panel_reason_response(request)
         if denied:
             return denied
-        denied = _ensure_control_panel_quota_response(request.user, ControlPanelQuotaCounter.Category.BRANDING)
+        denied = ensure_control_panel_quota_response(request.user, ControlPanelQuotaCounter.Category.BRANDING)
         if denied:
             return denied
 
@@ -998,16 +783,16 @@ class ControlPanelBrandingConfigView(APIView):
         _apply_branding_preset_to_config(preset=preset, config=ConfiguracionSistema.get_solo())
         after_json = TenantBrandingConfigSerializer(config).data
 
-        finalized = _consume_control_panel_quota(request.user, ControlPanelQuotaCounter.Category.BRANDING)
+        finalized = consume_control_panel_quota(request.user, ControlPanelQuotaCounter.Category.BRANDING)
         if finalized is None:
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
                 message="Se alcanzo la cuota diaria para branding.",
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=_control_panel_quota_state(request.user, ControlPanelQuotaCounter.Category.BRANDING),
+                detail=control_panel_quota_state(request.user, ControlPanelQuotaCounter.Category.BRANDING),
                 field="quota",
             )
-        _record_control_panel_audit(
+        record_control_panel_audit(
             request=request,
             category=ControlPanelQuotaCounter.Category.BRANDING,
             action=ControlPanelAuditEvent.Action.UPDATE,
@@ -1025,7 +810,7 @@ class ControlPanelSessionCloseView(APIView):
     def post(self, request):
         session = resolve_control_panel_session(request)
         if session is None:
-            return ok_response(_active_control_panel_session_payload(None))
+            return ok_response(active_control_panel_session_payload(None))
         session.revoked_at = timezone.now()
         session.save(update_fields=["revoked_at"])
         return ok_response({"active": False, "session": None, "mensaje": "Sesion del panel cerrada correctamente."})
@@ -1078,20 +863,20 @@ class ControlPanelSessionRequestOtpView(APIView):
         code = generate_otp_code()
         salt = secrets.token_hex(16)
         cache.set(
-            _control_panel_otp_cache_key(user.id, request_id),
+            control_panel_otp_cache_key(user.id, request_id),
             {
                 "salt": salt,
                 "code_hash": hash_code(salt, code),
                 "attempts": 0,
                 "ip": str(ip or ""),
-                "user_agent": _request_user_agent(request),
+                "user_agent": request_user_agent(request),
             },
             timeout=CONTROL_PANEL_OTP_TTL_SEC,
         )
         try:
             send_control_panel_otp_email(user.email, code)
         except Exception:
-            cache.delete(_control_panel_otp_cache_key(user.id, request_id))
+            cache.delete(control_panel_otp_cache_key(user.id, request_id))
             return error_response(
                 code=ErrorCode.NETWORK_ERROR,
                 message="No se pudo enviar el codigo OTP del panel.",
@@ -1121,7 +906,7 @@ class ControlPanelSessionVerifyOtpView(APIView):
 
         s = ControlPanelSessionOtpVerifySerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        key = _control_panel_otp_cache_key(user.id, s.validated_data["request_id"])
+        key = control_panel_otp_cache_key(user.id, s.validated_data["request_id"])
         payload = cache.get(key) or {}
         if not payload:
             return error_response(
@@ -1148,10 +933,15 @@ class ControlPanelSessionVerifyOtpView(APIView):
             )
 
         cache.delete(key)
-        session = _create_control_panel_session(request, user, verified_by=ControlPanelSession.VerifiedBy.OTP)
+        session = create_control_panel_session(
+            request,
+            user,
+            verified_by=ControlPanelSession.VerifiedBy.OTP,
+            session_ttl_sec=CONTROL_PANEL_SESSION_TTL_SEC,
+        )
         return ok_response(
             {
-                **_active_control_panel_session_payload(session),
+                **active_control_panel_session_payload(session),
                 "mensaje": "Sesion del panel abierta correctamente.",
             }
         )
@@ -1161,6 +951,8 @@ class ControlPanelSessionRequestPasskeyView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        if not bool(getattr(settings, "WEBAUTHN_MOCK", True)):
+            return control_panel_passkey_disabled_response()
         user: Usuario = request.user
         denied = _require_permission_response(
             user,
@@ -1180,7 +972,7 @@ class ControlPanelSessionRequestPasskeyView(APIView):
         request_id = uuid4().hex
         challenge = secrets.token_urlsafe(32)
         cache.set(
-            _control_panel_passkey_cache_key(user.id, request_id),
+            control_panel_passkey_cache_key(user.id, request_id),
             {"challenge": challenge},
             timeout=PASSKEY_AUTH_CHALLENGE_TTL,
         )
@@ -1188,7 +980,7 @@ class ControlPanelSessionRequestPasskeyView(APIView):
             {
                 "request_id": request_id,
                 "challenge": challenge,
-                "rp_id": _resolve_webauthn_rp_id(request),
+                "rp_id": resolve_webauthn_rp_id(request),
                 "timeout": 60000,
                 "allow_credentials": credentials,
                 "mock": bool(getattr(settings, "WEBAUTHN_MOCK", True)),
@@ -1200,6 +992,8 @@ class ControlPanelSessionVerifyPasskeyView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        if not bool(getattr(settings, "WEBAUTHN_MOCK", True)):
+            return control_panel_passkey_disabled_response()
         user: Usuario = request.user
         denied = _require_permission_response(
             user,
@@ -1211,7 +1005,7 @@ class ControlPanelSessionVerifyPasskeyView(APIView):
 
         s = ControlPanelSessionPasskeyVerifySerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        key = _control_panel_passkey_cache_key(user.id, s.validated_data["request_id"])
+        key = control_panel_passkey_cache_key(user.id, s.validated_data["request_id"])
         payload = cache.get(key) or {}
         if not payload:
             return error_response(
@@ -1242,10 +1036,15 @@ class ControlPanelSessionVerifyPasskeyView(APIView):
         credential.sign_count = int(credential.sign_count or 0) + 1
         credential.save(update_fields=["last_used_at", "sign_count"])
         cache.delete(key)
-        session = _create_control_panel_session(request, user, verified_by=ControlPanelSession.VerifiedBy.PASSKEY)
+        session = create_control_panel_session(
+            request,
+            user,
+            verified_by=ControlPanelSession.VerifiedBy.PASSKEY,
+            session_ttl_sec=CONTROL_PANEL_SESSION_TTL_SEC,
+        )
         return ok_response(
             {
-                **_active_control_panel_session_payload(session),
+                **active_control_panel_session_payload(session),
                 "mensaje": "Sesion del panel abierta correctamente.",
             }
         )
@@ -1780,7 +1579,7 @@ class ControlPanelMutationMixin:
     control_panel_target_type: str | None = None
 
     def _control_panel_snapshot(self, instance):
-        return _json_safe(self.get_serializer(instance).data)
+        return json_safe(self.get_serializer(instance).data)
 
     def _control_panel_target_name(self) -> str:
         if self.control_panel_target_type:
@@ -1789,22 +1588,22 @@ class ControlPanelMutationMixin:
         return getattr(getattr(model, "_meta", None), "model_name", "resource")
 
     def _preflight_control_panel_mutation(self, request):
-        denied = _require_control_panel_reason_response(request)
+        denied = require_control_panel_reason_response(request)
         if denied:
             return denied
-        return _ensure_control_panel_quota_response(request.user, self.control_panel_category)
+        return ensure_control_panel_quota_response(request.user, self.control_panel_category)
 
     def _finalize_control_panel_mutation(self, request, *, action: str, target_id, before_json, after_json):
-        counter = _consume_control_panel_quota(request.user, self.control_panel_category)
+        counter = consume_control_panel_quota(request.user, self.control_panel_category)
         if counter is None:
             return error_response(
                 code=ErrorCode.VALIDATION_ERROR,
                 message=f"Se alcanzo la cuota diaria para {self.control_panel_category}.",
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=_control_panel_quota_state(request.user, self.control_panel_category),
+                detail=control_panel_quota_state(request.user, self.control_panel_category),
                 field="quota",
             )
-        _record_control_panel_audit(
+        record_control_panel_audit(
             request=request,
             category=self.control_panel_category,
             action=action,
@@ -1884,10 +1683,12 @@ class ControlPanelMutationMixin:
 class SedeViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
     serializer_class = SedeSerializer
     queryset = Sede.objects.all().order_by("name")
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated, RequiresPermission]
     control_panel_category = ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT
     control_panel_target_type = "sede"
     permission_map = {
+        "list": "sede.read",
+        "retrieve": "sede.read",
         "create": "sede.manage",
         "update": "sede.manage",
         "partial_update": "sede.manage",
@@ -1896,7 +1697,7 @@ class SedeViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
-            return [AllowAny()]
+            return [IsAuthenticated(), RequiresPermission()]
         return [IsAuthenticated(), RequiresPermission(), RequiresControlPanelSession()]
 
     def get_queryset(self):
@@ -1914,9 +1715,7 @@ class SedeViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
             active_filter = raw_active_clean == "true"
 
         if not user or not getattr(user, "is_authenticated", False):
-            if active_filter is False:
-                return qs.none()
-            return qs.filter(is_active=True)
+            return qs.none()
 
         if is_superadmin(user):
             if include_inactive:
@@ -2168,7 +1967,7 @@ class AuditEventsView(APIView):
         )
         if denied:
             return denied
-        denied = _require_control_panel_session_response(request, request.user)
+        denied = require_control_panel_session_response(request, request.user)
         if denied:
             return denied
 
@@ -2268,12 +2067,12 @@ class ControlPanelQuotaStatusView(APIView):
         )
         if denied:
             return denied
-        denied = _require_control_panel_session_response(request, request.user)
+        denied = require_control_panel_session_response(request, request.user)
         if denied:
             return denied
 
         results = [
-            _control_panel_quota_state(request.user, category)
+            control_panel_quota_state(request.user, category)
             for category in [
                 ControlPanelQuotaCounter.Category.BRANDING,
                 ControlPanelQuotaCounter.Category.DOMAINS,
@@ -4140,7 +3939,7 @@ class PasskeyRegisterOptionsView(APIView):
         request_id = uuid4().hex
         challenge = secrets.token_urlsafe(32)
         cache.set(
-            _webauthn_register_cache_key(user.id, request_id),
+            webauthn_register_cache_key(user.id, request_id),
             {"challenge": challenge, "nickname": s.validated_data.get("nickname", "")},
             timeout=PASSKEY_REGISTER_CHALLENGE_TTL,
         )
@@ -4148,8 +3947,8 @@ class PasskeyRegisterOptionsView(APIView):
         payload = {
             "request_id": request_id,
             "challenge": challenge,
-            "rp": {"name": getattr(settings, "WEBAUTHN_RP_NAME", "SADI"), "id": _resolve_webauthn_rp_id(request)},
-            "origin": _resolve_webauthn_origin(request),
+            "rp": {"name": getattr(settings, "WEBAUTHN_RP_NAME", "SADI"), "id": resolve_webauthn_rp_id(request)},
+            "origin": resolve_webauthn_origin(request),
             "user": {
                 "id": str(user.id),
                 "name": user.username,
@@ -4172,7 +3971,7 @@ class PasskeyRegisterVerifyView(APIView):
 
         user: Usuario = request.user
         request_id = s.validated_data["request_id"]
-        key = _webauthn_register_cache_key(user.id, request_id)
+        key = webauthn_register_cache_key(user.id, request_id)
         saved = cache.get(key) or {}
         if not saved:
             return error_response(
@@ -4218,6 +4017,9 @@ class PasskeyAuthOptionsView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if not bool(getattr(settings, "WEBAUTHN_MOCK", True)):
+            return passkey_auth_disabled_response()
+
         s = PasskeyAuthOptionsSerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
@@ -4234,7 +4036,7 @@ class PasskeyAuthOptionsView(APIView):
         request_id = uuid4().hex
         challenge = secrets.token_urlsafe(32)
         cache.set(
-            _webauthn_auth_cache_key(request_id),
+            webauthn_auth_cache_key(request_id),
             {
                 "challenge": challenge,
                 "username": login_identifier,  # compatibilidad con payloads previos
@@ -4247,7 +4049,7 @@ class PasskeyAuthOptionsView(APIView):
             {
                 "request_id": request_id,
                 "challenge": challenge,
-                "rp_id": _resolve_webauthn_rp_id(request),
+                "rp_id": resolve_webauthn_rp_id(request),
                 "timeout": 60000,
                 "allow_credentials": allow_credentials,
                 "mock": bool(getattr(settings, "WEBAUTHN_MOCK", True)),
@@ -4259,11 +4061,14 @@ class PasskeyAuthVerifyView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if not bool(getattr(settings, "WEBAUTHN_MOCK", True)):
+            return passkey_auth_disabled_response()
+
         s = PasskeyAuthVerifySerializer(data=request.data)
         s.is_valid(raise_exception=True)
 
         request_id = s.validated_data["request_id"]
-        key = _webauthn_auth_cache_key(request_id)
+        key = webauthn_auth_cache_key(request_id)
         payload = cache.get(key) or {}
         if not payload:
             return error_response(

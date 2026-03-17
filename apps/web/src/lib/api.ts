@@ -6,105 +6,11 @@
  * - Normalizar respuestas del backend con Zod para evitar errores de render.
  * - Exponer DTOs tipados via `z.infer` como contrato de datos.
  */
-
 import axios, { AxiosHeaders } from "axios";
 import { z } from "zod";
-import { clearTokens, getAccessToken, getRefreshToken, saveTokens } from "./auth";
+import { clearTokens, getAccessToken, saveTokens } from "./auth";
+import { API_BASE, API_TIMEOUT_MS, COOKIE_AUTH_MODE, joinApiPath } from "./api-config";
 
-const IS_PRODUCTION_BUILD = process.env.NODE_ENV === "production";
-const ENFORCE_DEPLOY_API_URL_GUARD =
-  IS_PRODUCTION_BUILD &&
-  (process.env.VERCEL === "1" || process.env.CI === "true" || process.env.STRICT_PUBLIC_API_URL === "true");
-const DEPLOY_DEFAULT_API_URL = normalizeApiBaseUrl(
-  process.env.NEXT_PUBLIC_DEPLOY_DEFAULT_API_URL || "https://sadi-api-genm.onrender.com"
-);
-
-function normalizeApiBaseUrl(value: string): string {
-  const trimmed = (value || "").trim().replace(/\/+$/, "");
-  if (!trimmed) return "";
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (trimmed.startsWith("/")) return trimmed;
-  return `https://${trimmed}`;
-}
-
-function isLoopbackHost(value: string): boolean {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value, "https://placeholder.invalid");
-    return ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsed.hostname);
-  } catch {
-    return /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(value);
-  }
-}
-
-function isSupabaseProjectUrl(value: string): boolean {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value, "https://placeholder.invalid");
-    return parsed.hostname.endsWith(".supabase.co");
-  } catch {
-    return false;
-  }
-}
-
-function isPlaceholderApiHost(value: string): boolean {
-  if (!value) return false;
-  try {
-    const parsed = new URL(value, "https://placeholder.invalid");
-    const host = parsed.hostname.toLowerCase();
-    return (
-      host === "api.tu-dominio.com" ||
-      host.endsWith(".tu-dominio.com") ||
-      host === "tu-dominio.com" ||
-      host === "example.com" ||
-      host.endsWith(".example.com")
-    );
-  } catch {
-    return /tu-dominio\.com|example\.com/i.test(value);
-  }
-}
-
-const RAW_API_BASE = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
-const COOKIE_AUTH_MODE =
-  String(process.env.NEXT_PUBLIC_AUTH_COOKIE_MODE || "true").trim().toLowerCase() !== "false";
-const API_TIMEOUT_MS = (() => {
-  const raw = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || 20000);
-  if (!Number.isFinite(raw)) return 20000;
-  return Math.max(5000, Math.trunc(raw));
-})();
-
-function reportApiBaseGuard(reason: string) {
-  if (!ENFORCE_DEPLOY_API_URL_GUARD || typeof console === "undefined") return;
-  console.error(`[api-config] ${reason} Usando fallback ${DEPLOY_DEFAULT_API_URL}.`);
-}
-
-function resolveApiBaseUrl(): string {
-  if (!ENFORCE_DEPLOY_API_URL_GUARD) return RAW_API_BASE;
-  if (!RAW_API_BASE) {
-    reportApiBaseGuard("Falta NEXT_PUBLIC_API_URL en produccion.");
-    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
-  }
-  if (isLoopbackHost(RAW_API_BASE)) {
-    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: localhost/loopback.");
-    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
-  }
-  if (isSupabaseProjectUrl(RAW_API_BASE)) {
-    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: apunta a *.supabase.co.");
-    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
-  }
-  if (isPlaceholderApiHost(RAW_API_BASE)) {
-    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: dominio placeholder.");
-    return DEPLOY_DEFAULT_API_URL || RAW_API_BASE;
-  }
-  return RAW_API_BASE;
-}
-
-function joinApiPath(path: string): string {
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  return API_BASE ? `${API_BASE}${cleanPath}` : cleanPath;
-}
-
-const API_BASE = resolveApiBaseUrl();
 export const api = axios.create({
   baseURL: API_BASE || undefined,
   withCredentials: COOKIE_AUTH_MODE,
@@ -305,20 +211,15 @@ let refreshing: Promise<string | null> | null = null;
 async function refreshAccessToken(): Promise<string | null> {
   if (!refreshing) {
     refreshing = (async () => {
-      const refresh = getRefreshToken();
-      const payload: Record<string, string> = {};
-      if (refresh) payload.refresh = refresh;
-      if (COOKIE_AUTH_MODE) payload.auth_transport = "cookie";
-      if (!refresh && !COOKIE_AUTH_MODE) return null;
+      const payload: Record<string, string> = { auth_transport: "cookie" };
       const r = await axios.post(joinApiPath("/api/token/refresh/"), payload, {
         withCredentials: COOKIE_AUTH_MODE,
-        headers: COOKIE_AUTH_MODE ? { "X-Auth-Transport": "cookie" } : undefined,
+        headers: { "X-Auth-Transport": "cookie" },
         timeout: API_TIMEOUT_MS,
       });
       const nextAccess = r?.data?.access as string | undefined;
-      const nextRefresh = (r?.data?.refresh as string | undefined) || refresh;
       if (!nextAccess) return null;
-      saveTokens({ access: nextAccess, refresh: nextRefresh || "" });
+      saveTokens({ access: nextAccess, refresh: "" });
       return nextAccess;
     })().finally(() => {
       refreshing = null;

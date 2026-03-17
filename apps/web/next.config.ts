@@ -1,4 +1,17 @@
 import type { NextConfig } from "next";
+import { normalizeApiBaseUrl } from "./src/lib/api-config";
+
+const isProduction = process.env.NODE_ENV === "production";
+const apiBaseUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
+const allowedConnectSources = ["'self'"];
+
+if (apiBaseUrl) {
+  allowedConnectSources.push(apiBaseUrl);
+}
+
+if (!isProduction) {
+  allowedConnectSources.push("http://127.0.0.1:3000", "http://localhost:3000", "ws://127.0.0.1:3000", "ws://localhost:3000");
+}
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "DENY" },
@@ -9,21 +22,23 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
+      isProduction ? "script-src 'self' 'unsafe-inline'" : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self' data:",
       "img-src 'self' data: blob: https:",
-      "connect-src 'self' http: https: ws: wss:",
+      `connect-src ${allowedConnectSources.join(" ")}`,
       "frame-src 'self' https://view.officeapps.live.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      "object-src 'none'",
     ].join("; "),
   },
 ];
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   allowedDevOrigins: ["http://172.24.160.1:3000"],
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];

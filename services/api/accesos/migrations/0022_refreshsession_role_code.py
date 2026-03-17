@@ -14,6 +14,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="refreshsession",
-            index=models.Index(fields=["user", "role_code"], name="accesos_ref_user_rol_a1f86f_idx"),
+            index=models.Index(fields=["user", "role_code"], name="acc_ref_usr_role_idx"),
         ),
     ]

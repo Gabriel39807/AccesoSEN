@@ -307,6 +307,8 @@ class AllowedEmailDomain(models.Model):
 
 
 class Equipo(models.Model):
+    HARD_MAX_PER_APRENDIZ = 4
+
     class Estado(models.TextChoices):
         PENDIENTE = "pendiente", "Pendiente"
         APROBADO = "aprobado", "Aprobado"
@@ -333,6 +335,19 @@ class Equipo(models.Model):
     }
 
     def clean(self):
+        if owner_id := getattr(self, "propietario_id", None):
+            existing_qs = type(self).objects.filter(propietario_id=owner_id)
+            if self.pk:
+                existing_qs = existing_qs.exclude(pk=self.pk)
+            if existing_qs.count() >= self.HARD_MAX_PER_APRENDIZ:
+                raise ValidationError(
+                    {
+                        "equipos": (
+                            f"No se pueden registrar mas de {self.HARD_MAX_PER_APRENDIZ} equipos por aprendiz."
+                        )
+                    }
+                )
+
         if self.pk:
             previous_estado = (
                 type(self).objects.filter(pk=self.pk).values_list("estado", flat=True).first()
@@ -604,7 +619,7 @@ class RefreshSession(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "device_id"]),
-            models.Index(fields=["user", "role_code"], name="accesos_ref_user_rol_a1f86f_idx"),
+            models.Index(fields=["user", "role_code"], name="acc_ref_usr_role_idx"),
             models.Index(fields=["user", "expires_at"]),
             models.Index(fields=["device_id", "expires_at"]),
             models.Index(fields=["revoked_at"]),

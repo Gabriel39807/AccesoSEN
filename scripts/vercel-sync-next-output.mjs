@@ -8,12 +8,6 @@ const sourceNext = path.join(webRoot, ".next");
 const targetNext = path.join(repoRoot, ".next");
 const sourcePublic = path.join(webRoot, "public");
 const targetPublic = path.join(repoRoot, "public");
-const sourceStandaloneNodeModules = path.join(sourceStandalone, "node_modules");
-const targetNodeModules = path.join(repoRoot, "node_modules");
-const sourceStandaloneServer = path.join(sourceStandalone, "server.js");
-const targetStandaloneServer = path.join(repoRoot, "server.js");
-const sourceStandalonePackageJson = path.join(sourceStandalone, "package.json");
-const targetStandalonePackageJson = path.join(repoRoot, "package.json");
 
 function copyDir(sourceDir, targetDir, label) {
   if (!fs.existsSync(sourceDir)) {
@@ -45,12 +39,13 @@ function copyFileIfExists(sourceFile, targetFile, label) {
 }
 
 copyDir(sourceNext, targetNext, "apps/web/.next to root/.next");
-copyDir(sourceStandaloneNodeModules, targetNodeModules, "apps/web/.next/standalone/node_modules to root/node_modules");
-copyFileIfExists(sourceStandaloneServer, targetStandaloneServer, "apps/web/.next/standalone/server.js to root/server.js");
-copyFileIfExists(sourceStandalonePackageJson, targetStandalonePackageJson, "apps/web/.next/standalone/package.json to root/package.json");
 
 if (fs.existsSync(sourcePublic)) {
   copyDir(sourcePublic, targetPublic, "apps/web/public to root/public");
 }
 
-console.log("[vercel-build] Synced Next.js build output and standalone runtime artifacts to repository root.");
+if (fs.existsSync(sourceStandalone)) {
+  console.log("[vercel-build] Skipped standalone runtime sync; Vercel uses the copied .next output directly.");
+}
+
+console.log("[vercel-build] Synced Next.js build output to repository root.");
