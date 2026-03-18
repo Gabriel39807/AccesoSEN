@@ -8,6 +8,8 @@ const sourceNext = path.join(webRoot, ".next");
 const targetNext = path.join(repoRoot, ".next");
 const sourcePublic = path.join(webRoot, "public");
 const targetPublic = path.join(repoRoot, "public");
+const sourceStandaloneNodeModules = path.join(sourceStandalone, "node_modules");
+const targetNodeModules = path.join(repoRoot, "node_modules");
 
 function copyDir(sourceDir, targetDir, label) {
   if (!fs.existsSync(sourceDir)) {
@@ -44,8 +46,10 @@ if (fs.existsSync(sourcePublic)) {
   copyDir(sourcePublic, targetPublic, "apps/web/public to root/public");
 }
 
-if (fs.existsSync(sourceStandalone)) {
-  console.log("[vercel-build] Skipped standalone runtime sync; Vercel uses the copied .next output directly.");
+if (fs.existsSync(sourceStandaloneNodeModules)) {
+  copyDir(sourceStandaloneNodeModules, targetNodeModules, "apps/web/.next/standalone/node_modules to root/node_modules");
+} else if (fs.existsSync(sourceStandalone)) {
+  console.log("[vercel-build] Standalone directory present but node_modules trace was not found.");
 }
 
 console.log("[vercel-build] Synced Next.js build output to repository root.");
