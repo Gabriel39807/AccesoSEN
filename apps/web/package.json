@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint --rule \"@typescript-eslint/no-explicit-any: off\"",
     "typecheck": "tsc --noEmit",
+    "test:unit": "node --no-warnings --import ./scripts/register-ts-extensionless-resolver.mjs scripts/run-unit-tests.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed"
   },

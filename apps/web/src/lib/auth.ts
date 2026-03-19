@@ -1,6 +1,6 @@
 export type Tokens = { access: string; refresh: string };
 
-import { COOKIE_AUTH_MODE } from "./api-config.ts";
+import { COOKIE_AUTH_MODE } from "./api-config";
 
 let accessTokenMemory: string | null = null;
 
