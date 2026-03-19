@@ -95,8 +95,8 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      - name: Mobile smoke tests
-        run: npm run test:smoke
+      - name: Web unit tests
+        run: npm run test:unit
       - name: Build
         run: npm run build
       - name: Install Playwright browser

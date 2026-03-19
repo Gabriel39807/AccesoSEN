@@ -82,3 +82,10 @@ test_connection_host.py
 
 # Local design references (must not be pushed)
 designinspo/
+
+.vercel
+.tmp-vercel-clean/
+apps/web/.next-integration/
+apps/web/.next-integration-smoke/
+services/api/smoke_integration.sqlite3
+login_*.png

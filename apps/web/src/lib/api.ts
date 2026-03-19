@@ -8,8 +8,8 @@
  */
 import axios, { AxiosHeaders } from "axios";
 import { z } from "zod";
-import { clearTokens, getAccessToken, saveTokens } from "./auth";
-import { API_BASE, API_TIMEOUT_MS, COOKIE_AUTH_MODE, joinApiPath } from "./api-config";
+import { clearTokens, getAccessToken, saveTokens } from "./auth.ts";
+import { API_BASE, API_TIMEOUT_MS, COOKIE_AUTH_MODE, joinApiPath } from "./api-config.ts";
 
 export const api = axios.create({
   baseURL: API_BASE || undefined,
