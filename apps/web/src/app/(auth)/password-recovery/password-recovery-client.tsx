@@ -205,7 +205,6 @@ export default function PasswordRecoveryClient() {
                   value={newPass}
                   onChange={(e) => setNewPass(e.target.value)}
                   autoComplete="new-password"
-                  maxLength={20}
                 />
                 <button
                   type="button"
@@ -230,7 +229,6 @@ export default function PasswordRecoveryClient() {
                   value={newPass2}
                   onChange={(e) => setNewPass2(e.target.value)}
                   autoComplete="new-password"
-                  maxLength={20}
                 />
                 <button
                   type="button"

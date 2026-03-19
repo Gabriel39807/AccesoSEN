@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { api } from "@/lib/api";
-import { clearTokens } from "@/lib/auth";
 import { useMe } from "@/hooks/useMe";
+import { logoutCurrentSession } from "@/lib/logout";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -13,17 +12,7 @@ export default function Navbar() {
   const { me, loadingMe } = useMe();
 
   async function logout() {
-    try {
-      await api.post(
-        "/api/auth/logout-all/",
-        { auth_transport: "cookie" },
-        { headers: { "X-Auth-Transport": "cookie" } }
-      );
-    } catch {
-      // best effort revocation
-    }
-    clearTokens();
-    router.replace("/login");
+    await logoutCurrentSession(router);
   }
 
   const isAdmin = pathname.startsWith("/admin");

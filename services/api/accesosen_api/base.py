@@ -274,6 +274,7 @@ ASGI_APPLICATION = "accesosen_api.asgi.application"
 DATABASE_ENGINE = os.getenv("DATABASE_ENGINE", "django.db.backends.sqlite3")
 DATABASE_URL = str(os.getenv("DATABASE_URL", "") or "").strip()
 DATABASE_SSLMODE = str(os.getenv("DATABASE_SSLMODE", "require") or "require").strip() or "require"
+DATABASE_SQLITE_NAME = str(os.getenv("DATABASE_SQLITE_NAME", "") or "").strip()
 
 if DATABASE_URL:
     db_url = _parse_postgres_database_url(DATABASE_URL)
@@ -328,10 +329,11 @@ elif DATABASE_ENGINE == "django.db.backends.postgresql":
         }
     }
 else:
+    sqlite_name = Path(DATABASE_SQLITE_NAME) if DATABASE_SQLITE_NAME else BASE_DIR / "db.sqlite3"
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": sqlite_name,
         }
     }
 

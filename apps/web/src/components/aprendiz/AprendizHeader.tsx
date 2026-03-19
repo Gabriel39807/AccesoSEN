@@ -3,8 +3,7 @@
 import { useRouter } from "next/navigation";
 
 import { useMe } from "@/hooks/useMe";
-import { api } from "@/lib/api";
-import { clearTokens } from "@/lib/auth";
+import { logoutCurrentSession } from "@/lib/logout";
 
 export default function AprendizHeader() {
   const router = useRouter();
@@ -16,17 +15,7 @@ export default function AprendizHeader() {
       : me?.username ?? "";
 
   async function logout() {
-    try {
-      await api.post(
-        "/api/auth/logout-all/",
-        { auth_transport: "cookie" },
-        { headers: { "X-Auth-Transport": "cookie" } }
-      );
-    } catch {
-      // Best effort revocation.
-    }
-    clearTokens();
-    router.replace("/login");
+    await logoutCurrentSession(router);
   }
 
   return (

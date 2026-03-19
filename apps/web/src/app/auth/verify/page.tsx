@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { buildPasswordRecoveryUrl } from "@/lib/password-recovery-routes";
 
 type VerifyPageProps = {
   searchParams: Promise<{ email?: string }>;
@@ -6,6 +7,5 @@ type VerifyPageProps = {
 
 export default async function VerifyPage({ searchParams }: VerifyPageProps) {
   const params = await searchParams;
-  const email = params.email ? `&email=${encodeURIComponent(params.email)}` : "";
-  redirect(`/password-recovery?step=sent${email}`);
+  redirect(buildPasswordRecoveryUrl("sent", { email: params.email }));
 }

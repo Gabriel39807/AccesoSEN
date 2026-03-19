@@ -3,6 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
+import {
+  BrandingSection,
+  ControlPanelAccessCard,
+  PermissionsSection,
+  RolesSection,
+  SedesSection,
+} from "@/components/admin/control-center";
+import {
+  buildControlPanelHeaders,
+  buildDomainRulePayload,
+  type DomainScope,
+  validateControlPanelReason,
+} from "@/lib/control-center";
 import { normalizeApiErrors } from "@/lib/errors";
 import { useMe } from "@/hooks/useMe";
 
@@ -52,8 +65,6 @@ type AssignmentRow = {
   permission_name?: string;
   scope: "GLOBAL" | "SEDE" | "OWN";
 };
-
-type DomainScope = "GLOBAL" | "SEDE" | "ROLE" | "ROLE_SEDE";
 
 type DomainRuleRow = {
   id: number;
@@ -229,20 +240,13 @@ export default function SuperadminControlCenterPage() {
   }
 
   function controlPanelHeaders(reason?: string) {
-    const headers: Record<string, string> = {};
-    if (controlPanelSession.session?.id) {
-      headers["X-Control-Panel-Session"] = controlPanelSession.session.id;
-    }
-    const finalReason = (reason ?? actionReason).trim();
-    if (finalReason) {
-      headers["X-Control-Panel-Reason"] = finalReason;
-    }
-    return headers;
+    return buildControlPanelHeaders(controlPanelSession.session?.id, reason ?? actionReason);
   }
 
   function ensureReason(reason?: string): boolean {
-    if ((reason ?? actionReason).trim()) return true;
-    setFormErrors(["Debes indicar un motivo del cambio antes de modificar el panel."]);
+    const validationError = validateControlPanelReason(reason ?? actionReason);
+    if (!validationError) return true;
+    setFormErrors([validationError]);
     return false;
   }
 
@@ -415,7 +419,7 @@ export default function SuperadminControlCenterPage() {
   async function verifyControlPanelOtp() {
     clearErrors();
     if (!otpRequestId || !otpCode.trim()) {
-      setFormErrors(["Solicita el OTP e ingresa el codigo para abrir la sesion reforzada."]);
+      setFormErrors(["Solicita el código e ingrésalo para abrir la sesión reforzada."]);
       return;
     }
     setBusy(true);
@@ -441,7 +445,7 @@ export default function SuperadminControlCenterPage() {
   async function openControlPanelWithPasskey() {
     clearErrors();
     if (!passkeySupported) {
-      setFormErrors(["Tu navegador no soporta Passkeys/WebAuthn para abrir la sesion reforzada."]);
+      setFormErrors(["Tu navegador no soporta Passkeys/WebAuthn para abrir la sesión reforzada."]);
       return;
     }
     setBusy(true);
@@ -534,7 +538,7 @@ export default function SuperadminControlCenterPage() {
   async function submitCreateSede() {
     clearErrors();
     if (!createSedeCode.trim() || !createSedeName.trim()) {
-      setFormErrors(["Debes completar codigo y nombre de sede."]);
+      setFormErrors(["Debes completar código y nombre de sede."]);
       return;
     }
     if (!ensureReason()) return;
@@ -607,7 +611,7 @@ export default function SuperadminControlCenterPage() {
   async function submitCreateRole() {
     clearErrors();
     if (!roleCode.trim() || !roleName.trim()) {
-      setFormErrors(["Debes completar codigo y nombre del rol."]);
+      setFormErrors(["Debes completar código y nombre del rol."]);
       return;
     }
     if (!ensureReason()) return;
@@ -631,7 +635,7 @@ export default function SuperadminControlCenterPage() {
   async function submitCreatePermission() {
     clearErrors();
     if (!permissionCode.trim() || !permissionName.trim()) {
-      setFormErrors(["Debes completar codigo y nombre del permiso."]);
+      setFormErrors(["Debes completar código y nombre del permiso."]);
       return;
     }
     if (!ensureReason()) return;
@@ -726,36 +730,18 @@ export default function SuperadminControlCenterPage() {
   }
 
   function buildDomainPayload() {
-    const domain = domainFormValue.trim().toLowerCase().replace("@", "");
-    if (!domain) {
-      setFormErrors(["Debes indicar un dominio, por ejemplo empresa.com."]);
+    const result = buildDomainRulePayload({
+      domain: domainFormValue,
+      scope: domainFormScope,
+      role: domainFormRole,
+      sede: domainFormSede,
+      isActive: domainFormActive,
+    });
+    if (!result.ok) {
+      setFormErrors([result.error]);
       return null;
     }
-
-    const payload: Record<string, unknown> = {
-      domain,
-      is_active: domainFormActive,
-      role: null,
-      sede: null,
-    };
-
-    if (domainFormScope === "ROLE" || domainFormScope === "ROLE_SEDE") {
-      if (!domainFormRole) {
-        setFormErrors(["Selecciona un rol para el alcance elegido."]);
-        return null;
-      }
-      payload.role = domainFormRole;
-    }
-
-    if (domainFormScope === "SEDE" || domainFormScope === "ROLE_SEDE") {
-      if (!domainFormSede) {
-        setFormErrors(["Selecciona una sede para el alcance elegido."]);
-        return null;
-      }
-      payload.sede = domainFormSede;
-    }
-
-    return payload;
+    return result.payload;
   }
 
   async function submitDomainRule() {
@@ -817,98 +803,30 @@ export default function SuperadminControlCenterPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-surface-border bg-surface p-4">
+      <div className="sadi-card rounded-3xl p-4 sm:p-5">
         <h1 className="text-2xl font-bold text-primary">Superadmin / Centro de control</h1>
-        <p className="text-sm text-text/70">
+        <p className="sadi-text-soft text-sm">
           Gestión centralizada de sedes, RBAC y visibilidad de auditoría.
         </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.4fr,1fr]">
-        <div className="rounded-2xl border border-surface-border bg-surface p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-text">Sesión reforzada del panel</h2>
-              <p className="text-xs text-text/70">
-                {controlPanelSession.active
-                  ? `Activa hasta ${formatDate(controlPanelSession.session?.expires_at)}`
-                  : "Abre una sesión reforzada para operar identidad visual, permisos, dominios y auditoría."}
-              </p>
-            </div>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                controlPanelSession.active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-700"
-              }`}
-            >
-              {controlPanelSession.active ? "Activa" : "Cerrada"}
-            </span>
-          </div>
+      <ControlPanelAccessCard
+        active={controlPanelSession.active}
+        busy={busy}
+        passkeySupported={passkeySupported}
+        otpRequestId={otpRequestId}
+        otpCode={otpCode}
+        sessionId={controlPanelSession.session?.id}
+        expiresAtLabel={formatDate(controlPanelSession.session?.expires_at)}
+        actionReason={actionReason}
+        onOtpCodeChange={setOtpCode}
+        onActionReasonChange={setActionReason}
+        onRequestOtp={requestControlPanelOtp}
+        onOpenPasskey={openControlPanelWithPasskey}
+        onVerifyOtp={verifyControlPanelOtp}
+        onCloseSession={closeControlPanelSession}
+      />
 
-          {!controlPanelSession.active ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-[auto,1fr,auto]">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={requestControlPanelOtp}
-                  disabled={busy}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {busy ? "Enviando..." : otpRequestId ? "Reenviar código" : "Enviar código"}
-                </button>
-                <button
-                  type="button"
-                  onClick={openControlPanelWithPasskey}
-                  disabled={busy || !passkeySupported}
-                  className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
-                >
-                  Abrir con passkey
-                </button>
-              </div>
-              <input
-                className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                placeholder="Código de verificación del panel"
-                value={otpCode}
-                onChange={(event) => setOtpCode(event.target.value)}
-              />
-              <button
-                type="button"
-                onClick={verifyControlPanelOtp}
-                disabled={busy || !otpRequestId}
-                className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
-              >
-                Verificar
-              </button>
-            </div>
-          ) : (
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <div className="rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
-                Sesión: {controlPanelSession.session?.id?.slice(0, 8)}...
-              </div>
-              <button
-                type="button"
-                onClick={closeControlPanelSession}
-                disabled={busy}
-                className="rounded-xl border border-surface-border px-3 py-2 text-sm font-semibold hover:bg-primary/10 disabled:opacity-60"
-              >
-                Cerrar sesión reforzada
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-surface-border bg-surface p-4">
-          <h2 className="text-sm font-semibold text-text">Motivo del cambio</h2>
-          <p className="mt-1 text-xs text-text/70">
-            Se envía en cada mutación del panel y queda registrado en auditoría.
-          </p>
-          <textarea
-            className="mt-3 min-h-24 w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-            placeholder="Ej: Activar identidad visual del cliente para campus norte"
-            value={actionReason}
-            onChange={(event) => setActionReason(event.target.value)}
-          />
-        </div>
-      </div>
 
       {formErrors.length > 0 ? (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
@@ -920,9 +838,9 @@ export default function SuperadminControlCenterPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[220px,1fr]">
-        <aside className="rounded-2xl border border-surface-border bg-surface p-3">
-          <div className="space-y-2">
+      <div className="grid gap-4 xl:grid-cols-[280px,minmax(0,1fr)] 2xl:grid-cols-[300px,minmax(0,1fr)]">
+        <aside className="sadi-card rounded-3xl p-3">
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 xl:mx-0 xl:block xl:space-y-2 xl:overflow-visible xl:px-0 xl:pb-0">
             {sections.map((section) => {
               const active = section.key === activeSection;
               return (
@@ -930,8 +848,8 @@ export default function SuperadminControlCenterPage() {
                   key={section.key}
                   type="button"
                   onClick={() => setActiveSection(section.key)}
-                  className={`w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
-                    active ? "bg-primary text-white" : "bg-surface text-text hover:bg-primary/10 hover:text-primary"
+                  className={`shrink-0 rounded-2xl px-3 py-2 text-left text-sm font-semibold transition xl:w-full ${
+                    active ? "bg-primary text-white shadow-sm" : "bg-surface-muted text-text hover:bg-primary/10 hover:text-primary"
                   }`}
                 >
                   {section.label}
@@ -941,357 +859,74 @@ export default function SuperadminControlCenterPage() {
           </div>
         </aside>
 
-        <section className="space-y-4 rounded-2xl border border-surface-border bg-surface p-4">
+        <section className="space-y-4 sadi-card rounded-3xl p-4 sm:p-5">
           {activeSection === "branding" ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-surface-border bg-surface p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold text-text">Preset activo</h3>
-                    <p className="text-xs text-text/70">
-                      {brandingConfig
-                        ? `${brandingConfig.branding_preset_name} (${brandingConfig.branding_preset})`
-                        : "Abre la sesión reforzada para cargar la identidad visual."}
-                    </p>
-                  </div>
-                  {brandingConfig?.updated_at ? (
-                    <span className="text-xs text-text/60">
-                      Actualizado: {formatDate(brandingConfig.updated_at)}
-                    </span>
-                  ) : null}
-                </div>
-                {brandingConfig ? (
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    {Object.entries(brandingConfig.tokens).map(([token, value]) => (
-                      <div key={token} className="rounded-xl border border-surface-border p-3">
-                        <div className="flex items-center gap-3">
-                          <span className="h-8 w-8 rounded-full border border-surface-border" style={{ backgroundColor: value }} />
-                          <div>
-                            <p className="text-xs font-semibold text-text">{token}</p>
-                            <p className="font-mono text-xs text-text/70">{value}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
-                <div className="grid gap-4 md:grid-cols-2">
-                  {brandingPresets.map((preset) => {
-                    const selected = brandingConfig?.branding_preset === preset.slug;
-                    return (
-                      <article
-                        key={preset.id}
-                        className={`rounded-2xl border p-4 ${
-                          selected ? "border-primary bg-primary/5" : "border-surface-border bg-surface"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h4 className="text-sm font-semibold text-text">{preset.name}</h4>
-                            <p className="text-xs text-text/60">{preset.slug}</p>
-                          </div>
-                          {selected ? (
-                            <span className="rounded-full bg-primary px-2 py-1 text-xs font-semibold text-white">Activo</span>
-                          ) : null}
-                        </div>
-                        <div className="mt-4 grid grid-cols-3 gap-2">
-                          {Object.entries(preset.tokens_json).map(([token, value]) => (
-                            <div key={token} className="rounded-xl border border-surface-border p-2">
-                              <div className="h-8 rounded-lg border border-surface-border" style={{ backgroundColor: value }} />
-                              <p className="mt-2 truncate text-[11px] font-medium text-text/70">{token}</p>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-4 flex justify-end">
-                          <button
-                            type="button"
-                            disabled={busy || selected || !controlPanelSession.active}
-                            onClick={() => applyBrandingPreset(preset.slug)}
-                            className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                          >
-                            {selected ? "Aplicado" : "Aplicar preset"}
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-
-                <div className="rounded-2xl border border-surface-border bg-surface p-4">
-                  <h3 className="text-sm font-semibold text-text">Cuotas del panel</h3>
-                  <div className="mt-3 space-y-3">
-                    {quotaRows.map((row) => (
-                      <div key={row.category} className="rounded-xl border border-surface-border p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-semibold text-text">{row.category}</span>
-                          <span className="text-xs text-text/60">
-                            {row.used}/{row.limit}
-                          </span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/10">
-                          <div
-                            className="h-full rounded-full bg-primary"
-                            style={{ width: `${Math.min(100, Math.round((row.used / Math.max(1, row.limit)) * 100))}%` }}
-                          />
-                        </div>
-                        <p className="mt-2 text-xs text-text/60">
-                          Restantes: {row.remaining} {row.last_action_at ? `| Último cambio ${formatDate(row.last_action_at)}` : ""}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <BrandingSection
+              busy={busy}
+              sessionActive={controlPanelSession.active}
+              brandingConfig={brandingConfig}
+              brandingPresets={brandingPresets}
+              quotaRows={quotaRows}
+              formatDate={formatDate}
+              onApplyPreset={applyBrandingPreset}
+            />
           ) : null}
 
           {activeSection === "sedes" ? (
-            <>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-xs text-text/70">Código de sede</label>
-                  <input
-                    className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                    value={createSedeCode}
-                    onChange={(event) => {
-                      setCreateSedeCode(event.target.value);
-                      setFieldErrors((prev) => ({ ...prev, code: [] }));
-                    }}
-                    placeholder="sede-norte"
-                  />
-                  {fieldError("code") ? <p className="text-xs text-rose-600">{fieldError("code")}</p> : null}
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-text/70">Nombre de sede</label>
-                  <input
-                    className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                    value={createSedeName}
-                    onChange={(event) => {
-                      setCreateSedeName(event.target.value);
-                      setFieldErrors((prev) => ({ ...prev, name: [] }));
-                    }}
-                    placeholder="Sede Norte"
-                  />
-                  {fieldError("name") ? <p className="text-xs text-rose-600">{fieldError("name")}</p> : null}
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={submitCreateSede}
-                  disabled={busy}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {busy ? "Guardando..." : "Crear sede"}
-                </button>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-surface-border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-primary/10 text-primary">
-                    <tr className="text-left">
-                      <th className="px-3 py-2">Nombre</th>
-                      <th className="px-3 py-2">Código</th>
-                      <th className="px-3 py-2">Estado</th>
-                      <th className="px-3 py-2">Creada</th>
-                      <th className="px-3 py-2 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sedes.map((row) => (
-                      <tr key={row.id} className="border-t border-surface-border">
-                        <td className="px-3 py-2">{row.name}</td>
-                        <td className="px-3 py-2 font-mono">{row.code}</td>
-                        <td className="px-3 py-2">
-                          {row.is_active ? (
-                            <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">Activa</span>
-                          ) : (
-                            <span className="rounded-full bg-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-700">Inactiva</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">{formatDate(row.created_at)}</td>
-                        <td className="px-3 py-2 text-right">
-                          <div className="inline-flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEditSede(row)}
-                              className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold hover:bg-primary/10"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => deactivateSede(row)}
-                              disabled={!row.is_active || busy}
-                              className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                            >
-                              Desactivar
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {editingSedeId ? (
-                <div className="rounded-2xl border border-surface-border bg-surface p-4">
-                  <h3 className="text-sm font-semibold text-text">Editar sede #{editingSedeId}</h3>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <input
-                      className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                      value={editingSedeCode}
-                      onChange={(event) => setEditingSedeCode(event.target.value)}
-                      placeholder="código"
-                    />
-                    <input
-                      className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                      value={editingSedeName}
-                      onChange={(event) => setEditingSedeName(event.target.value)}
-                      placeholder="nombre"
-                    />
-                    <select
-                      className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                      value={editingSedeActive ? "true" : "false"}
-                      onChange={(event) => setEditingSedeActive(event.target.value === "true")}
-                    >
-                      <option value="true">Activa</option>
-                      <option value="false">Inactiva</option>
-                    </select>
-                  </div>
-                  <div className="mt-3 flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingSedeId(null)}
-                      className="rounded-xl border border-surface-border px-3 py-2 text-sm hover:bg-primary/10"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={submitEditSede}
-                      disabled={busy}
-                      className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                    >
-                      {busy ? "Guardando..." : "Guardar cambios"}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-            </>
+            <SedesSection
+              busy={busy}
+              sedes={sedes}
+              createSedeCode={createSedeCode}
+              createSedeName={createSedeName}
+              editingSedeId={editingSedeId}
+              editingSedeCode={editingSedeCode}
+              editingSedeName={editingSedeName}
+              editingSedeActive={editingSedeActive}
+              fieldError={fieldError}
+              formatDate={formatDate}
+              setCreateSedeCode={setCreateSedeCode}
+              setCreateSedeName={setCreateSedeName}
+              setEditingSedeId={setEditingSedeId}
+              setEditingSedeCode={setEditingSedeCode}
+              setEditingSedeName={setEditingSedeName}
+              setEditingSedeActive={setEditingSedeActive}
+              clearFieldErrors={(field) => setFieldErrors((prev) => ({ ...prev, [field]: [] }))}
+              submitCreateSede={submitCreateSede}
+              submitEditSede={submitEditSede}
+              openEditSede={openEditSede}
+              deactivateSede={deactivateSede}
+            />
           ) : null}
 
           {activeSection === "roles" ? (
-            <>
-              <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="código del rol"
-                  value={roleCode}
-                  onChange={(event) => setRoleCode(event.target.value)}
-                />
-                <input
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="nombre del rol"
-                  value={roleName}
-                  onChange={(event) => setRoleName(event.target.value)}
-                />
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={submitCreateRole}
-                  disabled={busy}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {busy ? "Guardando..." : "Crear rol"}
-                </button>
-              </div>
-              <div className="overflow-x-auto rounded-2xl border border-surface-border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-primary/10 text-primary">
-                    <tr className="text-left">
-                      <th className="px-3 py-2">Código</th>
-                      <th className="px-3 py-2">Nombre</th>
-                      <th className="px-3 py-2">Sistema</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roles.map((row) => (
-                      <tr key={row.id} className="border-t border-surface-border">
-                        <td className="px-3 py-2 font-mono">{row.code}</td>
-                        <td className="px-3 py-2">{row.name}</td>
-                        <td className="px-3 py-2">{row.is_system ? "Si" : "No"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <RolesSection
+              busy={busy}
+              roles={roles}
+              roleCode={roleCode}
+              roleName={roleName}
+              setRoleCode={setRoleCode}
+              setRoleName={setRoleName}
+              submitCreateRole={submitCreateRole}
+            />
           ) : null}
 
           {activeSection === "permisos" ? (
-            <>
-              <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="código del permiso"
-                  value={permissionCode}
-                  onChange={(event) => setPermissionCode(event.target.value)}
-                />
-                <input
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="nombre del permiso"
-                  value={permissionName}
-                  onChange={(event) => setPermissionName(event.target.value)}
-                />
-              </div>
-              <textarea
-                className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                placeholder="descripción (opcional)"
-                value={permissionDescription}
-                onChange={(event) => setPermissionDescription(event.target.value)}
-              />
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={submitCreatePermission}
-                  disabled={busy}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {busy ? "Guardando..." : "Crear permiso"}
-                </button>
-              </div>
-              <div className="overflow-x-auto rounded-2xl border border-surface-border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-primary/10 text-primary">
-                    <tr className="text-left">
-                      <th className="px-3 py-2">Código</th>
-                      <th className="px-3 py-2">Nombre</th>
-                      <th className="px-3 py-2">Descripción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {permissions.map((row) => (
-                      <tr key={row.id} className="border-t border-surface-border">
-                        <td className="px-3 py-2 font-mono">{row.code}</td>
-                        <td className="px-3 py-2">{row.name}</td>
-                        <td className="px-3 py-2">{row.description || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <PermissionsSection
+              busy={busy}
+              permissions={permissions}
+              permissionCode={permissionCode}
+              permissionName={permissionName}
+              permissionDescription={permissionDescription}
+              setPermissionCode={setPermissionCode}
+              setPermissionName={setPermissionName}
+              setPermissionDescription={setPermissionDescription}
+              submitCreatePermission={submitCreatePermission}
+            />
           ) : null}
 
           {activeSection === "asignaciones" ? (
             <>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <select
                   className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
                   value={assignmentRole}
@@ -1375,7 +1010,7 @@ export default function SuperadminControlCenterPage() {
                 Las reglas de dominio activas se aplican en todo el producto.
               </div>
 
-              <div className="grid gap-3 md:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <input
                   className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
                   placeholder="Buscar dominio"
@@ -1432,7 +1067,7 @@ export default function SuperadminControlCenterPage() {
                 <h3 className="text-sm font-semibold text-text">
                   {domainFormId ? `Editar regla #${domainFormId}` : "Nueva regla de dominio"}
                 </h3>
-                <div className="mt-3 grid gap-3 md:grid-cols-4">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="space-y-1">
                     <label className="text-xs text-text/70">Dominio</label>
                     <input

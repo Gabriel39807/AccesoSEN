@@ -1,40 +1,66 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=Manrope:wght@400;500;600;700;800&display=swap");
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../";
 
 :root {
   --color-primary: #0f766e;
-  --color-background: #f4f7fb;
-  --color-text: #0f172a;
-  --color-surface: #ffffff;
+  --color-background: #f2f7f6;
+  --color-text: #112033;
+  --color-surface: rgba(255, 255, 255, 0.84);
 
   --background: var(--color-background);
   --foreground: var(--color-text);
   --surface: var(--color-surface);
-  --surface-border: #e2e8f0;
+  --surface-elevated: rgba(255, 255, 255, 0.94);
+  --surface-muted: rgba(241, 245, 249, 0.78);
+  --surface-border: rgba(148, 163, 184, 0.28);
+  --surface-border-strong: rgba(100, 116, 139, 0.42);
   --primary: var(--color-primary);
   --primary-strong: #115e59;
+  --primary-soft: color-mix(in srgb, var(--primary) 14%, white 86%);
+  --primary-contrast: #f8fffe;
+  --text-soft: rgba(30, 41, 59, 0.78);
+  --text-muted: rgba(71, 85, 105, 0.76);
+  --text-faint: rgba(100, 116, 139, 0.58);
+  --success: #0f9f7a;
+  --warning: #c57a10;
+  --danger: #c24144;
+  --shadow-soft: 0 18px 50px rgba(15, 23, 42, 0.08);
+  --shadow-strong: 0 26px 80px rgba(15, 23, 42, 0.14);
   --app-glow-a: rgba(16, 185, 129, 0.12);
   --app-glow-b: rgba(14, 165, 233, 0.11);
-  --font-body: "Manrope", sans-serif;
-  --font-display: "Fraunces", serif;
+  --app-grid: rgba(15, 23, 42, 0.045);
+  --font-body-fallback: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display-fallback: Georgia, "Times New Roman", serif;
 }
 
 [data-theme="dark"] {
-  --color-primary: #2dd4bf;
-  --color-background: #0b1220;
-  --color-text: #e2e8f0;
-  --color-surface: #111827;
+  --color-primary: #49d2c0;
+  --color-background: #09111c;
+  --color-text: #ebf3ff;
+  --color-surface: rgba(10, 20, 33, 0.76);
 
   --background: var(--color-background);
   --foreground: var(--color-text);
   --surface: var(--color-surface);
-  --surface-border: #334155;
+  --surface-elevated: rgba(14, 26, 40, 0.92);
+  --surface-muted: rgba(18, 31, 48, 0.8);
+  --surface-border: rgba(148, 163, 184, 0.16);
+  --surface-border-strong: rgba(148, 163, 184, 0.28);
   --primary: var(--color-primary);
-  --primary-strong: #14b8a6;
-  --app-glow-a: rgba(45, 212, 191, 0.18);
-  --app-glow-b: rgba(56, 189, 248, 0.16);
-  --font-body: "Manrope", sans-serif;
-  --font-display: "Fraunces", serif;
+  --primary-strong: #2fbba9;
+  --primary-soft: color-mix(in srgb, var(--primary) 18%, #0d1725 82%);
+  --primary-contrast: #08131e;
+  --text-soft: rgba(226, 232, 240, 0.82);
+  --text-muted: rgba(203, 213, 225, 0.74);
+  --text-faint: rgba(148, 163, 184, 0.56);
+  --success: #38c59a;
+  --warning: #ffb648;
+  --danger: #ff7c86;
+  --shadow-soft: 0 20px 60px rgba(2, 8, 23, 0.42);
+  --shadow-strong: 0 34px 90px rgba(2, 8, 23, 0.55);
+  --app-glow-a: rgba(73, 210, 192, 0.18);
+  --app-glow-b: rgba(56, 189, 248, 0.14);
+  --app-grid: rgba(148, 163, 184, 0.08);
 }
 
 @theme inline {
@@ -43,9 +69,12 @@
   --color-text: var(--foreground);
   --color-primary: var(--primary);
   --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-muted: var(--surface-muted);
   --color-surface-border: var(--surface-border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface-border-strong: var(--surface-border-strong);
+  --font-sans: var(--font-body);
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
 body {
@@ -53,16 +82,121 @@ body {
   background:
     radial-gradient(circle at 8% 8%, var(--app-glow-a), transparent 28%),
     radial-gradient(circle at 92% 0%, var(--app-glow-b), transparent 26%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 72%, var(--background) 28%) 0%, var(--background) 100%);
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 58%, var(--background) 42%) 0%, var(--background) 100%);
   color: var(--foreground);
-  font-family: var(--font-body);
+  font-family: var(--font-body), var(--font-body-fallback);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-display);
+  font-family: var(--font-display), var(--font-display-fallback);
+}
+
+* {
+  border-color: var(--surface-border);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.sadi-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 0% 15%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 28%),
+    radial-gradient(circle at 100% 0%, var(--app-glow-b), transparent 22%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 48%, transparent) 0%, transparent 36%),
+    linear-gradient(180deg, color-mix(in srgb, var(--background) 92%, var(--surface-muted) 8%) 0%, var(--background) 100%);
+}
+
+.sadi-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--app-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--app-grid) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: radial-gradient(circle at center, black 24%, transparent 82%);
+  opacity: 0.4;
+}
+
+.sadi-card {
+  border: 1px solid var(--surface-border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 96%, transparent), color-mix(in srgb, var(--surface) 92%, transparent));
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
+}
+
+.sadi-card-strong {
+  border: 1px solid var(--surface-border-strong);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--primary) 10%, transparent), transparent 32%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 98%, transparent), color-mix(in srgb, var(--surface) 90%, transparent));
+  box-shadow: var(--shadow-strong);
+  backdrop-filter: blur(20px);
+}
+
+.sadi-subtle-panel {
+  border: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
+}
+
+.sadi-kicker {
+  color: var(--primary);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.sadi-text-soft {
+  color: var(--text-soft);
+}
+
+.sadi-text-muted {
+  color: var(--text-muted);
+}
+
+.sadi-text-faint {
+  color: var(--text-faint);
+}
+
+.sadi-nav-active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 92%, white 8%), var(--primary-strong));
+  color: var(--primary-contrast);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--primary) 26%, transparent);
+}
+
+.sadi-nav-active .sadi-nav-icon {
+  background: color-mix(in srgb, white 18%, transparent);
+  color: inherit;
+}
+
+.sadi-nav-idle {
+  color: var(--text-soft);
+  background: color-mix(in srgb, var(--surface-muted) 62%, transparent);
+}
+
+.sadi-nav-idle:hover {
+  border-color: color-mix(in srgb, var(--primary) 18%, var(--surface-border));
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--surface-elevated) 84%, transparent);
+}
+
+.sadi-nav-icon {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
 }
 
 /* Skeleton shimmer (institucional, suave) */
@@ -78,9 +212,9 @@ h4 {
 .sadi-skeleton {
   background: linear-gradient(
     90deg,
-    #f1f5f9 25%,
-    #e2e8f0 37%,
-    #f1f5f9 63%
+    color-mix(in srgb, var(--surface-muted) 92%, transparent) 25%,
+    color-mix(in srgb, var(--surface-border) 88%, transparent) 37%,
+    color-mix(in srgb, var(--surface-muted) 92%, transparent) 63%
   );
   background-size: 400% 100%;
   animation: sadi-shimmer 1.2s ease-in-out infinite;

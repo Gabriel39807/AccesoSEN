@@ -31,9 +31,9 @@ function buildPasswordRules(password: string, confirmPassword: string): Password
 
 function DataCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/80 bg-white/80 p-4 shadow-[0_6px_18px_rgba(2,6,23,0.04)]">
-      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-zinc-900">{value || "-"}</p>
+    <div className="sadi-subtle-panel rounded-2xl p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide sadi-text-faint">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-foreground">{value || "-"}</p>
     </div>
   );
 }
@@ -243,7 +243,7 @@ export default function AprendizPerfilPage() {
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_12px_34px_rgba(2,6,23,0.07)] backdrop-blur-sm">
+      <section className="sadi-card relative overflow-hidden rounded-3xl p-5">
         <div className="pointer-events-none absolute -right-16 -top-14 h-44 w-44 rounded-full bg-sky-300/25 blur-3xl" />
         <div className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-cyan-300/20 blur-3xl" />
 
@@ -281,8 +281,8 @@ export default function AprendizPerfilPage() {
         </div>
       </section>
 
-      <div className="grid gap-5 xl:grid-cols-12">
-        <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm xl:col-span-8">
+      <div className="grid gap-5 lg:grid-cols-12">
+        <section className="sadi-card rounded-3xl p-5 lg:col-span-7 xl:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Aprendiz</div>
@@ -295,10 +295,10 @@ export default function AprendizPerfilPage() {
             </span>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
             <DataCard label="Documento" value={perfil?.documento ?? me?.documento ?? "-"} />
             <DataCard label="Correo" value={perfil?.email ?? me?.email ?? "-"} />
-            <DataCard label="Telefono" value={perfil?.telefono ?? "-"} />
+            <DataCard label="Teléfono" value={perfil?.telefono ?? "-"} />
             <DataCard label={sedeLabel} value={perfil?.sede_principal ?? me?.sede_principal ?? "-"} />
             <DataCard label="Programa" value={perfil?.programa_formacion ?? me?.programa_formacion ?? "-"} />
           </div>
@@ -316,10 +316,10 @@ export default function AprendizPerfilPage() {
           ) : null}
         </section>
 
-        <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm xl:col-span-4">
+        <section className="sadi-card rounded-3xl p-5 lg:col-span-5 xl:col-span-4">
           <h3 className="text-base font-extrabold tracking-tight text-zinc-900">Seguridad</h3>
           <div className="mt-4 space-y-3">
-            <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
+            <div className="sadi-subtle-panel rounded-2xl p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Estado de la cuenta</p>
               <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{perfil?.estado ?? me?.estado ?? "-"}</p>
             </div>
@@ -332,7 +332,7 @@ export default function AprendizPerfilPage() {
 
       {editing ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-2xl rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-white/80 bg-white p-5 shadow-2xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-extrabold text-zinc-900">Editar perfil</h3>
@@ -454,7 +454,7 @@ export default function AprendizPerfilPage() {
 
       {pwOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-lg rounded-3xl border border-white/80 bg-white p-6 shadow-2xl">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/80 bg-white p-5 shadow-2xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-extrabold text-zinc-900">Cambiar contraseña</h3>

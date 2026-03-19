@@ -4,8 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useMe } from "@/hooks/useMe";
-import { api } from "@/lib/api";
-import { clearTokens } from "@/lib/auth";
+import { logoutCurrentSession } from "@/lib/logout";
 
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -17,17 +16,7 @@ export default function AdminTopNav() {
   const { me, loadingMe } = useMe();
 
   async function logout() {
-    try {
-      await api.post(
-        "/api/auth/logout-all/",
-        { auth_transport: "cookie" },
-        { headers: { "X-Auth-Transport": "cookie" } }
-      );
-    } catch {
-      // Best effort revocation.
-    }
-    clearTokens();
-    router.replace("/login");
+    await logoutCurrentSession(router);
   }
 
   const nombreBonito =

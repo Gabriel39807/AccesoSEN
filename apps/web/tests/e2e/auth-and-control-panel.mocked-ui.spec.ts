@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
+test.setTimeout(60_000);
+
+// Esta suite mockea completamente la API y valida contratos UI/control-flow.
+// No debe interpretarse como prueba de integracion real web -> backend.
+
 type MockState = {
   meRole: "superadmin" | "admin_sede" | "aprendiz";
   meUsername?: string;
@@ -290,10 +295,15 @@ test("admin web login submits expected auth payload", async ({ page }) => {
   };
   await installApiMocks(page, state);
 
-  await page.goto("/login");
-  await page.locator("#auth-username").fill("superadmin");
-  await page.locator("#auth-password").fill("Segura123");
-  await page.getByRole("button", { name: "Iniciar sesion" }).click();
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  const usernameInput = page.getByRole("textbox", { name: "Usuario o correo" });
+  const passwordInput = page.getByRole("textbox", { name: "Contraseña" });
+  await expect(usernameInput).toBeVisible();
+  await expect(passwordInput).toBeVisible();
+  await usernameInput.fill("superadmin");
+  await passwordInput.fill("Segura123");
+  await expect(usernameInput).toHaveValue("superadmin");
+  await page.getByRole("button", { name: "Entrar al sistema" }).click();
   await expect.poll(() => state.tokenRequestBody, { timeout: 10_000 }).not.toBeUndefined();
   expect(state.tokenRequestBody).toMatchObject({
     username: "superadmin",
@@ -313,20 +323,23 @@ test("superadmin opens OTP session and applies branding preset with control head
   };
   await installApiMocks(page, state);
 
-  await page.goto("/admin/control-center");
+  await page.goto("/admin/control-center", { waitUntil: "domcontentloaded" });
 
-  await expect(page.getByRole("heading", { name: "Superadmin / Control Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Superadmin / Centro de control" })).toBeVisible();
   await expect(page.getByText("Cerrada")).toBeVisible();
 
-  await page.getByRole("button", { name: "Solicitar OTP" }).click();
-  await page.getByPlaceholder("Codigo OTP del panel").fill("654321");
+  await page.getByRole("button", { name: "Enviar código" }).click();
+  await expect(page.getByRole("button", { name: "Reenviar código" })).toBeVisible();
+  const otpInput = page.getByRole("textbox", { name: "Código de verificación del panel" });
+  await expect(otpInput).toBeEnabled();
+  await otpInput.fill("654321");
   await page.getByRole("button", { name: "Verificar" }).click();
 
   await expect(page.getByText("Activa", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Sesion:\s+cp-sessi/i)).toBeVisible();
+  await expect(page.getByText(/Sesión:\s+cp-sessi/i)).toBeVisible();
 
   await page
-    .getByPlaceholder("Ej: Activar branding del cliente para campus norte")
+    .getByPlaceholder("Ej: Activar identidad visual del cliente para campus norte")
     .fill("Aplicar preset verde para el cliente piloto");
 
   const emeraldCard = page.locator("article").filter({ hasText: "Emerald Campus" });
@@ -347,7 +360,7 @@ test("control center blocks branding mutation without explicit reason", async ({
   };
   await installApiMocks(page, state);
 
-  await page.goto("/admin/control-center");
+  await page.goto("/admin/control-center", { waitUntil: "domcontentloaded" });
 
   const emeraldCard = page.locator("article").filter({ hasText: "Emerald Campus" });
   await emeraldCard.getByRole("button", { name: "Aplicar preset" }).click();

@@ -26,6 +26,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    ".next-integration/**",
+    ".next-integration-smoke/**",
     "out/**",
     "build/**",
     "playwright-report/**",

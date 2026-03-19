@@ -9,7 +9,7 @@ export default function ModalScreen() {
   return (
     <ModernScreen contentStyle={{ justifyContent: "center" }}>
       <FadeInCard delay={0} style={{ gap: 16 }}>
-        <Pill text="ACCESO RAPIDO" />
+        <Pill text="ACCESO RÁPIDO" />
         <View
           style={{
             borderRadius: 30,
@@ -26,10 +26,10 @@ export default function ModalScreen() {
                 Modal del sistema
               </Text>
               <Text style={{ color: "#ffffff", fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
-                Panel rapido SADI
+                Panel rápido SADI
               </Text>
               <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 20 }}>
-                Este espacio puede usarse para accesos rapidos, avisos o acciones contextuales dentro de la app movil.
+                Este espacio puede usarse para accesos rápidos, avisos o acciones contextuales dentro de la app móvil.
               </Text>
             </View>
             <View style={{ width: 54, height: 54, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
@@ -41,7 +41,7 @@ export default function ModalScreen() {
 
       <FadeInCard delay={70} style={{ gap: 10 }}>
         <View style={{ borderRadius: 20, padding: 14, backgroundColor: "rgba(255,255,255,0.78)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
-          <TitleBlock title="Vista temporal" subtitle="La plantilla base fue reemplazada por una presentacion coherente con el lenguaje visual del proyecto." />
+          <TitleBlock title="Vista temporal" subtitle="La plantilla base fue reemplazada por una presentación coherente con el lenguaje visual del proyecto." />
         </View>
         <ModernButton label="Volver al inicio" tone="dark" onPress={() => router.replace("/" as any)} />
         <ModernButton label="Cerrar" tone="light" onPress={() => router.back()} />

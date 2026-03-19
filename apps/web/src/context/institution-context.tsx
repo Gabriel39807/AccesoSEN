@@ -11,7 +11,7 @@ type InstitutionContextValue = {
   loading: boolean;
 };
 
-const FALLBACK_INSTITUTION = (process.env.NEXT_PUBLIC_INSTITUTION_NAME || "Institucion").trim() || "Institucion";
+const FALLBACK_INSTITUTION = (process.env.NEXT_PUBLIC_INSTITUTION_NAME || "Institución").trim() || "Institución";
 const FALLBACK_SEDE_LABEL = (process.env.NEXT_PUBLIC_SEDE_LABEL || "La Sede").trim() || "La Sede";
 const FALLBACK_EMAIL_DOMAIN =
   (process.env.NEXT_PUBLIC_EMAIL_PLACEHOLDER_DOMAIN || "institucion.local").replace("@", "").trim().toLowerCase() ||

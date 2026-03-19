@@ -163,7 +163,7 @@ export default function PrimerAccesoPage() {
 
   const identityError = showErrors && !identityConfirmed ? "Debes confirmar la verificación de identidad." : null;
 
-  const emailError = showErrors && !isValidEmail(email) ? "Ingresa un correo valido." : null;
+  const emailError = showErrors && !isValidEmail(email) ? "Ingresa un correo válido." : null;
 
   const currentPasswordError = showErrors && !currentPassword ? "Ingresa la contraseña inicial actual." : null;
   const newPasswordError = showErrors && !allPasswordRulesValid ? "La nueva contraseña no cumple los requisitos." : null;
@@ -175,7 +175,7 @@ export default function PrimerAccesoPage() {
       return null;
     }
     if (targetStep === 2) {
-      if (!isValidEmail(email)) return "Ingresa un correo valido.";
+      if (!isValidEmail(email)) return "Ingresa un correo válido.";
       return null;
     }
     if (!currentPassword) return "Ingresa la contraseña inicial actual.";
@@ -216,7 +216,7 @@ export default function PrimerAccesoPage() {
 
   function confirmNewEmail() {
     if (verifyEmailInput.trim() !== email.trim()) {
-      setVerifyEmailError("La verificacion no coincide con el nuevo correo.");
+      setVerifyEmailError("La verificación no coincide con el nuevo correo.");
       return;
     }
     setVerifyEmailError(null);
@@ -255,7 +255,7 @@ export default function PrimerAccesoPage() {
         } catch {
           setToast({
             type: "error",
-            text: "No fue posible actualizar el correo en este paso. Se continuara con la activacion.",
+            text: "No fue posible actualizar el correo en este paso. Se continuará con la activación.",
           });
         }
       }
@@ -417,7 +417,7 @@ export default function PrimerAccesoPage() {
                     disabled
                     className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-700 outline-none"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Solo administracion puede modificar este dato.</p>
+                  <p className="mt-1 text-xs text-zinc-500">Solo administración puede modificar este dato.</p>
                 </div>
 
                 <div>
@@ -430,7 +430,7 @@ export default function PrimerAccesoPage() {
                     disabled
                     className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-700 outline-none"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Solo administracion puede modificar este dato.</p>
+                  <p className="mt-1 text-xs text-zinc-500">Solo administración puede modificar este dato.</p>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -457,7 +457,7 @@ export default function PrimerAccesoPage() {
                     disabled
                     className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-700 outline-none"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Solo administracion puede modificar este dato.</p>
+                  <p className="mt-1 text-xs text-zinc-500">Solo administración puede modificar este dato.</p>
                 </div>
 
                 <div>
@@ -470,7 +470,7 @@ export default function PrimerAccesoPage() {
                     disabled
                     className="mt-1 w-full rounded-2xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-sm text-zinc-700 outline-none"
                   />
-                  <p className="mt-1 text-xs text-zinc-500">Solo administracion puede modificar este dato.</p>
+                  <p className="mt-1 text-xs text-zinc-500">Solo administración puede modificar este dato.</p>
                 </div>
               </div>
             </div>
@@ -595,7 +595,7 @@ export default function PrimerAccesoPage() {
               disabled={step === 1 || submitting}
               className="rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Atras
+              Atrás
             </button>
 
             {step < 3 ? (

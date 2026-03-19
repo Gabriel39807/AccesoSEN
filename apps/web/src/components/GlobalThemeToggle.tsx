@@ -1,28 +1,78 @@
 "use client";
 
+import { Monitor, MoonStar, SunMedium } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useMemo } from "react";
 
-/**
- * Global dark/light toggle for web.
- * It is fixed at top-left so it is available in all modules.
- */
+type ThemeOption = {
+  value: "light" | "dark" | "system";
+  label: string;
+  icon: typeof SunMedium;
+};
+
+const THEME_OPTIONS: ThemeOption[] = [
+  { value: "light", label: "Claro", icon: SunMedium },
+  { value: "dark", label: "Oscuro", icon: MoonStar },
+  { value: "system", label: "Sistema", icon: Monitor },
+];
+
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
+}
+
 export default function GlobalThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const mounted = typeof theme === "string" && theme.length > 0;
 
-  const isDark = resolvedTheme === "dark";
-  const label = isDark ? "Modo claro" : "Modo oscuro";
-  const title = isDark ? "Activar modo claro" : "Activar modo oscuro";
-  const ariaLabel = isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
+  const effectiveTheme = useMemo(() => {
+    if (!mounted) return "system";
+    return (theme as ThemeOption["value"] | undefined) ?? "system";
+  }, [mounted, theme]);
+
+  const currentLabel = useMemo(() => {
+    if (!mounted) return "Tema del sistema";
+    if (effectiveTheme === "system") {
+      return `Sistema (${resolvedTheme === "dark" ? "oscuro" : "claro"})`;
+    }
+    return effectiveTheme === "dark" ? "Modo oscuro" : "Modo claro";
+  }, [effectiveTheme, mounted, resolvedTheme]);
 
   return (
-    <button
-      type="button"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="fixed left-3 top-3 z-[70] rounded-xl border border-surface-border bg-surface/95 px-3 py-2 text-xs font-semibold text-text shadow-sm backdrop-blur transition hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-      title={title}
-      aria-label={ariaLabel}
-    >
-      {label}
-    </button>
+    <div className="pointer-events-none fixed bottom-3 left-1/2 z-[80] w-[calc(100%-1.25rem)] max-w-max -translate-x-1/2 sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:w-auto sm:translate-x-0">
+      <div
+        className="pointer-events-auto flex items-center justify-center gap-2 rounded-[1.35rem] border border-surface-border bg-surface-elevated/92 p-1.5 backdrop-blur-xl"
+        style={{ boxShadow: "var(--shadow-soft)" }}
+      >
+        <div className="hidden pl-2 sm:block">
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] sadi-kicker">Tema</p>
+          <p className="text-[11px] font-semibold sadi-text-muted">{currentLabel}</p>
+        </div>
+        <div className="flex w-full items-center justify-center gap-1 rounded-[1rem] bg-surface-muted/90 p-1 sm:w-auto">
+          {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+            const active = effectiveTheme === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTheme(value)}
+                className={cx(
+                  "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-[0.9rem] px-3 py-2 text-xs font-semibold transition duration-200 focus-visible:outline-none sm:flex-none",
+                  active
+                    ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]"
+                    : "text-[color:var(--text-soft)] hover:bg-surface-elevated hover:text-foreground"
+                )}
+                style={active ? { boxShadow: "0 10px 24px color-mix(in srgb, var(--primary) 28%, transparent)" } : undefined}
+                aria-pressed={active}
+                aria-label={`Activar tema ${label.toLowerCase()}`}
+                title={`Cambiar a ${label.toLowerCase()}`}
+              >
+                <Icon className="h-3.5 w-3.5" strokeWidth={2.1} />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }

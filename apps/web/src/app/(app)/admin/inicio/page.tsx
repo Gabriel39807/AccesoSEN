@@ -29,18 +29,18 @@ export default function AdminInicioPage() {
   const nombre = me?.first_name || me?.username || "Administrador";
 
   return (
-    <div className="flex flex-col space-y-6">
-      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(135deg,rgba(15,23,42,0.98),rgba(12,74,110,0.92)_48%,rgba(8,145,178,0.82))] p-6 text-white shadow-[0_18px_50px_rgba(2,6,23,0.18)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
+    <div className="flex flex-col space-y-6 2xl:space-y-7">
+      <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(135deg,rgba(15,23,42,0.98),rgba(12,74,110,0.92)_48%,rgba(8,145,178,0.82))] p-6 text-white shadow-[0_18px_50px_rgba(2,6,23,0.18)] xl:p-7 2xl:p-8">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr),minmax(320px,0.9fr)] xl:items-end 2xl:grid-cols-[minmax(0,1.6fr),minmax(360px,0.85fr)]">
+          <div className="max-w-3xl">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-cyan-100/80">Centro operativo</p>
-            <h1 className="mt-3 text-4xl font-extrabold leading-none tracking-tight">Bienvenido, {nombre}</h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-cyan-50/85">
+            <h1 className="mt-3 text-4xl font-extrabold leading-none tracking-tight xl:text-[2.9rem] 2xl:text-[3.2rem]">Bienvenido, {nombre}</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-cyan-50/85 xl:text-[15px]">
               Supervisa usuarios, accesos, equipos y turnos desde una vista más clara y priorizada para la operación diaria.
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:justify-self-end xl:min-w-[340px]">
             <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-100/75">Jornada</p>
               <p className="mt-1 text-sm font-semibold">{currentDateLabel()}</p>
@@ -55,8 +55,8 @@ export default function AdminInicioPage() {
 
       <OverviewCards />
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="flex flex-col gap-6 lg:col-span-8">
+      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.6fr),minmax(320px,0.9fr)] 2xl:grid-cols-[minmax(0,1.7fr),minmax(360px,0.85fr)]">
+        <div className="flex min-w-0 flex-col gap-6">
           <div className="rounded-[1.75rem] border border-white/80 bg-white/75 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -68,10 +68,10 @@ export default function AdminInicioPage() {
               </p>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-3">
+            <div className="mt-5 grid gap-3 xl:grid-cols-3">
               {[
                 { title: "Revisar accesos", detail: "Valida novedades recientes y confirma consistencia por sede." },
-                { title: "Gestionar equipos", detail: "Aprueba o rechaza solicitudes pendientes con trazabilidad." },
+              { title: "Gestionar equipos", detail: "Aprueba o rechaza solicitudes pendientes con trazabilidad." },
                 { title: "Organizar turnos", detail: "Confirma cobertura operativa y cambios del día." },
               ].map((item) => (
                 <article
@@ -85,11 +85,13 @@ export default function AdminInicioPage() {
             </div>
           </div>
 
-          <BestEmployeeWidget />
-          <ProgressWidget />
+          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.15fr),minmax(300px,0.85fr)]">
+            <BestEmployeeWidget />
+            <ProgressWidget />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-6 lg:col-span-4">
+        <div className="flex min-w-0 flex-col gap-6">
           <article className="rounded-[1.75rem] border border-white/80 bg-white/75 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-sky-700">Estado operativo</p>
             <h3 className="mt-2 text-2xl font-bold text-zinc-900">Lectura rápida</h3>

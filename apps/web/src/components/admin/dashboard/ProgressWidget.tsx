@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 export default function ProgressWidget() {
   return (
-    <article className="flex flex-col rounded-3xl border border-white/60 bg-white/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl">
+    <article className="flex h-full flex-col rounded-3xl border border-white/60 bg-white/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-base font-extrabold text-zinc-900">Avance operativo</h3>
         <button className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100/50 transition hover:bg-zinc-200/50">

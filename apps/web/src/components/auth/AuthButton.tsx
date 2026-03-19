@@ -3,7 +3,7 @@ import styles from "./auth.module.css";
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "ghost";
   loading?: boolean;
   loadingLabel?: string;
 };
@@ -17,7 +17,7 @@ export default function AuthButton({
   disabled,
   ...props
 }: Props) {
-  const baseClass = variant === "primary" ? styles.btnPrimary : styles.btnSecondary;
+  const baseClass = variant === "primary" ? styles.btnPrimary : variant === "secondary" ? styles.btnSecondary : styles.btnGhost;
   const locked = disabled || loading;
   return (
     <button

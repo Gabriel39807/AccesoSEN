@@ -1,68 +1,54 @@
 # Production Cutover Runbook
 
-Fecha base: 2026-03-15
+Fecha base: 2026-03-17
 
-Este runbook define el orden recomendado para sacar SADI a produccion con el estado actual del proyecto.
+Este runbook asume la topologia oficial documentada en [deploy-production.md](/C:/Users/picos/Desktop/SADI/docs/deploy-production.md): `PostgreSQL` gestionado + `api` y `web` desplegados con sus Dockerfiles.
 
 ## 1. Decision de salida
 
-No iniciar el despliegue si alguno de estos puntos falla:
+No iniciar el cutover si falla cualquiera de estos puntos:
 
 - [release-readiness-checklist.md](/C:/Users/picos/Desktop/SADI/docs/release-readiness-checklist.md) incompleto.
 - `cmd /c check.cmd` no termina en `CHECK_OK`.
 - No existe backup verificable de la base de datos.
-- No estan listos los valores reales de dominios, correo y WebAuthn.
+- No estan cargadas las variables reales de produccion.
+- Se intenta usar una topologia distinta de la documentada sin una aprobacion tecnica explicita.
 
-## 2. Variables obligatorias antes del deploy
+## 2. Confirmaciones previas
 
 ### Backend
 
 - `DJANGO_ENV=production`
 - `DJANGO_DEBUG=false`
-- `DJANGO_SECRET_KEY`
-- `DJANGO_ALLOWED_HOSTS`
-- `DATABASE_URL`
-- `CORS_ALLOWED_ORIGINS`
-- `CSRF_TRUSTED_ORIGINS`
-- `REFRESH_TOKEN_PEPPER`
-- `WEBAUTHN_RP_ID`
-- `WEBAUTHN_ORIGIN`
-- `EMAIL_HOST_USER`
-- `EMAIL_HOST_PASSWORD`
-- `DEFAULT_FROM_EMAIL`
+- `DJANGO_SECRET_KEY` real
+- `DJANGO_ALLOWED_HOSTS` real
+- `DATABASE_URL` productivo
+- `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` cerrados al frontend real
+- `WEBAUTHN_MOCK=false`
+- `DEFAULT_SUPERADMIN_AUTO_CREATE=false`
 
 ### Web
 
-- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_API_URL` apunta al dominio publico real de la API
 - `NEXT_PUBLIC_AUTH_COOKIE_MODE=true`
-- `NEXT_PUBLIC_INSTITUTION_NAME`
-- `NEXT_PUBLIC_SUPPORT_EMAIL`
 
 ### Mobile
 
-- `EXPO_PUBLIC_API_URL`
-- `EXPO_PUBLIC_INSTITUTION_NAME`
+- `EXPO_PUBLIC_API_URL` apunta a la misma API publica real
 
-## 3. Validaciones de configuracion
-
-- `NEXT_PUBLIC_API_URL` y `EXPO_PUBLIC_API_URL` deben apuntar al dominio publico real de la API.
-- `DJANGO_ALLOWED_HOSTS` debe incluir el host de la API.
-- `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` deben incluir el frontend web final con HTTPS.
-- `WEBAUTHN_RP_ID` debe coincidir con el dominio donde vivira el login/passkey web.
-- `WEBAUTHN_ORIGIN` debe ser exactamente el origen HTTPS del frontend.
-- `DEFAULT_SUPERADMIN_AUTO_CREATE` debe quedar en `false` en produccion estable.
-
-## 4. Orden de despliegue recomendado
+## 3. Orden de despliegue
 
 1. Congelar cambios de ultima hora.
 2. Ejecutar backup de DB.
-3. Confirmar secretos y variables productivas.
-4. Desplegar API.
-5. Esperar migraciones y verificar `/health/` y `/ready/`.
-6. Desplegar web contra la API nueva.
-7. Publicar mobile solo si las URLs y branding ya estan verificados.
+3. Confirmar secretos y variables.
+4. Build de `api` y `web`.
+5. Desplegar `api`.
+6. Ejecutar migraciones contra PostgreSQL productivo.
+7. Verificar `GET /health/` y `GET /ready/`.
+8. Desplegar `web`.
+9. Publicar mobile solo si branding y URLs quedaron verificados.
 
-## 5. Smoke post deploy
+## 4. Smoke post deploy
 
 ### Infra
 
@@ -73,8 +59,9 @@ No iniciar el despliegue si alguno de estos puntos falla:
 
 - Login admin responde.
 - Login aprendiz responde.
-- `Control Panel` permite OTP/passkey y bloquea cambios sin motivo.
+- `Control Panel` exige step-up auth valido.
 - Cambio de preset de branding impacta web.
+- Smoke integrado real web -> API sigue pasando.
 
 ### Mobile
 
@@ -85,24 +72,26 @@ No iniciar el despliegue si alguno de estos puntos falla:
 
 ### Permisos
 
-- `admin_sede` no puede entrar a `Control Center`.
-- `guarda` no puede operar sin turno activo.
+- `GET /api/sedes/` anonimo devuelve `401` o `403`.
+- `admin_sede` no accede a `Control Center`.
+- `guarda` no registra acceso sin turno activo.
 - `aprendiz` no ve datos ajenos.
 
-## 6. Senales de rollback inmediato
+## 5. Senales de rollback inmediato
 
 Hacer rollback si ocurre cualquiera de estas:
 
 - `/ready/` falla o degrada tras deploy.
 - Login deja de funcionar para superadmin, admin_sede o guarda.
 - QR firmado deja de validar.
-- `Control Panel` cambia branding/permisos sin sesion reforzada.
+- `Control Panel` pierde step-up, motivo obligatorio o auditoria.
 - Se detecta fuga cross-sede o escalacion de privilegios.
+- La migracion productiva falla o deja la app en estado parcial.
 
-## 7. Rollback operativo
+## 6. Rollback operativo
 
-1. Revertir al release/tag anterior.
-2. Re-desplegar version previa.
+1. Revertir a la imagen o tag anterior.
+2. Re-desplegar `api` y `web`.
 3. Verificar:
    - `/health/`
    - `/ready/`
@@ -110,11 +99,10 @@ Hacer rollback si ocurre cualquiera de estas:
    - login guarda
    - QR firmado
    - lectura de branding
-4. Si la incidencia esta ligada a migracion o datos, detener nuevas escrituras y evaluar restauracion desde backup.
+4. Si el problema esta ligado a migracion o datos, detener nuevas escrituras y evaluar restauracion desde backup.
 
-## 8. Riesgos actuales que no bloquean salida controlada
+## 7. Riesgos conocidos al momento del cutover
 
-- Render sigue configurado con `plan: free` en [render.yaml](/C:/Users/picos/Desktop/SADI/render.yaml).
-  - Eso puede ser valido para piloto, pero no es una postura fuerte para operacion estable.
-- Mobile ya tiene smoke de contrato, pero no pruebas automatizadas de dispositivo real.
-- Web ya tiene smoke e2e basicos, pero no cubre todo el journey admin/aprendiz.
+- Passkeys de autenticacion siguen fuera de produccion por decision de seguridad.
+- El release puede salir sin esa feature; no debe reactivarse manualmente.
+- [render.yaml](/C:/Users/picos/Desktop/SADI/render.yaml) no representa hoy la topologia oficial completa del release.

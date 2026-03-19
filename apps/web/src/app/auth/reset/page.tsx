@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { buildPasswordRecoveryUrl } from "@/lib/password-recovery-routes";
 
 type ResetPageProps = {
   searchParams: Promise<{ email?: string; otp?: string }>;
@@ -6,9 +7,5 @@ type ResetPageProps = {
 
 export default async function ResetPage({ searchParams }: ResetPageProps) {
   const params = await searchParams;
-  const q = new URLSearchParams();
-  q.set("step", "reset");
-  if (params.email) q.set("email", params.email);
-  if (params.otp) q.set("otp", params.otp);
-  redirect(`/password-recovery?${q.toString()}`);
+  redirect(buildPasswordRecoveryUrl("reset", { email: params.email, otp: params.otp }));
 }

@@ -22,7 +22,7 @@ type SystemThemeContextValue = {
 };
 
 const DEFAULT_CONFIG: SystemThemeConfig = {
-  nombre_institucion: (process.env.NEXT_PUBLIC_INSTITUTION_NAME || "Institucion").trim() || "Institucion",
+  nombre_institucion: (process.env.NEXT_PUBLIC_INSTITUTION_NAME || "Institución").trim() || "Institución",
   branding_preset: null,
   color_aprendiz_light: "#14B8A6",
   color_aprendiz_dark: "#0F766E",

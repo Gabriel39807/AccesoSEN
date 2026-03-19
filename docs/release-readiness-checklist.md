@@ -15,7 +15,8 @@ Este checklist es el criterio operativo minimo para decidir si una version de SA
   - `npm run lint` en verde.
   - `npm run typecheck` en verde.
   - `npm run build` en verde.
-  - `npm run test:e2e` en verde.
+  - `npm run test:e2e:mocked` en verde como validacion UI mockeada.
+  - `npm run test:e2e:integrated` en verde como smoke real web -> API.
 - Mobile:
   - `npm run lint` en verde.
   - `npm run typecheck` en verde.
@@ -23,6 +24,7 @@ Este checklist es el criterio operativo minimo para decidir si una version de SA
 
 ## 2. Gate de configuracion
 
+- El flujo web vigente coincide con [auth-web-official-flow.md](/C:/Users/picos/Desktop/SADI/docs/auth-web-official-flow.md).
 - `DJANGO_ENV=production`.
 - `DEBUG=False`.
 - `DJANGO_SECRET_KEY` real, largo y sin fallback.
@@ -31,12 +33,16 @@ Este checklist es el criterio operativo minimo para decidir si una version de SA
 - `CORS_ALLOWED_ORIGINS` limitado a frontends reales.
 - Base de datos y cache reales accesibles desde la API.
 - SMTP/OTP configurado y probado.
-- `render.yaml` o plataforma equivalente verificando `healthCheckPath: /ready/`.
+- la topologia oficial coincide con [deploy-production.md](/C:/Users/picos/Desktop/SADI/docs/deploy-production.md).
+- `NEXT_PUBLIC_API_URL` apunta al backend oficial del release.
+- no existe fallback hardcodeado a un host productivo fijo.
+- la matriz minima de variables coincide con [env-matrix-operativa.md](/C:/Users/picos/Desktop/SADI/docs/env-matrix-operativa.md).
 
 ## 3. Gate de datos y migraciones
 
 - Backup de base de datos ejecutado antes del despliegue.
 - `python manage.py migrate --noinput` aplicado sin errores.
+- El mapa de invariantes y su mecanismo de enforcement coincide con [invariant-enforcement.md](/C:/Users/picos/Desktop/SADI/docs/invariant-enforcement.md).
 - Seeds de permisos y branding presentes:
   - `control_panel.*`
   - presets de branding activos
@@ -87,6 +93,8 @@ Este checklist es el criterio operativo minimo para decidir si una version de SA
 - Un `admin_sede` no puede leer ni mutar recursos de otra sede.
 - Un `guarda` no puede usar endpoints de admin.
 - Un token emitido en un rol multirol no hereda permisos de otro rol.
+- `GET /api/sedes/` sin autenticacion devuelve `401` o `403`.
+- passkeys no estan expuestas en produccion sin verificacion WebAuthn real.
 - `Control Panel` rechaza mutaciones sin:
   - sesion reforzada
   - header `X-Control-Panel-Reason`
@@ -113,6 +121,8 @@ No desplegar si ocurre cualquiera de estos puntos:
 - `/ready/` no valida DB/cache.
 - Hay ambiguedad entre `UserMembership` y rol legado en un flujo critico nuevo.
 - Existe un bypass de sede o escalacion de privilegios.
+- Passkey/WebAuthn sigue habilitada en produccion sin validacion criptografica real.
+- El frontend puede redirigirse a una API hardcodeada distinta del release actual.
 - El `Control Panel` permite mutaciones sin step-up auth o sin auditoria.
 - Un flujo critico de QR/turno/acceso falla en smoke test.
 
@@ -128,15 +138,21 @@ No desplegar si ocurre cualquiera de estos puntos:
    - lectura de configuracion/branding
 5. Si la regresion fue por migracion, detener rollout y evaluar rollback de datos segun backup.
 
-## 9. Estado actual de referencia
+## 9. Estado de referencia historico
 
-Al cierre de esta iteracion:
+Los valores de esta seccion son solo una foto previa de validacion y **no equivalen** a aprobacion vigente de release.
 
-- Backend test suite: `118 passed, 1 skipped`
-- Cobertura backend: `75.07%`
+Antes de reconsiderar salida deben re-ejecutarse todos los gates de las secciones anteriores sobre el commit objetivo.
+
+Referencia historica conocida:
+
+- `cmd /c check.cmd`: `CHECK_OK`
+- Backend test suite: `127 passed, 3 skipped`
+- Cobertura backend: `75.34%`
 - Web build: verde
 - Web lint/typecheck: verde
-- Web smoke e2e: `3 passed`
+- Web mocked UI e2e: `3 passed`
+- Web integrated smoke e2e: `1 passed`
 - Mobile lint/typecheck: verde
 - Mobile smoke tests: `10 passed`
-- Riesgo residual principal: mobile ya tiene smoke de contrato, pero aun no tiene E2E/dispositivo real automatizado
+- Riesgo residual principal: falta validar el enforcement DB-level nuevo tambien sobre PostgreSQL real y ejecutar el cutover en la topologia oficial documentada

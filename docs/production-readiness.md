@@ -1,143 +1,83 @@
 # Production Readiness Report
 
-Fecha: 2026-02-19  
+Fecha: 2026-03-17  
 Rama objetivo: `dev`
 
-## Score por area (0-100)
-- Security: 72
-- Reliability: 70
-- Observability: 68
-- CI/CD: 74
-- Testing: 66
-- DX (Developer Experience): 78
-- Architecture: 73
+## Estado actual
 
-Score global: **72/100**
+Veredicto operativo: **RECONSIDERABLE CON RIESGO**
 
-## Riesgos y prioridades
-### P0 (bloqueadores de produccion)
-1. `services/api/venv` versionado en git (resuelto).
-2. Settings inseguros para prod (`DEBUG`, hosts, secret fallback) (resuelto con split por entorno).
-3. Sin pipeline CI para validar cambios antes de merge (resuelto con GitHub Actions).
+La Fase 0, Fase 1, Fase 2 y Fase 4 quedan cerradas a nivel de codigo y gate local.  
+La Fase 3 queda materialmente avanzada y operativa en el entorno local, pero conserva un riesgo residual: el enforcement DB-level nuevo para `Acceso` fue probado en SQLite por validacion de modelo y migracion limpia, pero la prueba automatizada raw-SQL especifica de PostgreSQL aun depende de ejecutarse en un entorno Postgres real.
 
-### P1 (alto impacto)
-1. Lint web con deuda tecnica (`no-explicit-any`) aun elevada.
-2. Ausencia de pruebas e2e completas en dispositivo real para mobile y cobertura de journeys web todavia limitada.
-3. Falta de reverse proxy/TLS documentado operativamente.
+## Evidencia confirmada en este commit
 
-### P2 (mejora continua)
-1. No hay metricas de aplicacion (Prometheus/OTel).
-2. Falta politicas de retencion/anonimizacion de logs.
-3. Cobertura de backend inicial todavia baja para un sistema critico.
+- `cmd /c check.cmd`: verde.
+- Backend:
+  - `check`: verde
+  - `check --deploy`: verde con env de produccion de CI
+  - `pytest`: verde
+  - cobertura backend: `75.34%`
+- Web:
+  - `lint`: verde
+  - `typecheck`: verde
+  - `build`: verde
+  - `test:e2e:mocked`: verde (`3 passed`)
+  - `test:e2e:integrated`: verde (`1 passed`)
+- Mobile:
+  - `lint`: verde
+  - `typecheck`: verde
+  - `test:smoke`: verde (`10 passed`)
 
-## Actualizacion 2026-02-21 (RBAC y politicas dinamicas)
-- Se implemento RBAC data-driven con modelos: `Role`, `Permission`, `RolePermission`, `UserMembership`.
-- Se agregaron politicas por sede (`SedePolicy`) y dominios permitidos por rol/sede (`AllowedEmailDomain`).
-- Se reforzo scoping server-side en viewsets clave (`usuarios`, `equipos`, `turnos`, `accesos`, `notificaciones`) usando `AuthorizationService`.
-- Se centralizo parse/generacion de QR con `QRService` y modo por sede (`PLAIN|SIGNED|DUAL`).
-- Se documento la decision en `docs/decisions/ADR-004-data-driven-rbac-and-domain-policies.md`.
+## Endurecimiento confirmado
 
-## Cambios implementados en esta iteracion
-### Repo hygiene
-- `.gitignore` reforzado para monorepo.
-- Eliminado del indice `services/api/venv` (artefactos locales).
-- Agregados `.editorconfig`, `.gitattributes`, `CONTRIBUTING.md`, `CODEOWNERS`, `LICENSE`.
+### Seguridad y auth
 
-### Configuracion por entorno (Django)
-- Split de settings:
-  - `accesosen_api/base.py`
-  - `accesosen_api/development.py`
-  - `accesosen_api/production.py`
-- Dispatcher por `DJANGO_ENV` en `accesosen_api/settings.py`.
-- Hardening en produccion:
-  - secure cookies
-  - HSTS
-  - headers de seguridad
-  - validacion explicita de secretos/hosts
+- Passkeys de autenticacion permanecen fail-closed cuando `WEBAUTHN_MOCK=false`.
+- `Control Panel` no depende de un step-up passkey falso.
+- El flujo web oficial queda reducido a:
+  - `access` corto en memoria
+  - `refresh` por cookie HttpOnly
 
-### Infra y despliegue
-- `docker-compose.yml` raiz con `db`, `redis`, `api`, `web`.
-- Dockerfile API (gunicorn + migrations en entrypoint).
-- Dockerfile web multi-stage (`next build` standalone).
-- `.env.example` para raiz, API, web y mobile.
-- `.dockerignore` en API y web.
+### Integracion
 
-### Calidad/CI
-- Workflow GitHub Actions (`.github/workflows/ci.yml`) para:
-  - backend (`check` + `pytest --cov`)
-  - web (`lint` + `build`)
-  - mobile (`lint`)
-- `pytest.ini` agregado en API.
-- `check.sh` y `check.cmd` actualizados (lint/test/build).
+- Existe smoke integrado real web -> API.
+- La suite mocked UI ya esta separada de la integrada y no cuenta como evidencia falsa de release.
 
-### Seguridad y operacion
-- `SECURITY.md`.
-- `dependabot.yml` para pip/npm.
-- Logging de eventos de login/lockout/OTP.
-- Middleware de request logging con `X-Request-ID`.
-- Endpoints de salud:
-  - `/health/`
-  - `/ready/`
-- Runbook y guia de deploy:
-  - `docs/runbook-operations.md`
-  - `docs/deploy-production.md`
+### Persistencia
 
-## Pendientes recomendados
-1. Subir coverage backend a >= 60% y luego >= 75%.
-2. Eliminar excepcion temporal de `no-explicit-any` en CI web.
-3. Integrar escaneo de vulnerabilidades en CI (`pip-audit`, `npm audit`, `trivy`).
-4. Expandir smoke e2e actuales de web hacia mas journeys criticos.
-5. Evolucionar smoke mobile actuales de contrato hacia pruebas de dispositivo o navegacion real.
-6. Anadir proxy TLS (Nginx/Caddy) y guia de certificados.
+- El limite de 4 equipos por aprendiz ya no depende solo del view logic.
+- Se agrego enforcement adicional para invariantes de `Acceso`.
+- `showmigrations` local quedo sin pendientes tras aplicar `0022` a `0027`.
 
-## Plan de mitigacion
-1. Sprint corto de deuda web typing (`any` -> tipos concretos).
-2. Matriz de pruebas de regresion para auth/permisos/OTP.
-3. Observabilidad avanzada (Sentry + metricas HTTP).
-4. Procedimiento formal de rotacion de secretos trimestral.
+### Release gate
 
-## Actualizacion 2026-03-15 (hardening final API + Control Panel)
+- Existe una ruta oficial unica de despliegue documentada en [deploy-production.md](/C:/Users/picos/Desktop/SADI/docs/deploy-production.md).
+- El checklist operativo ya puede usarse como gate real.
 
-Estado actual estimado:
+## Riesgos residuales
 
-- Security: 86
-- Reliability: 84
-- Observability: 72
-- CI/CD: 85
-- Testing: 82
-- DX (Developer Experience): 82
-- Architecture: 86
+1. Passkeys siguen deshabilitadas en produccion, lo cual es intencional y correcto por ahora, pero deja esa capacidad fuera del release inicial.
+2. El enforcement DB-level nuevo de `Acceso` debe validarse tambien sobre PostgreSQL real antes de declarar aprobacion sin reservas.
+3. [render.yaml](/C:/Users/picos/Desktop/SADI/render.yaml) sigue siendo backend-only y no debe confundirse con la topologia oficial completa del release.
+4. Mobile tiene smoke automatizado, pero no E2E de dispositivo real.
 
-Score global estimado: **82/100**
+## Decision actual
 
-### Resuelto desde la linea base
+El proyecto ya no esta en estado **bloqueado** por fallos obvios de seguridad, integracion o build.  
+El estado correcto pasa a **reconsiderable con riesgo**.
 
-- Flujo QR firmado corregido para tokens largos.
-- Healthcheck de plataforma alineado a `/ready/`.
-- `check --deploy` agregado y validado en pipeline.
-- Tests backend desacoplados de dependencia remota accidental.
-- RBAC endurecido con evaluacion por `UserMembership` en flujos criticos.
-- Multirol corregido para que el token respete el rol runtime.
-- `Acceso` dejado inmutable salvo politica controlada de borrado.
-- Contrasenas iniciales predecibles eliminadas.
-- `Control Panel` separado como perimetro sensible con:
-  - permisos `control_panel.*`
-  - step-up auth
-  - cuotas
-  - auditoria before/after
-- Branding migrado a presets seguros con consumo efectivo en web y mobile.
+## Para subir a “aprobado”
 
-### Riesgos residuales
+Falta cerrar estas evidencias en entorno objetivo:
 
-1. Web ya tiene smoke e2e basicos y mobile tiene smoke de contrato, pero aun faltan pruebas de dispositivo real y mas journeys criticos.
-2. Persisten zonas de backend con cobertura funcional baja, especialmente:
-   - `accesos/import_services.py`
-   - zonas amplias de `accesos/views.py`
-3. Falta observabilidad avanzada de negocio y aplicacion:
-   - metricas HTTP
-   - alertas
-   - error tracking centralizado
+1. Ejecutar migraciones y smoke contra PostgreSQL real.
+2. Validar `health`, `ready` y smoke por rol sobre la topologia oficial.
+3. Confirmar variables reales, backup y rollback antes del cutover.
 
-### Criterio actual
+## Referencias
 
-El proyecto ya no presenta bloqueadores funcionales evidentes para una primera salida controlada, siempre que el despliegue siga el checklist operativo de [release-readiness-checklist.md](/C:/Users/picos/Desktop/SADI/docs/release-readiness-checklist.md).
+- [release-readiness-checklist.md](/C:/Users/picos/Desktop/SADI/docs/release-readiness-checklist.md)
+- [deploy-production.md](/C:/Users/picos/Desktop/SADI/docs/deploy-production.md)
+- [production-cutover-runbook.md](/C:/Users/picos/Desktop/SADI/docs/production-cutover-runbook.md)
+- [invariant-enforcement.md](/C:/Users/picos/Desktop/SADI/docs/invariant-enforcement.md)

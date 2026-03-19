@@ -7,15 +7,14 @@ function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 function statusClasses(status: StatusChipState) {
-  const base =
-    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold backdrop-blur-sm transition";
+  const base = "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold backdrop-blur-sm transition";
   if (status === "DENTRO") {
-    return `${base} border-sky-200/90 bg-sky-50/80 text-sky-800`;
+    return `${base} border-[color:color-mix(in_srgb,var(--success)_26%,var(--surface-border))] bg-[color:color-mix(in_srgb,var(--success)_14%,var(--surface-elevated))] text-[color:color-mix(in_srgb,var(--success)_72%,var(--foreground))]`;
   }
   if (status === "FUERA") {
-    return `${base} border-cyan-200/90 bg-cyan-50/80 text-cyan-800`;
+    return `${base} border-[color:color-mix(in_srgb,var(--warning)_28%,var(--surface-border))] bg-[color:color-mix(in_srgb,var(--warning)_14%,var(--surface-elevated))] text-[color:color-mix(in_srgb,var(--warning)_78%,var(--foreground))]`;
   }
-  return `${base} border-zinc-200/90 bg-zinc-100/80 text-zinc-700`;
+  return `${base} border-surface-border bg-surface-muted/90 text-[color:var(--text-soft)]`;
 }
 
 function statusLabel(status: StatusChipState) {
@@ -37,9 +36,9 @@ export default function StatusChip({
       <span
         className={cx(
           "inline-flex h-2.5 w-2.5 rounded-full",
-          safeStatus === "DENTRO" && "bg-sky-500 animate-pulse",
-          safeStatus === "FUERA" && "bg-cyan-500 animate-pulse",
-          safeStatus !== "DENTRO" && safeStatus !== "FUERA" && "bg-zinc-400"
+          safeStatus === "DENTRO" && "animate-pulse bg-[color:var(--success)]",
+          safeStatus === "FUERA" && "animate-pulse bg-[color:var(--warning)]",
+          safeStatus !== "DENTRO" && safeStatus !== "FUERA" && "bg-[color:var(--text-faint)]"
         )}
       />
       <span className="whitespace-nowrap">

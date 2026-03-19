@@ -45,39 +45,42 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
         ref={wrapperRef}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
-        className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1.08fr_0.92fr]"
+        className="mx-auto grid w-full max-w-7xl items-start gap-7 xl:grid-cols-[1.14fr_0.86fr]"
       >
         <motion.section
-          className="order-2 lg:order-1"
+          className="order-2 xl:order-1"
           initial={{ opacity: 0, x: -60 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
         >
           <HeroVisual role={role} tx={tilt.tx} ty={tilt.ty} />
         </motion.section>
+
         <motion.section
-          className="order-1 lg:order-2 flex items-center"
+          className="order-1 xl:order-2 xl:pt-3"
           initial={{ opacity: 0, x: 40 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: "easeOut", delay: 0.15 }}
         >
-          <div className="w-full">
+          <div className="w-full max-w-[34rem] xl:ml-auto">
             <motion.p
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="mb-3 inline-flex rounded-full border border-white/70 bg-white/75 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-600 shadow-sm"
+              className="mb-3 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--auth-accent)] shadow-sm backdrop-blur-md"
             >
               {badge}
             </motion.p>
+
             <motion.h1
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className={`max-w-xl text-4xl font-extrabold leading-[1.02] md:text-5xl ${styles.textStrong}`}
+              className={`max-w-xl text-4xl font-extrabold leading-[1.02] tracking-tight md:text-5xl ${styles.textStrong}`}
             >
               {title}
             </motion.h1>
+
             <motion.p
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -86,6 +89,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
             >
               {subtitle}
             </motion.p>
+
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
@@ -98,6 +102,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
                 </span>
               ))}
             </motion.div>
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

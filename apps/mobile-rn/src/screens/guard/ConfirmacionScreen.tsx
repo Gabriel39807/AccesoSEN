@@ -48,7 +48,7 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
           <Pill text="ACCESO DENEGADO" />
           <TitleBlock
             title="Usuario no encontrado"
-            subtitle="La informacion escaneada no corresponde a un usuario registrado."
+            subtitle="La información escaneada no corresponde a un usuario registrado."
           />
           <ModernButton label="Volver a escanear" tone="danger" onPress={() => navigation.goBack()} />
         </FadeInCard>
@@ -83,7 +83,7 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
       <FadeInCard style={{ gap: 14 }}>
         <TitleBlock
           title="Checklist de equipos"
-          subtitle="Marca los equipos que acompanaran este movimiento antes de confirmar ingreso o salida."
+          subtitle="Marca los equipos que acompañarán este movimiento antes de confirmar ingreso o salida."
         />
         <FlatList
           data={equipos}

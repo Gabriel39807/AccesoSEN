@@ -23,11 +23,12 @@ export default function DataTable({
 }) {
   if (loading && skeleton) return <>{skeleton}</>;
   return (
-    <section className="overflow-auto rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
-      <table className={cx("min-w-full text-sm", tableClassName)}>
+    <section className="sadi-card overflow-hidden rounded-3xl">
+      <div className="overflow-x-auto">
+        <table className={cx("min-w-full text-sm", tableClassName)}>
         <thead
           className={cx(
-            "bg-sky-50 text-sky-900",
+            "bg-primary/10 text-primary",
             stickyHeader && "sticky top-0 z-10"
           )}
         >
@@ -37,8 +38,8 @@ export default function DataTable({
           {children}
           {!hasRows && emptyState ? emptyState : null}
         </tbody>
-      </table>
+        </table>
+      </div>
     </section>
   );
 }
-

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import Modal from "@/components/ui/Modal";
 import { api } from "@/lib/api";
@@ -103,7 +103,7 @@ export default function AprendizEquipoDetallePage() {
 
   const canMutate = equipo?.estado === "pendiente";
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     if (!idNum || Number.isNaN(idNum)) {
       setError("ID de equipo inválido.");
       setLoading(false);
@@ -135,11 +135,11 @@ export default function AprendizEquipoDetallePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [idNum]);
 
   useEffect(() => {
     void cargar();
-  }, [idNum]);
+  }, [cargar]);
 
   async function guardarCambios() {
     setMsg(null);

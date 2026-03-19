@@ -184,7 +184,7 @@ function FilterSkeleton() {
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <>
-      {/* Tabla skeleton (misma ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“cajaÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â que tu tabla real) */}
+      {/* Tabla skeleton (misma caja que tu tabla real) */}
       <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
         <table className="min-w-[1020px] table-fixed text-sm">
           {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
@@ -210,7 +210,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
                   <div className="h-4 w-10 rounded sadi-skeleton" />
                 </td>
 
-                {/* Usuario (2 lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­neas: username + email) */}
+                {/* Usuario (2 líneas: username + email) */}
                 <td className="p-3">
                   <div className="h-4 w-28 rounded sadi-skeleton" />
                   <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
@@ -252,7 +252,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
                   <div className="h-4 w-32 rounded sadi-skeleton" />
                 </td>
 
-                {/* Acciones (botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n) */}
+                {/* Acciones (botón) */}
                 <td className="p-3">
                   <div className="h-10 w-24 rounded-xl sadi-skeleton" />
                 </td>
@@ -262,7 +262,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
         </table>
       </div>
 
-      {/* PaginaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n skeleton (misma caja que tu paginaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n real) */}
+      {/* Paginación skeleton (misma caja que tu paginación real) */}
       <div className="mt-4 flex items-center justify-between rounded-2xl border bg-white p-3 shadow-sm">
         <div className="h-4 w-40 rounded sadi-skeleton" />
 
@@ -412,7 +412,7 @@ export default function AdminUsuariosPage() {
       if (rid !== requestIdRef.current) return;
 
       if (Array.isArray(payload)) {
-        // fallback: backend sin paginaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n
+        // fallback: backend sin paginación
         setServerPaginated(false);
         setUsuarios(payload);
         setCount(payload.length);
@@ -507,7 +507,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, filtrados, page, serverPaginated]);
 
   const stats = useMemo(() => {
-    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â±o)
+    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseño)
     const base = serverPaginated ? usuarios : usuarios;
 
     const total = serverPaginated ? count : base.length;
@@ -935,7 +935,7 @@ export default function AdminUsuariosPage() {
       <PageHeader
         breadcrumb="ADMIN > USUARIOS"
         title="Usuarios"
-        description="Gestion de cuentas, roles, estado y carga de aprendices."
+      description="Gestión de cuentas, roles, estado y carga de aprendices."
         actions={
           <>
             <Button onClick={abrirCrear} variant="primary">
@@ -1606,12 +1606,12 @@ export default function AdminUsuariosPage() {
               <FormBanner type={importBanner.type} message={importBanner.message} />
             ) : null}
 
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-end">
               <input
                 type="file"
                 accept=".xlsx,.xlsm,.xltx,.xltm,.csv"
                 onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                className="min-w-0 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
               />
               <button
                 onClick={validarImportacion}
@@ -1637,7 +1637,7 @@ export default function AdminUsuariosPage() {
             </div>
 
             {importResumen ? (
-              <div className="grid gap-3 sm:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <div className="text-xs text-slate-500">Total</div>
                   <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
@@ -1882,7 +1882,7 @@ export default function AdminUsuariosPage() {
                 onChange={(e) => setHideConflictSummary(e.target.checked)}
                 className="h-4 w-4 rounded border-slate-300"
               />
-              No volver a mostrar este resumen en esta importacion
+              No volver a mostrar este resumen en esta importación
             </label>
             <div className="flex flex-wrap justify-end gap-2">
               <button

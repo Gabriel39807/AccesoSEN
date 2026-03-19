@@ -9,7 +9,7 @@ export default function BestEmployeeWidget() {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6, ease: "easeOut" }}
-      className="flex flex-col rounded-3xl border border-white/60 bg-white/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl"
+      className="flex h-full flex-col rounded-3xl border border-white/60 bg-white/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)] backdrop-blur-xl"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-base font-extrabold text-zinc-900">Responsable destacado</h3>

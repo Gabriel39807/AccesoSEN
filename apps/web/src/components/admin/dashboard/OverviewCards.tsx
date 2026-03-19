@@ -26,7 +26,7 @@ export default function OverviewCards() {
       variants={container}
       initial="hidden"
       animate="show"
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:gap-5"
     >
       <motion.div variants={item}>
         <SharedStatCard

@@ -11,7 +11,7 @@ type Props = InputHTMLAttributes<HTMLInputElement> & {
 export default function AuthInput({ id, label, error, hint, className = "", ...props }: Props) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-sm font-semibold text-slate-800">
+      <label htmlFor={id} className="block text-sm font-semibold text-[color:var(--foreground)]">
         {label}
       </label>
       <input
@@ -20,7 +20,7 @@ export default function AuthInput({ id, label, error, hint, className = "", ...p
         className={`${styles.input} ${error ? styles.inputError : ""} ${className}`}
         {...props}
       />
-      {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
+      {hint ? <p className="text-xs text-[color:var(--text-muted)]">{hint}</p> : null}
       {error ? (
         <p aria-live="polite" className={`text-xs font-medium ${styles.statusError} ${styles.status}`}>
           {error}
