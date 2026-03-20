@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile-rn",
-    "slug": "mobile-rn",
+    "name": "SADI",
+    "slug": "sadi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -45,6 +45,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b7652202-942d-495b-9b51-774d1ae7f226"
+      }
+    },
+    "owner": "gabriel39807s-organization"
   }
 }
