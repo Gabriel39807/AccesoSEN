@@ -1,15 +1,19 @@
 /**
- * Login movil para roles aprendiz/guarda.
+ * Login movil para roles aprendiz/guarda (V5 Premium No-Scroll).
  *
  * Responsabilidad:
  * - Validar credenciales y sede/turno para guardas.
- * - Exponer acceso con biometria cuando existe sesion persistida.
- * - Mantener feedback visual de carga/error durante todo el flujo.
+ * - Exponer acceso con biometría cuando existe sesión persistida.
+ * - Diseño UI de alta gama: layout ajustado sin scroll, doble picker horizontal,
+ *   header flotante arriba, botón compacto para huella.
  */
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { ActivityIndicator, Text, View, Pressable, StyleSheet, Animated, Dimensions, Image, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { useSessionStore } from "../../src/store/session";
 import { toUiErrorMessage } from "../../src/api/client";
@@ -18,10 +22,15 @@ import { listSedes, type SedeItem } from "../../src/api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
 import { isBiometricAvailable } from "../../src/auth/biometric";
 import { hasRefreshToken, isBiometricEnabled } from "../../src/storage/tokens";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
+import { InputField, ModernButton, Pill, SwirlingConstellations } from "../../src/ui/modern";
+
+const SCREEN_HEIGHT = Dimensions.get("window").height;
+
+// We now use the global SwirlingConstellations and PATTERN_ICONS from modern.tsx
 
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ rol?: "guarda" | "aprendiz" }>();
+  // Forced to 'guarda' as per prompt if not specified, though it handles both.
   const rol = (params.rol ?? "guarda") as "guarda" | "aprendiz";
 
   const signIn = useSessionStore((s) => s.signIn);
@@ -45,21 +54,47 @@ export default function LoginScreen() {
 
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
 
-  /**
-   * Sanitiza documento para permitir solo digitos (maximo 10).
-   */
+  // Entrance animation
+  const introAnimFade = useRef(new Animated.Value(0)).current;
+  const introAnimSlide = useRef(new Animated.Value(30)).current;
+  const cardAnimFade = useRef(new Animated.Value(0)).current;
+  const cardAnimSlide = useRef(new Animated.Value(30)).current;
+  const actionAnimFade = useRef(new Animated.Value(0)).current;
+  const actionAnimSlide = useRef(new Animated.Value(30)).current;
+
   function onUsernameChange(value: string) {
     setUsername(sanitizeDigits(value).slice(0, 10));
   }
 
-  /**
-   * Limita longitud de contrasena en UI para evitar envios invalidos.
-   */
   function onPasswordChange(value: string) {
     setPassword(value.slice(0, 20));
   }
 
   const bloqueado = lockRemainingSec > 0;
+
+  useEffect(() => {
+    // 1. Enter Header/Brand
+    Animated.parallel([
+      Animated.timing(introAnimFade, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.spring(introAnimSlide, { toValue: 0, tension: 50, friction: 9, useNativeDriver: true })
+    ]).start();
+
+    // 2. Enter Form Card
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(cardAnimFade, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.spring(cardAnimSlide, { toValue: 0, tension: 40, friction: 8, useNativeDriver: true })
+      ]).start();
+    }, 150);
+
+    // 3. Enter Actions
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(actionAnimFade, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.spring(actionAnimSlide, { toValue: 0, tension: 40, friction: 8, useNativeDriver: true })
+      ]).start();
+    }, 300);
+  }, []);
 
   useEffect(() => {
     if (lockRemainingSec <= 0) return;
@@ -80,18 +115,14 @@ export default function LoginScreen() {
           setSede(items[0].code);
           setSedeLoadHint(null);
         }
-        if (items.length === 0) {
-          setSedeLoadHint("No hay sedes activas disponibles. Contacta al administrador.");
-        }
+        if (items.length === 0) setSedeLoadHint("No hay sedes activas disponibles.");
       } catch {
         if (!mounted) return;
         setSedes([]);
-        setSedeLoadHint("No se pudieron cargar las sedes. Revisa la conexion con el servidor.");
+        setSedeLoadHint("No se pudieron cargar las sedes.");
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -99,49 +130,31 @@ export default function LoginScreen() {
     (async () => {
       try {
         const [available, hasRefresh, enabled] = await Promise.all([
-          isBiometricAvailable(),
-          hasRefreshToken(),
-          isBiometricEnabled(),
+          isBiometricAvailable(), hasRefreshToken(), isBiometricEnabled(),
         ]);
         if (!mounted) return;
         setShowBiometricButton(Boolean(available));
         setBiometricReady(Boolean(available && hasRefresh && enabled));
-        if (!available) setBiometricHint("Este dispositivo no tiene biometria disponible.");
-        else if (!hasRefresh) setBiometricHint("La huella se habilita despues de iniciar sesion al menos una vez.");
-        else if (!enabled) setBiometricHint("La huella esta desactivada para esta sesion.");
+        if (!available) setBiometricHint("Huella no disponible en el dispositivo.");
+        else if (!hasRefresh) setBiometricHint("Aún no tienes sesión guardada para huella.");
+        else if (!enabled) setBiometricHint("Huella desactivada localmente.");
         else setBiometricHint(null);
       } catch {
         if (!mounted) return;
         setShowBiometricButton(false);
         setBiometricReady(false);
-        setBiometricHint(null);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
-  /**
-   * Flujo de autenticacion por password.
-   * Muestra estado de carga y bloquea botones para evitar doble submit.
-   */
   async function onSubmit() {
     setError(null);
     if (bloqueado) return;
     const documentError = validateDocument6to10(username.trim());
-    if (documentError) {
-      setError(documentError);
-      return;
-    }
-    if (!password || password.length > 20) {
-      setError("La contraseña debe tener maximo 20 caracteres.");
-      return;
-    }
-    if (rol === "guarda" && !sede) {
-      setError("Selecciona una sede.");
-      return;
-    }
+    if (documentError) { setError(documentError); return; }
+    if (!password || password.length > 20) { setError("Contraseña inválida (máx 20 chars)."); return; }
+    if (rol === "guarda" && !sede) { setError("Selecciona una sede."); return; }
 
     setLoading(true);
     try {
@@ -153,35 +166,22 @@ export default function LoginScreen() {
         jornada: rol === "guarda" ? jornada : undefined,
       });
       const mustChange = useSessionStore.getState().user?.must_change_password;
-      if (rol === "aprendiz" && mustChange) {
-        router.replace("/auth/first-password" as any);
-      } else {
-        router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
-      }
+      if (rol === "aprendiz" && mustChange) router.replace("/auth/first-password" as any);
+      else router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
     } catch (e: any) {
-      setError(toUiErrorMessage(e, "No se pudo iniciar sesion."));
+      setError(toUiErrorMessage(e, "Error de credenciales."));
       const code = e?.code as string | undefined;
       const secondsRemaining = Number(e?.detail?.seconds_remaining || 0);
-      if (code === "ACCOUNT_LOCKED_15MIN") {
-        setLockRemainingSec(secondsRemaining > 0 ? secondsRemaining : 15 * 60);
-      }
+      if (code === "ACCOUNT_LOCKED_15MIN") setLockRemainingSec(secondsRemaining > 0 ? secondsRemaining : 15 * 60);
     } finally {
       setLoading(false);
     }
   }
 
-  /**
-   * Flujo de autenticacion biometrica:
-   * - valida huella/face id local
-   * - refresca sesion con token seguro
-   */
   async function onBiometricSubmit() {
     setError(null);
     if (bloqueado) return;
-    if (rol === "guarda" && !sede) {
-      setError("Selecciona una sede.");
-      return;
-    }
+    if (rol === "guarda" && !sede) { setError("Selecciona sede primero."); return; }
 
     setBiometricLoading(true);
     try {
@@ -191,123 +191,345 @@ export default function LoginScreen() {
         jornada: rol === "guarda" ? jornada : undefined,
       });
       const mustChange = useSessionStore.getState().user?.must_change_password;
-      if (rol === "aprendiz" && mustChange) {
-        router.replace("/auth/first-password" as any);
-      } else {
-        router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
-      }
+      if (rol === "aprendiz" && mustChange) router.replace("/auth/first-password" as any);
+      else router.replace(rol === "guarda" ? ("/guard/home" as any) : ("/aprendiz/home" as any));
     } catch (e: any) {
-      setError(toUiErrorMessage(e, "No se pudo validar la huella. Usa tu contrasena."));
+      setError(toUiErrorMessage(e, "Huella rechazada."));
     } finally {
       setBiometricLoading(false);
     }
   }
 
-  return (
-    <ModernScreen scroll>
-      <FadeInCard delay={0}>
-        <Pill text={rol === "guarda" ? "SEGURIDAD" : "APRENDIZ"} />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock title="Iniciar sesion" subtitle={rol === "guarda" ? "Controla accesos y turnos activos." : "Consulta tu estado, equipos y mi QR."} />
-        </View>
-      </FadeInCard>
+  const mappedTheme = rol === "guarda" ? "guard" : "aprendiz";
 
-      <FadeInCard delay={70}>
-        <View style={{ gap: 10 }}>
+  return (
+    // Strictly NO-SCROLL View with native keyboard handling
+    // FIX: Android 'adjustResize' already shrinks the window natively. Using behavior="height" causes a double-shrink that drops focus.
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Background with uniform pattern texture - Premium Depth Pale Blue */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <LinearGradient 
+          colors={["#e0f2fe", "#ffffff"]} 
+          style={StyleSheet.absoluteFill} 
+        />
+        <SwirlingConstellations />
+      </View>
+
+      <ScrollView 
+        contentContainerStyle={{ flexGrow: 1, minHeight: SCREEN_HEIGHT }}
+        keyboardShouldPersistTaps="always"
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.contentWrapper}>
+          
+          {/* TOP INTRO SECTION ANIMATED */}
+        <Animated.View style={{ opacity: introAnimFade, transform: [{ translateY: introAnimSlide }] }}>
+          {/* Top Header Row Area (Sapphire-to-Cobalt Gradient Band) */}
+        <LinearGradient 
+          colors={rol === "guarda" ? ["#1e40af", "#172554"] : ["#0ea5e9", "#0284c7"]} 
+          start={{ x: 0, y: 0 }} 
+          end={{ x: 1, y: 1 }} 
+          style={styles.topHeaderBand}
+        >
+          <Pressable onPress={() => router.back()} style={styles.headerIconBtn}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          </Pressable>
+          <Pressable onPress={() => router.push("/auth/password-recovery" as any)} style={styles.headerIconBtn}>
+            <Ionicons name="help-circle-outline" size={26} color="#ffffff" />
+          </Pressable>
+        </LinearGradient>
+
+        {/* Branding & Welcome */}
+        <View style={styles.brandSection}>
+          <Pill text={rol === "guarda" ? "SEGURIDAD" : "ESTUDIANTE"} icon={rol === "guarda" ? "shield-checkmark" : "school"} tone={mappedTheme} />
+          <Text style={styles.titleText}>Iniciar sesión</Text>
+          <Text style={styles.subtitleText}>{rol === "guarda" ? "Tu labor garantiza la seguridad de nuestra institución." : "Consulta tu estado y mi QR."}</Text>
+        </View>
+      </Animated.View>
+
+        {/* Login Form Card (Glassmorphism, tightly packed) - SEQUENTIAL ANIM */}
+        <Animated.View style={[
+          styles.formCard, 
+          rol === "aprendiz" && { 
+            paddingVertical: 24, 
+            gap: 16, 
+            shadowColor: "#0f172a",
+            shadowOpacity: 0.08,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 8
+          }, 
+          { opacity: cardAnimFade, transform: [{ translateY: cardAnimSlide }] }
+        ]} pointerEvents="box-none">
           <InputField
+            icon="person-outline"
             label="Documento"
             value={username}
             onChangeText={onUsernameChange}
             autoCapitalize="none"
-            placeholder="1053444048"
+            placeholder="Ej. 1053444048"
             keyboardType="number-pad"
             maxLength={10}
+            iconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
+            wrapperStyle={rol === "aprendiz" ? { paddingVertical: 10, borderRadius: 12, backgroundColor: "#f8fafc" } : undefined}
           />
 
-          <InputField
-            label="contraseña"
-            value={password}
-            onChangeText={onPasswordChange}
-            placeholder="********"
-            secureTextEntry={!show}
-          />
+          <View>
+            <InputField
+              icon="lock-closed-outline"
+              label="Contraseña"
+              value={password}
+              onChangeText={onPasswordChange}
+              placeholder="••••••••"
+              secureTextEntry={!show}
+              rightIcon={show ? "eye-off-outline" : "eye-outline"}
+              onRightIconPress={() => setShow((v) => !v)}
+              iconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
+              rightIconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
+              wrapperStyle={rol === "aprendiz" ? { paddingVertical: 10, borderRadius: 12, backgroundColor: "#f8fafc" } : undefined}
+            />
+            <Pressable onPress={() => router.push("/auth/password-recovery" as any)} style={{ alignSelf: "center", marginTop: 12 }}>
+              <Text style={{ color: "#0ea5e9", fontSize: 13, fontWeight: "700" }}>¿Olvidaste tu contraseña?</Text>
+            </Pressable>
+          </View>
 
-          <ModernButton
-            label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-            tone="light"
-            onPress={() => setShow((v) => !v)}
-          />
-
-          {rol === "guarda" ? (
-            <View style={{ gap: 10 }}>
-              <Text style={{ fontWeight: "700", color: "#0f172a" }}>Sede</Text>
-              <View style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 12, overflow: "hidden", backgroundColor: "#f8fafc" }}>
-                <Picker selectedValue={sede} onValueChange={(v) => setSede(v)}>
-                  {sedes.map((item) => (
-                    <Picker.Item key={item.id} label={item.name} value={item.code} />
-                  ))}
-                </Picker>
+          {/* Side-by-Side Pickers to save vertical space */}
+          {rol === "guarda" && (
+            <View style={styles.rowSelectors}>
+              <View style={styles.dropdownCol}>
+                <Text style={styles.dropdownLabel}>Sede</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker selectedValue={sede} onValueChange={setSede} style={styles.pickerNative} itemStyle={styles.pickerItem} dropdownIconColor="#1e3a8a">
+                    {sedes.map((item) => (
+                      <Picker.Item key={item.id} label={item.name} value={item.code} />
+                    ))}
+                  </Picker>
+                </View>
               </View>
 
-              <Text style={{ fontWeight: "700", color: "#0f172a" }}>Turno</Text>
-              <View style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 12, overflow: "hidden", backgroundColor: "#f8fafc" }}>
-                <Picker selectedValue={jornada} onValueChange={(v) => setJornada(v)}>
-                  <Picker.Item label="MAÑANA" value="MAÑANA" />
-                  <Picker.Item label="Tarde" value="TARDE" />
-                  <Picker.Item label="Noche" value="NOCHE" />
-                </Picker>
+              <View style={styles.dropdownCol}>
+                <Text style={styles.dropdownLabel}>Turno</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker selectedValue={jornada} onValueChange={setJornada} style={styles.pickerNative} itemStyle={styles.pickerItem} dropdownIconColor="#1e3a8a">
+                    <Picker.Item label="MAÑANA" value="MAÑANA" />
+                    <Picker.Item label="TARDE" value="TARDE" />
+                    <Picker.Item label="NOCHE" value="NOCHE" />
+                  </Picker>
+                </View>
               </View>
             </View>
-          ) : null}
+          )}
 
-          {bloqueado ? (
-            <Text style={{ color: "#b91c1c", fontWeight: "800" }}>
-              Bloqueado temporalmente. Intenta en {lockRemainingSec}s.
-            </Text>
-          ) : null}
+          {/* Feedback Area has been successfully moved below the Action Buttons */}
+        </Animated.View>
 
-          {error ? <Text style={{ color: "#b91c1c" }}>{error}</Text> : null}
-          {rol === "guarda" && sedeLoadHint ? <Text style={{ color: "#b91c1c" }}>{sedeLoadHint}</Text> : null}
-
-          <ModernButton
-            label={loading ? "Ingresando..." : "Continuar"}
-            disabled={
-              loading ||
-              biometricLoading ||
-              bloqueado ||
-              (rol === "guarda" && (!sede || sedes.length === 0))
-            }
-            onPress={onSubmit}
-          />
-
-          {showBiometricButton ? (
+        {/* ACTIONS & FOOTER AREA - SEQUENTIAL ANIM */}
+        <Animated.View style={[{ opacity: actionAnimFade, transform: [{ translateY: actionAnimSlide }] }, styles.actionsContainerLayout]} pointerEvents="box-none">
+          <View style={styles.actionsArea}>
             <ModernButton
-              label={biometricLoading ? "Validando huella..." : "Entrar con huella"}
-              tone="light"
-              disabled={
-                loading ||
-                biometricLoading ||
-                bloqueado ||
-                !biometricReady ||
-                (rol === "guarda" && (!sede || sedes.length === 0))
-              }
-              onPress={onBiometricSubmit}
+              icon="arrow-forward-outline"
+              label={loading ? "Verificando..." : "Continuar"}
+              tone="guard" // Force deep sapphire for all roles
+              disabled={loading || biometricLoading || bloqueado || (rol === "guarda" && (!sede || sedes.length === 0))}
+              onPress={onSubmit}
             />
-          ) : null}
 
-          {biometricHint ? <Text style={{ color: "#475569" }}>{biometricHint}</Text> : null}
+            {/* Ultra Compact Light Blue Biometric Action */}
+            {showBiometricButton && (
+              <View style={styles.compactBioWrapper}>
+                <Pressable
+                  disabled={loading || biometricLoading || bloqueado || !biometricReady || (rol === "guarda" && (!sede || sedes.length === 0))}
+                  onPress={onBiometricSubmit}
+                  style={({ pressed }) => [
+                    styles.compactBioBtn,
+                    { backgroundColor: rol === "aprendiz" ? "#e0f2fe" : "#bae6fd" }, // Extremely pale blue for Aprendiz
+                    pressed && { opacity: 0.7 },
+                    (!biometricReady) && { opacity: 0.4 }
+                  ]}
+                >
+                  <Ionicons name="finger-print" size={24} color={rol === "aprendiz" ? "#0ea5e9" : "#1e3a8a"} />
+                  <Text style={[styles.compactBioText, { color: "#ffffff" }]}>Entrar con huella</Text>
+                </Pressable>
+                {biometricHint && <Text style={styles.compactBioHint}>{biometricHint}</Text>}
+              </View>
+            )}
+          </View>
 
-          {loading || biometricLoading ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
+          {/* Feedback Area Moved Below Buttons */}
+          <View style={[styles.feedbackArea, { marginTop: 16 }]}>
+            {bloqueado && <Text style={styles.errorText}>Bloqueado temporalmente. Intenta en {lockRemainingSec}s.</Text>}
+            {error && <Text style={styles.errorText}>{error}</Text>}
+            {rol === "guarda" && sedeLoadHint && <Text style={styles.errorText}>{sedeLoadHint}</Text>}
+            {(loading || biometricLoading) && <ActivityIndicator color={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"} />}
+          </View>
 
-          <ModernButton
-            label="Olvide mi contraseña"
-            tone="light"
-            onPress={() => router.push({ pathname: "/auth/password-recovery" } as any)}
-          />
+          <View style={styles.footerRow}>
+            <Ionicons name="lock-closed" size={12} color="#64748b" />
+            <Text style={styles.footerText}>© 2026 Asegurado por S.A.D.I</Text>
+          </View>
 
-          <ModernButton label="Volver" tone="dark" onPress={() => router.back()} />
-        </View>
-      </FadeInCard>
-    </ModernScreen>
+        </Animated.View>
+      </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#ffffff",
+  },
+  bgOrb: {
+    position: "absolute",
+    width: SCREEN_HEIGHT * 0.5,
+    height: SCREEN_HEIGHT * 0.5,
+    borderRadius: 999,
+  },
+  contentWrapper: {
+    flexGrow: 1, // Let it grow if needed, but don't force squash via flex: 1
+    paddingHorizontal: 24,
+    paddingTop: 12, // Compact top margin
+    paddingBottom: 12, // Compact bottom margin
+    justifyContent: "space-between", // Spread content naturally
+  },
+  topHeaderBand: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    marginTop: 8,
+    borderRadius: 20, // Rounded pill-like header
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    shadowColor: "#1e3a8a",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  headerIconBtn: {
+    padding: 8,
+    borderRadius: 999,
+  },
+  brandSection: {
+    gap: 6,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  titleText: {
+    fontSize: 34,
+    fontWeight: "900",
+    color: "#0f172a",
+    letterSpacing: -1,
+    marginTop: 8,
+  },
+  subtitleText: {
+    fontSize: 15,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  formCard: {
+    backgroundColor: "rgba(255,255,255,0.9)",
+    borderRadius: 32,
+    padding: 20,
+    gap: 12,
+    // Soft drop shadow instead of harsh border
+    shadowColor: "#94a3b8",
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.5)",
+  },
+  rowSelectors: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  dropdownCol: {
+    width: "48%", // Precise sizing for side-by-side
+    gap: 6,
+  },
+  dropdownLabel: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginLeft: 4,
+  },
+  pickerContainer: {
+    backgroundColor: "#f1f5f9",
+    borderRadius: 16,
+    overflow: "hidden",
+    height: 50,
+    justifyContent: "center",
+  },
+  pickerNative: {
+    width: "100%",
+    color: "#0f172a",
+  },
+  pickerItem: {
+    fontSize: 14,
+  },
+  feedbackArea: {
+    minHeight: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    color: "#1e3a8a", // Sapphire blue error mapping
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  actionsContainerLayout: {
+    gap: 8,
+    marginTop: -8, // move the entire fingerprint state area up slightly to reduce the center void
+  },
+  actionsArea: {
+    gap: 12,
+    marginTop: 0,
+  },
+  compactBioWrapper: {
+    alignItems: "center",
+    gap: 4,
+  },
+  compactBioBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#bae6fd", // Deep sapphire complementary Light sky-blue
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 999,
+    gap: 8,
+    shadowColor: "#0ea5e9",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  compactBioText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#ffffff", // Pure white text as requested for Chimbita
+  },
+  compactBioHint: {
+    fontSize: 11,
+    color: "#64748b",
+  },
+  footerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 6
+  },
+  footerText: {
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5
+  }
+});
