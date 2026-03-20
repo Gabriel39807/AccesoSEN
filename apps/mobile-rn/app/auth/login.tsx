@@ -311,7 +311,7 @@ export default function LoginScreen() {
                 <Text style={styles.dropdownLabel}>Turno</Text>
                 <View style={styles.pickerContainer}>
                   <Picker selectedValue={jornada} onValueChange={setJornada} style={styles.pickerNative} itemStyle={styles.pickerItem} dropdownIconColor="#1e3a8a">
-                    <Picker.Item label="Ma?ana" value="MANANA" />
+                    <Picker.Item label="Mañana" value="MANANA" />
                     <Picker.Item label="TARDE" value="TARDE" />
                     <Picker.Item label="NOCHE" value="NOCHE" />
                   </Picker>

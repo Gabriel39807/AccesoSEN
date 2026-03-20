@@ -1405,6 +1405,18 @@ class InstitutionalDecouplingTests(BaseApiTest):
         r = self.client.get("/api/sedes/")
         self.assertEqual(r.status_code, status.HTTP_401_UNAUTHORIZED, r.data)
 
+    def test_public_sedes_endpoint_is_available_prelogin_and_only_returns_active_rows(self):
+        Sede.objects.all().delete()
+        Sede.objects.create(code="north-campus", name="North Campus", is_active=True)
+        Sede.objects.create(code="old-campus", name="Old Campus", is_active=False)
+
+        r = self.client.get("/api/public/sedes/")
+        self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
+        rows = r.data.get("results", r.data)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["code"], "north-campus")
+        self.assertTrue(rows[0]["is_active"])
+
     def test_admin_sede_queryset_is_scoped_with_dynamic_sede(self):
         self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
         r = self.client.get("/api/usuarios/?sede_id=south-campus")

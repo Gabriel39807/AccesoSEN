@@ -31,6 +31,7 @@ from accesos.views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     PasswordResetVerifyView,
+    PublicSedeListView,
 )
 
 __all__ = [
@@ -59,4 +60,5 @@ __all__ = [
     "PasswordResetConfirmView",
     "PasswordResetRequestView",
     "PasswordResetVerifyView",
+    "PublicSedeListView",
 ]

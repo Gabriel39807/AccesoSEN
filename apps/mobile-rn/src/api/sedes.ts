@@ -8,6 +8,6 @@ export type SedeItem = {
 };
 
 export async function listSedes() {
-  const r = await api.get("/api/sedes/");
+  const r = await api.get("/api/public/sedes/");
   return (r.data?.results || r.data || []) as SedeItem[];
 }

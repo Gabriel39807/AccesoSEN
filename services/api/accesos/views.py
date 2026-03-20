@@ -642,6 +642,16 @@ class HealthCheckView(APIView):
         return ok_response({"status": "ok", "database": "ok", "service": "accesos"})
 
 
+class PublicSedeListView(APIView):
+    """Public list of active sedes for pre-login guard flows."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        qs = Sede.objects.filter(is_active=True).order_by("name")
+        return ok_response({"results": SedeSerializer(qs, many=True).data})
+
+
 class ConfiguracionSistemaView(APIView):
     """Configuración global de marca blanca para frontend.
 

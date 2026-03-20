@@ -47,6 +47,7 @@ from accesos.api.viewsets.auth import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     PasswordResetVerifyView,
+    PublicSedeListView,
 )
 from accesos.views import AuditEventsView, ControlPanelQuotaStatusView, GeminiStubView
 from .jwt_views import SadiLogoutAllView, SadiLogoutView, SadiTokenObtainPairView, SadiTokenRefreshView
@@ -66,6 +67,7 @@ router.register(r"notificaciones", NotificacionViewSet, basename="notificaciones
 
 urlpatterns = [
     path("health/", HealthCheckView.as_view(), name="api-health"),
+    path("public/sedes/", PublicSedeListView.as_view(), name="public-sedes"),
     path("configuracion/", ConfiguracionSistemaView.as_view(), name="configuracion-sistema"),
     path("control-panel/branding/presets/", ControlPanelBrandingPresetListView.as_view(), name="control-panel-branding-presets"),
     path("control-panel/branding/config/", ControlPanelBrandingConfigView.as_view(), name="control-panel-branding-config"),
