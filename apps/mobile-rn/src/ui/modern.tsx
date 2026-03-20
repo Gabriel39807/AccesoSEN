@@ -263,9 +263,13 @@ export function FadeInCard({
         },
       ]}
     >
-      <BlurView intensity={intensity} tint="light" style={styles.glassCard}>
-        {children}
-      </BlurView>
+      {Platform.OS === "android" ? (
+        <View style={[styles.glassCard, styles.androidCardFallback]}>{children}</View>
+      ) : (
+        <BlurView intensity={intensity} tint="light" style={styles.glassCard}>
+          {children}
+        </BlurView>
+      )}
     </Animated.View>
   );
 }
@@ -589,6 +593,9 @@ const styles = StyleSheet.create({
   glassCard: {
     padding: 24,
     backgroundColor: "rgba(255, 255, 255, 0.4)",
+  },
+  androidCardFallback: {
+    backgroundColor: "rgba(255,255,255,0.92)",
   },
   title: {
     fontSize: 32,

@@ -5,6 +5,14 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://sadi-api-genm.onrender.com",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://zsuvxmaejwxndfoepejb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdXZ4bWFland4bmRmb2VwZWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NzMwODUsImV4cCI6MjA4NzU0OTA4NX0.5YT8L3ZrDUp4lZlgzKxlk-6Y9PwTK_FbbrS_lu27PQY",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdXZ4bWFland4bmRmb2VwZWpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NzMwODUsImV4cCI6MjA4NzU0OTA4NX0.5YT8L3ZrDUp4lZlgzKxlk-6Y9PwTK_FbbrS_lu27PQY",
+        "EXPO_PUBLIC_INSTITUTION_NAME": "SADI",
+        "EXPO_PUBLIC_SEDE_LABEL": "La Sede"
+      },
       "android": {
         "buildType": "apk"
       }
