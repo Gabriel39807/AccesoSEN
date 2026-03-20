@@ -1,160 +1,330 @@
-import React, { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import React from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { api } from "../../src/api/client";
 import { useSessionStore } from "../../src/store/session";
-import { FadeInCard, ModernButton, ModernScreen, NoticeBanner, Pill, SkeletonLine, TitleBlock, uiTheme } from "../../src/ui/modern";
-
-type EstadoResponse = {
-  permitido: boolean;
-  motivo: string | null;
-  estado?: "dentro" | "fuera" | "DENTRO" | "FUERA" | "SIN_REGISTROS" | string;
-};
-
-function normalizeEstado(raw?: string | null): "dentro" | "fuera" | "sin_registros" | null {
-  const value = String(raw ?? "").trim().toUpperCase();
-  if (value === "DENTRO") return "dentro";
-  if (value === "FUERA") return "fuera";
-  if (value === "SIN_REGISTROS") return "sin_registros";
-  return null;
-}
-
-function stateCopy(estado: "dentro" | "fuera" | "sin_registros" | null) {
-  if (estado === "dentro") return { label: "Dentro", color: uiTheme.success, note: "Tu último registro indica presencia activa en la sede.", hero: "Acceso activo y trazable" };
-  if (estado === "fuera") return { label: "Fuera", color: uiTheme.warn, note: "No hay un ingreso activo en este momento.", hero: "Listo para tu siguiente ingreso" };
-  if (estado === "sin_registros") return { label: "Sin registros", color: uiTheme.muted, note: "Aún no hay movimientos recientes asociados a tu perfil.", hero: "Aún no hay trazabilidad reciente" };
-  return { label: "No disponible", color: uiTheme.muted, note: "No fue posible consultar el estado actual.", hero: "Estado temporalmente no disponible" };
-}
-
-const quickActions = [
-  { label: "Historial", tone: "dark" as const, path: "/aprendiz/historial", icon: "time-outline" as const },
-  { label: "Mis equipos", tone: "primary" as const, path: "/aprendiz/equipos", icon: "hardware-chip-outline" as const },
-  { label: "Mi QR", tone: "light" as const, path: "/aprendiz/mi-qr", icon: "qr-code-outline" as const },
-  { label: "Perfil", tone: "light" as const, path: "/aprendiz/perfil", icon: "person-outline" as const },
-  { label: "Ayuda", tone: "light" as const, path: "/aprendiz/ayuda", icon: "help-circle-outline" as const },
-];
 
 export default function AprendizHome() {
   const user = useSessionStore((s) => s.user);
   const signOut = useSessionStore((s) => s.signOut);
-  const [estado, setEstado] = useState<"dentro" | "fuera" | "sin_registros" | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  async function cargarEstado() {
-    setLoading(true);
-    try {
-      const r = await api.get<EstadoResponse>("/api/accesos/estado/");
-      setEstado(normalizeEstado(r.data?.estado));
-    } catch {
-      setEstado(null);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void cargarEstado();
-  }, []);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      void cargarEstado();
-      return undefined;
-    }, [])
-  );
-
-  const currentState = stateCopy(estado);
+  const fullName =
+    `${user?.first_name || ""} ${user?.last_name || ""}`.trim() ||
+    user?.username ||
+    "Aprendiz";
+  const documento = user?.documento || "-";
+  const programa = user?.programa_formacion || "-";
+  const sede = (user as any)?.sede_principal || "";
 
   return (
-    <ModernScreen scroll>
-      <FadeInCard delay={0} style={{ gap: 16 }}>
-        <Pill text="PANEL APRENDIZ" />
-        <TitleBlock
-          title={`Hola, ${user?.first_name || user?.username || "Aprendiz"}`}
-          subtitle={`Documento ${user?.documento || "-"} | Programa ${user?.programa_formacion || "-"}`}
-        />
+    <View style={styles.root}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.profileCard}>
+          <View style={styles.avatar} />
+          <Text style={styles.name}>{fullName}</Text>
 
-        <View
-          style={{
-            borderRadius: 28,
-            padding: 18,
-            backgroundColor: "rgba(15,118,110,0.08)",
-            borderWidth: 1,
-            borderColor: "rgba(15,118,110,0.14)",
-            gap: 12,
+          <View style={styles.dataRow}>
+            <Ionicons name="person-outline" size={22} color="#8b8b8b" />
+            <View style={styles.dataText}>
+              <Text style={styles.dataLabel}>Documento</Text>
+              <Text style={styles.dataValue}>{documento}</Text>
+            </View>
+          </View>
+
+          <View style={styles.dataRow}>
+            <Ionicons name="qr-code-outline" size={22} color="#8b8b8b" />
+            <View style={styles.dataText}>
+              <Text style={styles.dataLabel}>Programa</Text>
+              <Text style={styles.dataValue}>{programa}</Text>
+            </View>
+          </View>
+
+          {sede ? (
+            <View style={styles.dataRow}>
+              <Ionicons name="business-outline" size={22} color="#8b8b8b" />
+              <View style={styles.dataText}>
+                <Text style={styles.dataLabel}>Sede Principal</Text>
+                <Text style={styles.dataValue}>{sede}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Mis Equipos</Text>
+          <Pressable onPress={() => router.push("/aprendiz/equipos" as any)}>
+            <Text style={styles.sectionAction}>Ver todos</Text>
+          </Pressable>
+        </View>
+
+        <Pressable style={styles.teamCard} onPress={() => router.push("/aprendiz/equipos" as any)}>
+          <View style={styles.teamIconWrap}>
+            <Ionicons name="laptop-outline" size={24} color="#000" />
+          </View>
+          <View>
+            <Text style={styles.teamName}>Mis equipos</Text>
+            <Text style={styles.teamSerial}>Consulta tus equipos registrados</Text>
+          </View>
+        </Pressable>
+
+        <Pressable style={styles.registerCard} onPress={() => router.push("/aprendiz/equipos" as any)}>
+          <View style={styles.registerPlus}>
+            <Ionicons name="add" size={16} color="#fff" />
+          </View>
+          <Text style={styles.registerText}>Registrar nuevo</Text>
+        </Pressable>
+
+        <View style={styles.quickActions}>
+          <Pressable style={styles.primaryAction} onPress={() => router.push("/aprendiz/mi-qr" as any)}>
+            <Ionicons name="qr-code-outline" size={20} color="#fff" />
+            <Text style={styles.primaryActionText}>Mi QR</Text>
+          </Pressable>
+
+          <View style={styles.quickRow}>
+            <Pressable style={styles.lightAction} onPress={() => router.push("/aprendiz/perfil" as any)}>
+              <Ionicons name="person-outline" size={20} color="#111" />
+              <Text style={styles.lightActionText}>Perfil</Text>
+            </Pressable>
+            <Pressable style={styles.lightAction} onPress={() => router.push("/aprendiz/ayuda" as any)}>
+              <Ionicons name="help-circle-outline" size={20} color="#111" />
+              <Text style={styles.lightActionText}>Ayuda</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <Text style={[styles.sectionTitle, { marginTop: 6 }]}>Notificaciones Recientes</Text>
+
+        <View style={styles.notificationsCard}>
+          <View style={styles.notificationRow}>
+            <View style={styles.notificationIconWrap}>
+              <Ionicons name="log-in-outline" size={22} color="#000" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.notificationTitle}>Panel actualizado</Text>
+              <Text style={styles.notificationBody}>Revisa historial, equipos y tu perfil desde este panel.</Text>
+            </View>
+          </View>
+        </View>
+
+        <Pressable
+          style={styles.logoutButton}
+          onPress={async () => {
+            await signOut();
+            router.replace("/" as any);
           }}
         >
-          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-            Estado de acceso
-          </Text>
-          {loading ? (
-            <View style={{ gap: 10, marginTop: 4 }}>
-              <SkeletonLine width="46%" height={24} />
-              <SkeletonLine width="82%" height={16} />
-              <SkeletonLine width="60%" height={16} />
-            </View>
-          ) : (
-            <>
-              <Text style={{ color: uiTheme.ink, fontSize: 26, lineHeight: 30, fontWeight: "900", letterSpacing: -0.7 }}>
-                {currentState.hero}
-              </Text>
-              <View style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: `${currentState.color}14`, borderWidth: 1, borderColor: `${currentState.color}20` }}>
-                <Text style={{ color: currentState.color, fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" }}>
-                  {currentState.label}
-                </Text>
-              </View>
-              <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>{currentState.note}</Text>
-            </>
-          )}
-        </View>
-      </FadeInCard>
-
-      <FadeInCard delay={70} style={{ gap: 12 }}>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <View style={{ flex: 1, borderRadius: 22, padding: 14, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)", gap: 8 }}>
-            <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(15,118,110,0.08)" }}>
-              <Ionicons name="hardware-chip-outline" size={18} color={uiTheme.accentDeep} />
-            </View>
-            <Text style={{ color: uiTheme.ink, fontWeight: "900", fontSize: 22 }}>4</Text>
-            <Text style={{ color: uiTheme.inkSoft, lineHeight: 18 }}>Equipos máximos que puedes administrar desde tu perfil.</Text>
-          </View>
-          <View style={{ flex: 1, borderRadius: 22, padding: 14, backgroundColor: "rgba(15,23,42,0.92)", borderWidth: 1, borderColor: "rgba(15,23,42,0.16)", gap: 8 }}>
-            <View style={{ width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)" }}>
-              <Ionicons name="qr-code-outline" size={18} color="#ffffff" />
-            </View>
-            <Text style={{ color: "#ffffff", fontWeight: "900", fontSize: 22 }}>QR</Text>
-            <Text style={{ color: "rgba(255,255,255,0.76)", lineHeight: 18 }}>Tu identificación dinámica para control rápido en portería.</Text>
-          </View>
-        </View>
-        <NoticeBanner tone="info" text="Mantener tus equipos y tu QR al día reduce validaciones manuales y hace el ingreso más fluido." />
-      </FadeInCard>
-
-      <FadeInCard delay={130} style={{ gap: 12 }}>
-        <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-          Acciones rápidas
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          {quickActions.map((action) => (
-            <View key={action.path} style={{ width: "48%" }}>
-              <ModernButton label={action.label} tone={action.tone} icon={action.icon} onPress={() => router.push(action.path as any)} />
-            </View>
-          ))}
-          <View style={{ width: "48%" }}>
-            <ModernButton
-              label="Cerrar sesión"
-              tone="dark"
-              icon="log-out-outline"
-              onPress={async () => {
-                await signOut();
-                router.replace("/" as any);
-              }}
-            />
-          </View>
-        </View>
-      </FadeInCard>
-    </ModernScreen>
+          <Ionicons name="log-out-outline" size={22} color="#fff" />
+          <Text style={styles.logoutText}>Cerrar sesion</Text>
+        </Pressable>
+      </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: "#efefef",
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  profileCard: {
+    borderWidth: 2,
+    borderColor: "#bdbdbd",
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: "#efefef",
+  },
+  avatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "#d1d1d1",
+    alignSelf: "center",
+  },
+  name: {
+    textAlign: "center",
+    marginTop: 10,
+    marginBottom: 8,
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#111",
+  },
+  dataRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginTop: 10,
+  },
+  dataText: {
+    flex: 1,
+  },
+  dataLabel: {
+    color: "#666",
+    fontSize: 16,
+  },
+  dataValue: {
+    fontSize: 18,
+    color: "#111",
+    fontWeight: "500",
+  },
+  sectionHeader: {
+    marginTop: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sectionTitle: {
+    fontSize: 36,
+    color: "#111",
+    fontWeight: "700",
+  },
+  sectionAction: {
+    fontSize: 29,
+    color: "#52a9e1",
+    fontWeight: "700",
+  },
+  teamCard: {
+    marginTop: 10,
+    borderWidth: 2,
+    borderColor: "#bdbdbd",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#efefef",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  teamIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#9fd9ff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  teamName: {
+    fontSize: 27,
+    fontWeight: "700",
+    color: "#111",
+  },
+  teamSerial: {
+    fontSize: 20,
+    color: "#666",
+  },
+  registerCard: {
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#c7c7c7",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#efefef",
+  },
+  registerPlus: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#52a9e1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  registerText: {
+    marginTop: 6,
+    color: "#52a9e1",
+    fontSize: 29,
+    fontWeight: "700",
+  },
+  quickActions: {
+    marginTop: 12,
+    gap: 10,
+  },
+  primaryAction: {
+    borderRadius: 14,
+    backgroundColor: "#52a9e1",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  primaryActionText: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  quickRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  lightAction: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#d5d5d5",
+    backgroundColor: "#f3f3f3",
+    paddingVertical: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  lightActionText: {
+    color: "#111",
+    fontSize: 22,
+    fontWeight: "600",
+  },
+  notificationsCard: {
+    marginTop: 10,
+    borderWidth: 2,
+    borderColor: "#bdbdbd",
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: "#efefef",
+  },
+  notificationRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  notificationIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#9fd9ff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationTitle: {
+    fontSize: 30,
+    fontWeight: "700",
+    color: "#111",
+  },
+  notificationBody: {
+    fontSize: 18,
+    color: "#666",
+    marginTop: 2,
+  },
+  logoutButton: {
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: "#d93659",
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  logoutText: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "700",
+  },
+});
