@@ -36,6 +36,8 @@
   --app-grid: rgba(255, 255, 255, 0.035);
   --font-body-fallback: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-display-fallback: "Space Grotesk", "Sora", "Inter", sans-serif;
+  --admin-shell-collapsed: 7rem;
+  --admin-shell-expanded: 19rem;
 }
 
 [data-theme="light"] {
@@ -81,6 +83,7 @@ body {
   font-family: var(--font-body), var(--font-body-fallback);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
 }
 
 h1,
@@ -108,6 +111,19 @@ h6 {
     radial-gradient(circle at 100% 0%, var(--app-glow-b), transparent 20%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface) 35%, transparent) 0%, transparent 28%),
     linear-gradient(180deg, #0a1018 0%, #070b11 100%);
+}
+
+.sadi-shell-content {
+  width: 100%;
+  min-width: 0;
+}
+
+.sadi-sidebar {
+  width: var(--admin-shell-expanded);
+}
+
+.sadi-sidebar[data-collapsed="true"] {
+  width: var(--admin-shell-collapsed);
 }
 
 .sadi-shell::before {
@@ -275,6 +291,7 @@ h6 {
 .command-noir-metric {
   position: relative;
   overflow: hidden;
+  min-width: 0;
   border-radius: 1.5rem;
   border: 1px solid var(--surface-border);
   background:
@@ -312,6 +329,7 @@ h6 {
 }
 
 .command-noir-detail-card {
+  min-width: 0;
   border-radius: 1.25rem;
   border: 1px solid var(--surface-border);
   background: linear-gradient(180deg, rgba(20, 30, 43, 0.96), rgba(13, 20, 30, 0.96));
@@ -324,6 +342,11 @@ h6 {
 
 .command-noir-table-row:hover {
   background: rgba(17, 29, 42, 0.82);
+}
+
+.command-noir-table-cell {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @keyframes sadi-shimmer {

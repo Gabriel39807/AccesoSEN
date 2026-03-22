@@ -1020,7 +1020,7 @@ export default function AdminUsuariosPage() {
           loading={loadingTable}
           skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
           hasRows={pageItems.length > 0}
-          tableClassName="min-w-[1120px] table-fixed"
+          tableClassName="min-w-[980px] xl:min-w-full table-auto"
           headers={
             <tr className="text-left">
               <th className="w-14 p-3">ID</th>
@@ -1049,14 +1049,14 @@ export default function AdminUsuariosPage() {
         >
           {pageItems.map((u, idx) => (
             <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(255,255,255,0.015)]")}>
-              <td className="p-3">{u.id}</td>
+              <td className="command-noir-table-cell p-3">{u.id}</td>
 
-              <td className="p-3">
+              <td className="command-noir-table-cell p-3">
                 <div className="max-w-[220px] truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
                 {u.email ? <div className="max-w-[220px] truncate text-[color:var(--color-text-muted)]">{u.email}</div> : null}
               </td>
 
-              <td className="p-3">
+              <td className="command-noir-table-cell p-3">
                 <div className="max-w-[180px] truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
               </td>
 
@@ -1095,13 +1095,13 @@ export default function AdminUsuariosPage() {
                 </div>
               </td>
 
-              <td className="p-3"><div className="max-w-[130px] truncate">{u.documento ?? "-"}</div></td>
+              <td className="command-noir-table-cell p-3"><div className="max-w-[130px] truncate">{u.documento ?? "-"}</div></td>
               <td className="p-3">
                 <div className="max-w-[110px] truncate">
                   {u.sede_principal ? sedesByCode.get(u.sede_principal) || u.sede_principal : "-"}
                 </div>
               </td>
-              <td className="p-3"><div className="max-w-[170px] truncate">{u.programa_formacion ?? "-"}</div></td>
+              <td className="command-noir-table-cell p-3"><div className="max-w-[170px] truncate">{u.programa_formacion ?? "-"}</div></td>
 
               <td className="p-3 text-right">
                 <div className="flex flex-col items-end gap-1">
@@ -1573,7 +1573,7 @@ export default function AdminUsuariosPage() {
               <FormBanner type={importBanner.type} message={importBanner.message} />
             ) : null}
 
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto] lg:items-end">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto] xl:items-end">
               <input
                 type="file"
                 accept=".xlsx,.xlsm,.xltx,.xltm,.csv"

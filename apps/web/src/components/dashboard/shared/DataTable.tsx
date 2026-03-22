@@ -23,8 +23,8 @@ export default function DataTable({
 }) {
   if (loading && skeleton) return <>{skeleton}</>;
   return (
-    <section className="sadi-card-strong overflow-hidden rounded-[1.85rem] border">
-      <div className="overflow-x-auto">
+    <section className="sadi-card-strong min-w-0 overflow-hidden rounded-[1.85rem] border">
+      <div className="w-full overflow-x-auto">
         <table className={cx("min-w-full text-sm text-[color:var(--text-soft)]", tableClassName)}>
           <thead
             className={cx(

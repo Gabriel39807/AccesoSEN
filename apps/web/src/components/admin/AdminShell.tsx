@@ -27,6 +27,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const { me, loadingMe } = useMe();
   const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const displayName = useMemo(() => {
@@ -58,7 +59,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     await logoutCurrentSession(router);
   }
 
-  const shellOffset = collapsed ? "lg:pl-[7rem]" : "lg:pl-[19rem]";
+  const desktopExpanded = !collapsed || hovered;
+  const shellOffset = desktopExpanded ? "lg:pl-[19rem]" : "lg:pl-[7rem]";
 
   return (
     <div className="sadi-shell relative min-h-screen overflow-x-hidden">
@@ -71,17 +73,19 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       ) : null}
 
       <aside
+        data-collapsed={desktopExpanded ? "false" : "true"}
         className={cx(
-          "fixed inset-y-0 left-0 z-50 hidden border-r border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(6,10,16,0.98),rgba(10,16,24,0.94))] shadow-[0_18px_60px_rgba(0,0,0,0.34)] transition-all duration-300 lg:flex lg:flex-col",
-          collapsed ? "w-[7rem]" : "w-[19rem]",
+          "sadi-sidebar fixed inset-y-0 left-0 z-50 hidden border-r border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(6,10,16,0.98),rgba(10,16,24,0.94))] shadow-[0_18px_60px_rgba(0,0,0,0.34)] transition-[width,box-shadow] duration-300 lg:flex lg:flex-col",
         )}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(111,211,255,0.18),rgba(255,255,255,0.03))] text-[color:var(--color-primary)] shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
               <span className="text-sm font-black tracking-[0.18em]">SA</span>
             </div>
-            {!collapsed ? (
+            {desktopExpanded ? (
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">SADI</div>
                 <div className="truncate text-lg font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">Command Centre</div>
@@ -100,7 +104,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
-          <div className="sadi-card rounded-[1.6rem] px-4 py-4">
+          <div className="sadi-card min-w-0 rounded-[1.6rem] px-4 py-4">
             <div className="flex items-center justify-between gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.04)] text-[color:var(--color-primary)]">
                 <IconBell className="h-4 w-4" />
@@ -109,7 +113,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 Operaci?n
               </span>
             </div>
-            {!collapsed ? (
+            {desktopExpanded ? (
               <>
                 <div className="mt-4 text-sm font-semibold text-[color:var(--color-text)]">Control premium de accesos y operaci?n.</div>
                 <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
@@ -126,7 +130,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <div key={`desktop-${item.href}`} onClick={() => setMobileOpen(false)}>
                   <SidebarItem
                     href={item.href}
-                    label={collapsed ? item.label.slice(0, 12) : item.label}
+                    label={desktopExpanded ? item.label : item.label.slice(0, 12)}
                     icon={item.icon}
                     active={active}
                   />
@@ -140,7 +144,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Mi perfil</div>
               <div className="mt-2 truncate text-sm font-semibold text-[color:var(--color-text)]">{loadingMe ? "Cargando..." : displayName}</div>
               <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{loadingMe ? "" : `Rol: ${me?.rol ?? "admin"}`}</div>
-              {!collapsed ? (
+              {desktopExpanded ? (
                 <div className="mt-4 flex gap-2">
                   <button
                     type="button"
@@ -161,7 +165,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               ) : null}
             </div>
 
-            {collapsed ? (
+            {!desktopExpanded ? (
               <button
                 type="button"
                 onClick={handleLogout}
@@ -240,8 +244,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      <div className={cx("min-h-screen", shellOffset)}>
-        <div className="mx-auto flex w-full max-w-none flex-col px-4 py-4 sm:px-6 lg:px-6 lg:py-5">
+      <div className={cx("sadi-shell-content min-h-screen transition-[padding-left] duration-300", shellOffset)}>
+        <div className="mx-auto flex w-full min-w-0 max-w-[1680px] flex-col px-4 py-4 sm:px-6 lg:px-6 lg:py-5 xl:px-8">
           <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">SADI</div>

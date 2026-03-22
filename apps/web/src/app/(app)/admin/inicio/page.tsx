@@ -529,7 +529,7 @@ export default function AdminInicioPage() {
   ];
 
   return (
-    <div className="space-y-6 2xl:space-y-7">
+    <div className="min-w-0 space-y-6 2xl:space-y-7">
       <section className="sadi-card-strong rounded-[2rem] p-6 xl:p-7">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-3xl space-y-3">
@@ -553,7 +553,7 @@ export default function AdminInicioPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-[360px]">
             <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Periodo activo</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{formatRangeLabel(periodRange.start, periodRange.end)}</p>
@@ -586,7 +586,7 @@ export default function AdminInicioPage() {
             ))}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[minmax(220px,1fr),auto,auto] xl:min-w-[560px]">
+          <div className="grid w-full gap-3 sm:grid-cols-[minmax(220px,1fr),auto,auto] xl:max-w-[560px]">
             <label className="block">
               <span className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Sede</span>
               <select
@@ -675,14 +675,14 @@ export default function AdminInicioPage() {
           description="Ultimos movimientos visibles en el rango activo para validar trazabilidad y detectar desviaciones."
         >
           <div className="mt-5 overflow-hidden rounded-[1.6rem] border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.88)]">
-            <div className="grid grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)]">
+            <div className="hidden grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] md:grid">
               <span>Evento</span>
               <span>Contexto</span>
               <span>Estado</span>
             </div>
             <div className="divide-y divide-[color:var(--color-border)]">
               {visibleActivity.map((item) => (
-                <div key={`${item.id}-${item.title}`} className="grid grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] items-center gap-3 px-4 py-4">
+                <div key={`${item.id}-${item.title}`} className="grid grid-cols-1 items-start gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] md:items-center">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-[color:var(--color-text)]">{item.title}</p>
                     <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">{item.meta}</p>

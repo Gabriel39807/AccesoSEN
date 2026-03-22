@@ -15,7 +15,7 @@ import { SystemThemeProvider } from "@/hooks/useSystemTheme";
  */
 export default function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem storageKey="sadi-theme" disableTransitionOnChange>
+    <ThemeProvider attribute="data-theme" defaultTheme="dark" forcedTheme="dark" enableSystem={false} storageKey="sadi-theme" disableTransitionOnChange>
       <SystemThemeProvider>
         <InstitutionProvider>
           <RoleThemeProvider>

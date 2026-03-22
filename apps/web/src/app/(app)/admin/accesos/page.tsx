@@ -498,7 +498,7 @@ export default function AdminAccesosPage() {
           loading={loadingTable}
           skeleton={<TableSkeleton />}
           hasRows={accesos.length > 0}
-          tableClassName="min-w-[1050px]"
+          tableClassName="min-w-[920px] xl:min-w-full"
           headers={
             <tr className="text-left">
               <th className="px-4 py-3 font-semibold">Fecha</th>
@@ -531,23 +531,23 @@ export default function AdminAccesosPage() {
 
             return (
               <tr key={a.id} className="command-noir-table-row">
-                <td className="px-4 py-4 whitespace-nowrap text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
-                <td className="px-4 py-3">
+                <td className="command-noir-table-cell px-4 py-4 text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
+                <td className="command-noir-table-cell px-4 py-3">
                   {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </td>
-                <td className="px-4 py-3">
+                <td className="command-noir-table-cell px-4 py-3">
                   {a.sede ? (
                     <Badge variant="blue" label={sedesByCode.get(a.sede) || a.sede} />
                   ) : (
                     <Badge variant="gray" label="(sin sede)" />
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="command-noir-table-cell px-4 py-3">
                   <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(aprendiz)}</div>
                   <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "—"}</div>
                 </td>
-                <td className="px-4 py-3 text-[color:var(--color-text-soft)]">{registrado ? nombreUsuario(registrado) : "—"}</td>
-                <td className="px-4 py-3">
+                <td className="command-noir-table-cell px-4 py-3 text-[color:var(--color-text-soft)]">{registrado ? nombreUsuario(registrado) : "—"}</td>
+                <td className="command-noir-table-cell px-4 py-3">
                   {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "—"}
                 </td>
                 <td className="px-4 py-3 text-right">

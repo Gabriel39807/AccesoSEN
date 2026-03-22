@@ -14,7 +14,7 @@ export default function PageHeader({
   return (
     <section
       className={[
-        "sadi-card-strong rounded-[1.9rem] border px-5 py-5 sm:px-6 sm:py-6",
+        "sadi-card-strong min-w-0 overflow-hidden rounded-[1.9rem] border px-5 py-5 sm:px-6 sm:py-6",
         sticky ? "sticky top-3 z-20 sm:top-4" : "",
       ].join(" ")}
     >
@@ -30,7 +30,7 @@ export default function PageHeader({
             </p>
           ) : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-stretch gap-2 sm:items-center sm:justify-end">{actions}</div> : null}
+        {actions ? <div className="flex w-full flex-wrap items-stretch gap-2 sm:w-auto sm:items-center sm:justify-end">{actions}</div> : null}
       </div>
     </section>
   );
