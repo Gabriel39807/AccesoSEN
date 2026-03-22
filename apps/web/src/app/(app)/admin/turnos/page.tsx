@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
 import StatCard from "@/components/admin/StatCard";
+import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import Button from "@/components/dashboard/shared/Button";
@@ -32,6 +33,13 @@ type Turno = {
   inicio: string;
   fin: string | null;
   activo: boolean;
+};
+
+type Paginated<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
 };
 
 const JORNADAS: Turno["jornada"][] = ["MANANA", "MAÑANA", "TARDE", "NOCHE"];
@@ -100,13 +108,19 @@ function FilterSkeleton() {
 
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
-      <div className="p-4 space-y-3">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 animate-pulse rounded-xl bg-zinc-100" />
-        ))}
-      </div>
-    </div>
+    <AdminTableSkeleton
+      rows={rows}
+      columns={[
+        { label: "ID", widthClass: "w-20", variant: "text" },
+        { label: "Guarda", widthClass: "w-52", variant: "stack" },
+        { label: "Sede", widthClass: "w-32", variant: "text" },
+        { label: "Jornada", widthClass: "w-28", variant: "pill" },
+        { label: "Inicio", widthClass: "w-40", variant: "text" },
+        { label: "Fin", widthClass: "w-40", variant: "text" },
+        { label: "Estado", widthClass: "w-28", variant: "pill" },
+        { label: "Acciones", widthClass: "w-32", align: "right", variant: "button" },
+      ]}
+    />
   );
 }
 
@@ -115,8 +129,10 @@ export default function AdminTurnosPage() {
   const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
 
   const [turnos, setTurnos] = useState<Turno[]>([]);
+  const [count, setCount] = useState(0);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingTable, setLoadingTable] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,7 +145,9 @@ export default function AdminTurnosPage() {
   const [turnoFinalizar, setTurnoFinalizar] = useState<Turno | null>(null);
   const [finalizando, setFinalizando] = useState(false);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
+  const firstFilterFetchRef = useRef(true);
+  const firstPageFetchRef = useRef(true);
 
   const usuariosMap = useMemo(() => {
     const m = new Map<number, Usuario>();
@@ -139,49 +157,57 @@ export default function AdminTurnosPage() {
 
   const guardas = useMemo(() => usuarios.filter((u) => u.rol === "guarda"), [usuarios]);
 
-  const rows = useMemo(() => {
-    let r = [...turnos];
-    if (guardaId !== "") r = r.filter((t) => t.guarda === guardaId);
-    return r;
-  }, [turnos, guardaId]);
-
   const stats = useMemo(() => {
-    const total = rows.length;
-    const activosCount = rows.filter((t) => t.activo && !t.fin).length;
-    const finalizados = rows.filter((t) => !t.activo || !!t.fin).length;
+    const total = count;
+    const activosCount = turnos.filter((t) => t.activo && !t.fin).length;
+    const finalizados = turnos.filter((t) => !t.activo || !!t.fin).length;
     return { total, activos: activosCount, finalizados };
-  }, [rows]);
+  }, [count, turnos]);
 
   const hasFilters = sede !== "" || jornada !== "" || activo !== "" || guardaId !== "";
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const pagedRows = useMemo(() => rows.slice((page - 1) * pageSize, page * pageSize), [rows, page]);
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  const pagedRows = turnos;
 
   async function cargarUsuarios() {
-    const res = await api.get("/api/usuarios/");
+    const res = await api.get<Paginated<Usuario> | Usuario[]>("/api/usuarios/", {
+      params: { page_size: 100, rol: "guarda" },
+    });
     const data = Array.isArray(res.data) ? res.data : res.data?.results ?? [];
     setUsuarios(data);
   }
 
-  async function cargarTurnos() {
-    const params: any = {};
+  async function cargarTurnos(targetPage = page) {
+    setLoadingTable(true);
+    const params: any = { page: targetPage, page_size: pageSize };
     if (sede) params.sede = sede;
     if (jornada) params.jornada = jornada;
     if (activo) params.activo = activo;
+    if (guardaId !== "") params.guarda = guardaId;
 
-    const res = await api.get("/api/turnos/", { params });
-    const data = Array.isArray(res.data) ? res.data : res.data?.results ?? [];
-    setTurnos(data);
+    try {
+      const res = await api.get<Paginated<Turno> | Turno[]>("/api/turnos/", { params });
+      const payload = res.data;
+      const data = Array.isArray(payload) ? payload : payload?.results ?? [];
+      const total = Array.isArray(payload) ? data.length : payload?.count ?? data.length;
+      setTurnos(data);
+      setCount(total);
+    } finally {
+      setLoadingTable(false);
+    }
   }
 
   async function cargarBase() {
     setLoading(true);
+    setLoadingTable(true);
     setError(null);
     try {
-      await Promise.all([cargarUsuarios(), cargarTurnos()]);
+      await Promise.all([cargarUsuarios(), cargarTurnos(1)]);
+      setPage(1);
     } catch (e: any) {
       setError(safeErrorMessage(e));
     } finally {
       setLoading(false);
+      setLoadingTable(false);
     }
   }
 
@@ -189,7 +215,7 @@ export default function AdminTurnosPage() {
     setReloading(true);
     setError(null);
     try {
-      await cargarTurnos();
+      await cargarTurnos(page);
     } catch (e: any) {
       setError(safeErrorMessage(e));
     } finally {
@@ -223,10 +249,10 @@ export default function AdminTurnosPage() {
       }
       setOpenFinalizar(false);
       setTurnoFinalizar(null);
-      await cargarTurnos();
+      await cargarTurnos(page);
     } catch (e: any) {
       setError(safeErrorMessage(e) || "No se pudo finalizar el turno. Revisa tu conexión e intenta nuevamente.");
-      await cargarTurnos();
+      await cargarTurnos(page);
     } finally {
       setFinalizando(false);
     }
@@ -238,8 +264,23 @@ export default function AdminTurnosPage() {
   }, []);
 
   useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+    if (firstFilterFetchRef.current) {
+      firstFilterFetchRef.current = false;
+      return;
+    }
+    setPage(1);
+    cargarTurnos(1).catch((e) => setError(safeErrorMessage(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sede, jornada, activo, guardaId, pageSize]);
+
+  useEffect(() => {
+    if (firstPageFetchRef.current) {
+      firstPageFetchRef.current = false;
+      return;
+    }
+    cargarTurnos(page).catch((e) => setError(safeErrorMessage(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   return (
     <div className="space-y-7 pb-2">
@@ -331,7 +372,7 @@ export default function AdminTurnosPage() {
             <Button
               onClick={() => {
                 setPage(1);
-                cargarTurnos().catch(() => setError("No se pudieron cargar los turnos."));
+                cargarTurnos(1).catch(() => setError("No se pudieron cargar los turnos."));
               }}
               variant="primary"
             >
@@ -340,7 +381,7 @@ export default function AdminTurnosPage() {
             <Button
               onClick={() => {
                 resetFiltros();
-                setTimeout(() => cargarTurnos().catch(() => {}), 0);
+                setTimeout(() => cargarTurnos(1).catch(() => {}), 0);
               }}
               variant="secondary"
               disabled={!hasFilters}
@@ -351,7 +392,7 @@ export default function AdminTurnosPage() {
 
           <div className="flex h-11 items-center justify-end md:col-span-12 lg:col-span-2">
             <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
-              {rows.length} turnos
+              {count} turnos
             </span>
           </div>
         </FilterBar>
@@ -359,7 +400,7 @@ export default function AdminTurnosPage() {
 
       <div className="space-y-4">
         <DataTable
-          loading={loading}
+          loading={loadingTable}
           skeleton={<TableSkeleton />}
           hasRows={pagedRows.length > 0}
           tableClassName="min-w-[980px]"
@@ -424,8 +465,13 @@ export default function AdminTurnosPage() {
         <Pagination
           page={page}
           totalPages={totalPages}
-          totalCount={rows.length}
+          totalCount={count}
           pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
           onPrev={() => setPage((p) => Math.max(1, p - 1))}
           onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
         />

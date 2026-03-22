@@ -23,21 +23,21 @@ export default function DataTable({
 }) {
   if (loading && skeleton) return <>{skeleton}</>;
   return (
-    <section className="sadi-card overflow-hidden rounded-3xl">
+    <section className="sadi-card-strong overflow-hidden rounded-[1.85rem] border">
       <div className="overflow-x-auto">
-        <table className={cx("min-w-full text-sm", tableClassName)}>
-        <thead
-          className={cx(
-            "bg-primary/10 text-primary",
-            stickyHeader && "sticky top-0 z-10"
-          )}
-        >
-          {headers}
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {children}
-          {!hasRows && emptyState ? emptyState : null}
-        </tbody>
+        <table className={cx("min-w-full text-sm text-[color:var(--text-soft)]", tableClassName)}>
+          <thead
+            className={cx(
+              "bg-[linear-gradient(180deg,rgba(22,33,47,0.98),rgba(14,21,31,0.98))] text-[color:var(--text-soft)]",
+              stickyHeader && "sticky top-0 z-10 backdrop-blur-sm",
+            )}
+          >
+            {headers}
+          </thead>
+          <tbody className="divide-y divide-[color:var(--surface-border)] bg-[rgba(8,14,21,0.72)]">
+            {children}
+            {!hasRows && emptyState ? emptyState : null}
+          </tbody>
         </table>
       </div>
     </section>

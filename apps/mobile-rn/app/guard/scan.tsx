@@ -1,37 +1,25 @@
-/**
- * Scanner de guarda para QR/codigo de barras.
- *
- * Responsabilidad:
- * - Leer codigo de documento.
- * - Bloquear lecturas concurrentes mientras se procesa una validacion.
- * - Permitir reinicio manual seguro con "Leer otro QR".
- */
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Text, View, StyleSheet } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
 import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
-import { FadeInCard, InputField, ModernButton, ModernScreen } from "../../src/ui/modern";
+import { EmptyState, FadeInCard, InputField, ModernButton, ModernScreen, NoticeBanner, Pill } from "../../src/ui/modern";
 
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
 
 export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-
   const [documento, setDocumento] = useState("");
   const [scanned, setScanned] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
-
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
+  const canScan = useMemo(() => !scanned && !loading, [scanned, loading]);
 
   async function validar(doc: string) {
     const clean = doc.trim();
@@ -39,6 +27,7 @@ export default function ScanScreen() {
       setMsg("Ingresa o escanea un documento.");
       return;
     }
+
     const documentError = validateDocument6to10(clean);
     if (documentError) {
       setMsg(documentError);
@@ -46,16 +35,14 @@ export default function ScanScreen() {
     }
 
     setLoading(true);
-    setMsg(null);
+    setMsg("Validando identidad...");
 
     try {
       const data = await Accesos.validarDocumento(clean);
       Accesos.__cache.set(clean, data);
       router.push({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean } } as any);
     } catch (e: any) {
-      setIsProcessing(false);
       const status = e?.response?.status;
-
       if (status === 404) {
         router.push({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
       } else {
@@ -67,9 +54,16 @@ export default function ScanScreen() {
     }
   }
 
+  function onBarcodeValue(raw: string) {
+    if (!canScan) return;
+    const clean = sanitizeDigits((raw || "").trim()).slice(0, 10);
+    setDocumento(clean);
+    setScanned(true);
+    void validar(clean);
+  }
+
   function reiniciarLectura() {
     setScanned(false);
-    setIsProcessing(false);
     setLoading(false);
     setMsg(null);
     setDocumento("");
@@ -79,7 +73,7 @@ export default function ScanScreen() {
   if (!permission) {
     return (
       <ModernScreen theme="guard" contentStyle={{ justifyContent: "center" }}>
-        <ActivityIndicator color="#1e3a8a" size="large" />
+        <ActivityIndicator color="#6FD3FF" size="large" />
       </ModernScreen>
     );
   }
@@ -87,15 +81,15 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <ModernScreen theme="guard" contentStyle={{ justifyContent: "center" }}>
-        <FadeInCard intensity={90} style={{ padding: 24, alignItems: "center" }}>
-          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(239, 68, 68, 0.15)", justifyContent: "center", alignItems: "center", marginBottom: 16 }}>
-            <Ionicons name="camera-outline" size={32} color="#ef4444" />
+        <FadeInCard intensity={85} style={styles.permissionCard}>
+          <View style={styles.permissionIcon}>
+            <Ionicons name="camera-outline" size={28} color="#FFD6DC" />
           </View>
-          <Text style={{ fontSize: 20, fontWeight: "900", color: "#0f172a", marginBottom: 8 }}>Permiso Denegado</Text>
-          <Text style={{ textAlign: "center", color: "#64748b", marginBottom: 20, lineHeight: 22 }}>
-            S.A.D.I requiere acceso a la cámara de tu dispositivo para poder escanear las identificaciones.
+          <Text style={styles.permissionTitle}>Permiso de camara requerido</Text>
+          <Text style={styles.permissionSubtitle}>
+            Activa la camara para abrir el visor operativo y validar accesos en tiempo real.
           </Text>
-          <ModernButton label="Otorgar Permiso" tone="primary" onPress={requestPermission} icon="camera" />
+          <ModernButton label="Permitir camara" tone="guard" icon="camera-outline" onPress={() => void requestPermission()} />
         </FadeInCard>
       </ModernScreen>
     );
@@ -103,188 +97,220 @@ export default function ScanScreen() {
 
   return (
     <ModernScreen scroll theme="guard">
-      
-      {/* Floating Sapphire Header Card */}
-      <FadeInCard delay={0} intensity={100} style={styles.headerCard}>
-        <LinearGradient
-          colors={["rgba(30, 58, 138, 0.95)", "rgba(23, 37, 84, 0.95)"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.headerContent}>
-          <View>
-            <View style={styles.badgeRow}>
-              <Ionicons name="scan-outline" size={16} color="#38bdf8" />
-              <Text style={styles.badgeText}>ESCÁNER INTELIGENTE</Text>
+      <FadeInCard delay={0} intensity={90} style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+          <View style={{ flex: 1, gap: 10 }}>
+            <Pill text="Scanner operativo" icon="scan-outline" tone="guard" />
+            <View style={{ gap: 6 }}>
+              <Text style={styles.heroTitle}>Verificacion inmediata</Text>
+              <Text style={styles.heroSubtitle}>
+                Alinea el QR o ingresa el documento manualmente. El resultado debe sentirse instantaneo y confiable.
+              </Text>
             </View>
-            <Text style={styles.headerTitle}>Verificación</Text>
-            <Text style={styles.headerSubtitle}>Alinea el código dentro del visor inteligente.</Text>
           </View>
-          <ModernButton 
-            icon="arrow-back" 
-            label="" 
-            tone="light" 
-            onPress={() => router.back()} 
-          />
+          <ModernButton label="" tone="light" icon="arrow-back" onPress={() => router.back()} />
         </View>
       </FadeInCard>
 
-      {/* Cybernetic Viewfinder */}
-      <FadeInCard delay={100} intensity={60} style={{ padding: 10, marginTop: 12 }}>
+      <FadeInCard delay={70} intensity={70} style={styles.viewfinderCard}>
+        <View style={styles.viewfinderHeader}>
+          <Text style={styles.sectionTitle}>Visor</Text>
+          <Text style={styles.sectionCaption}>{loading ? "Procesando" : scanned ? "Lectura pausada" : "Listo"}</Text>
+        </View>
+
         <View style={styles.cameraFrame}>
           <CameraView
             key={cameraKey}
-            style={{ flex: 1 }}
+            style={StyleSheet.absoluteFill}
             barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
-            onBarcodeScanned={(res) => {
-              if (!canScan) return;
-              setScanned(true);
-              setIsProcessing(true);
-              setDocumento((res.data || "").trim());
-              setMsg("Operación detectada. En validación...");
-            }}
+            onBarcodeScanned={(res) => onBarcodeValue(res.data || "")}
           />
-          {/* Neon Target Reticle */}
           <View pointerEvents="none" style={styles.targetReticle}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
             <View style={[styles.corner, styles.bottomLeft]} />
             <View style={[styles.corner, styles.bottomRight]} />
-            {isProcessing && (
-              <ActivityIndicator color="#0ea5e9" size="large" style={{ marginTop: 80 }} />
-            )}
+            <View style={styles.reticleCore}>
+              {loading ? <ActivityIndicator color="#6FD3FF" /> : <Ionicons name="scan-outline" size={28} color="rgba(243,247,251,0.9)" />}
+            </View>
           </View>
+        </View>
+
+        <View style={styles.viewfinderFooter}>
+          <View style={styles.footerMeta}>
+            <Ionicons name="shield-checkmark-outline" size={14} color="#B8C3D1" />
+            <Text style={styles.footerMetaText}>Solo una lectura a la vez</Text>
+          </View>
+          {scanned ? <ModernButton icon="refresh-outline" label="Leer otro" tone="light" onPress={reiniciarLectura} /> : null}
         </View>
       </FadeInCard>
 
-      {/* Manual Fallback Form */}
-      <FadeInCard delay={200} intensity={80} style={{ padding: 20, marginTop: 16, marginBottom: 40 }}>
-        <Text style={{ fontSize: 13, fontWeight: "800", color: "#475569", marginBottom: 16, textTransform: "uppercase" }}>Ingreso Manual</Text>
-        
+      <FadeInCard delay={140} intensity={72} style={styles.manualCard}>
+        <View style={styles.manualHeader}>
+          <Text style={styles.sectionTitle}>Fallback manual</Text>
+          <Pill text="Documento" icon="card-outline" tone="primary" />
+        </View>
+
         <InputField
           icon="id-card-outline"
-          label="Número de Documento"
+          label="Numero de documento"
           value={documento}
-          onChangeText={(v) => setDocumento(sanitizeDigits(v).slice(0, 10))}
+          onChangeText={(value) => setDocumento(sanitizeDigits(value).slice(0, 10))}
           placeholder="Ej. 1053444048"
           keyboardType="numeric"
           maxLength={10}
         />
 
-        {msg && (
-          <View style={[styles.msgBox, { backgroundColor: msg.includes("detectada") ? "rgba(16, 185, 129, 0.15)" : "rgba(225, 29, 72, 0.15)" }]}>
-            <Ionicons name={msg.includes("detectada") ? "checkmark-circle" : "warning"} size={20} color={msg.includes("detectada") ? "#10b981" : "#e11d48"} />
-            <Text style={[styles.msgText, { color: msg.includes("detectada") ? "#059669" : "#be123c" }]}>{msg}</Text>
-          </View>
-        )}
+        {msg ? <NoticeBanner tone={msg.toLowerCase().includes("deneg") ? "danger" : "info"} text={msg} /> : null}
 
-        <View style={{ gap: 12, marginTop: 24 }}>
-          <ModernButton 
-            icon="shield-checkmark" 
-            label={loading ? "Verificando identidad..." : "Validar Acceso"} 
-            tone="guard" 
-            disabled={loading || !documento.trim()} 
-            onPress={() => validar(documento)} 
+        <View style={styles.actionColumn}>
+          <ModernButton
+            icon="shield-checkmark-outline"
+            label={loading ? "Validando..." : "Validar acceso"}
+            tone="guard"
+            disabled={loading || !documento.trim()}
+            onPress={() => void validar(documento)}
           />
-          {scanned && (
-            <ModernButton 
-              icon="refresh" 
-              label="Leer otro código" 
-              tone="light" 
-              onPress={reiniciarLectura} 
-            />
-          )}
         </View>
+      </FadeInCard>
+
+      <FadeInCard delay={210} intensity={60} style={{ marginBottom: 40 }}>
+        <EmptyState
+          icon="information-circle-outline"
+          title="Lectura controlada"
+          subtitle="Si el QR falla, puedes usar el documento manual para mantener el flujo operativo sin perder claridad."
+        />
       </FadeInCard>
     </ModernScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  headerCard: {
-    padding: 24,
-    overflow: "hidden",
-    borderWidth: 0,
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+  permissionCard: {
+    alignItems: "center",
+    gap: 14,
   },
-  headerContent: {
+  permissionIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,107,122,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,107,122,0.24)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#F3F7FB",
+    textAlign: "center",
+  },
+  permissionSubtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#B8C3D1",
+    textAlign: "center",
+  },
+  heroCard: {
+    gap: 14,
+  },
+  heroHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  heroTitle: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "900",
+    color: "#F3F7FB",
+    letterSpacing: -0.8,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#B8C3D1",
+  },
+  viewfinderCard: {
+    gap: 14,
+  },
+  viewfinderHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  badgeRow: {
-    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(56, 189, 248, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-    marginBottom: 12,
+    gap: 10,
   },
-  badgeText: {
-    color: "#38bdf8",
-    fontSize: 11,
+  sectionTitle: {
+    fontSize: 18,
     fontWeight: "800",
-    marginLeft: 4,
-    letterSpacing: 0.5,
+    color: "#F3F7FB",
+    letterSpacing: -0.4,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#ffffff",
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#bae6fd",
-    marginTop: 4,
-    fontWeight: "500",
+  sectionCaption: {
+    fontSize: 12,
+    color: "#7F90A3",
+    fontWeight: "600",
   },
   cameraFrame: {
-    height: 380,
-    borderRadius: 16,
+    height: 410,
+    borderRadius: 24,
     overflow: "hidden",
     backgroundColor: "#000000",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.4)"
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
   },
   targetReticle: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    width: 240,
-    height: 240,
-    marginLeft: -120,
-    marginTop: -120,
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reticleCore: {
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    backgroundColor: "rgba(7,11,17,0.42)",
+    borderWidth: 1,
+    borderColor: "rgba(111,211,255,0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
   corner: {
     position: "absolute",
-    width: 30,
-    height: 30,
-    borderColor: "#0ea5e9", // Vivid Cyan
+    width: 38,
+    height: 38,
+    borderColor: "#6FD3FF",
   },
-  topLeft: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 16 },
-  topRight: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
-  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
-  bottomRight: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
-  msgBox: {
+  topLeft: { top: "24%", left: "18%", borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 18 },
+  topRight: { top: "24%", right: "18%", borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 18 },
+  bottomLeft: { bottom: "24%", left: "18%", borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 18 },
+  bottomRight: { bottom: "24%", right: "18%", borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 18 },
+  viewfinderFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  footerMeta: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 16,
+    gap: 6,
   },
-  msgText: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: "700",
-    flex: 1,
-  }
+  footerMetaText: {
+    fontSize: 12,
+    color: "#B8C3D1",
+    fontWeight: "600",
+  },
+  manualCard: {
+    gap: 14,
+  },
+  manualHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  actionColumn: {
+    gap: 10,
+  },
 });

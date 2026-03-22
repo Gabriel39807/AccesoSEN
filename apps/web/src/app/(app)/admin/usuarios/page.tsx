@@ -5,11 +5,10 @@ import { api } from "@/lib/api";
 import BadgeChip from "@/components/admin/BadgeChip";
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
-import StatCard from "@/components/admin/StatCard";
+import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import Button from "@/components/dashboard/shared/Button";
-import { IconBell, IconShield, IconUser, IconClock, IconHistory, IconLaptop } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import FormBanner from "@/components/feedback/FormBanner";
 import FieldError from "@/components/feedback/FieldError";
@@ -157,18 +156,12 @@ function downloadTextFile(content: string, filename: string) {
 }
 
 function StatSkeleton() {
-  return (
-    <div className="text-left rounded-2xl border bg-white p-5 shadow-sm animate-pulse">
-      <div className="h-6 w-6 bg-gray-200 rounded mb-2" />
-      <div className="h-3 w-20 bg-gray-200 rounded mb-2" />
-      <div className="h-6 w-10 bg-gray-200 rounded" />
-    </div>
-  );
+  return <div className="command-noir-metric h-[132px] animate-pulse" />;
 }
 
 function FilterSkeleton() {
   return (
-    <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+    <section className="sadi-card-strong rounded-[1.75rem] p-5">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-4" />
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
@@ -181,100 +174,69 @@ function FilterSkeleton() {
   );
 }
 
-function TableSkeleton({ rows = 8 }: { rows?: number }) {
-  return (
+
+function MetricPanel({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+  onClick,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+  onClick?: () => void;
+}) {
+  const content = (
     <>
-      {/* Tabla skeleton (misma caja que tu tabla real) */}
-      <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
-        <table className="min-w-[1020px] table-fixed text-sm">
-          {/* Mantener el header real (como en tu tabla) da contexto y se ve pro */}
-          <thead className="bg-sky-50 text-sky-900">
-            <tr className="text-left">
-              <th className="p-3">ID</th>
-              <th className="p-3">Usuario</th>
-              <th className="p-3">Nombre</th>
-              <th className="p-3">Rol</th>
-              <th className="p-3">Estado</th>
-              <th className="p-3">Documento</th>
-              <th className="p-3">Sede</th>
-              <th className="p-3">Programa</th>
-              <th className="p-3">Acciones</th>
-            </tr>
-          </thead>
-
-          <tbody className="divide-y">
-            {Array.from({ length: rows }).map((_, i) => (
-              <tr key={i} className="hover:bg-sky-50/40 transition">
-                {/* ID */}
-                <td className="p-3">
-                  <div className="h-4 w-10 rounded sadi-skeleton" />
-                </td>
-
-                {/* Usuario (2 líneas: username + email) */}
-                <td className="p-3">
-                  <div className="h-4 w-28 rounded sadi-skeleton" />
-                  <div className="mt-2 h-3 w-40 rounded sadi-skeleton" />
-                </td>
-
-                {/* Nombre */}
-                <td className="p-3">
-                  <div className="h-4 w-36 rounded sadi-skeleton" />
-                </td>
-
-                {/* Rol (pill + select como en tu UI real) */}
-                <td className="p-3">
-                  <div className="flex flex-col gap-2">
-                    <div className="h-6 w-24 rounded-full sadi-skeleton" />
-                    <div className="h-10 w-28 rounded-xl sadi-skeleton" />
-                  </div>
-                </td>
-
-                {/* Estado (pill + select) */}
-                <td className="p-3">
-                  <div className="flex flex-col gap-2">
-                    <div className="h-6 w-24 rounded-full sadi-skeleton" />
-                    <div className="h-10 w-28 rounded-xl sadi-skeleton" />
-                  </div>
-                </td>
-
-                {/* Documento */}
-                <td className="p-3">
-                  <div className="h-4 w-24 rounded sadi-skeleton" />
-                </td>
-
-                {/* Sede */}
-                <td className="p-3">
-                  <div className="h-4 w-20 rounded sadi-skeleton" />
-                </td>
-
-                {/* Programa */}
-                <td className="p-3">
-                  <div className="h-4 w-32 rounded sadi-skeleton" />
-                </td>
-
-                {/* Acciones (botón) */}
-                <td className="p-3">
-                  <div className="h-10 w-24 rounded-xl sadi-skeleton" />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Paginación skeleton (misma caja que tu paginación real) */}
-      <div className="mt-4 flex items-center justify-between rounded-2xl border bg-white p-3 shadow-sm">
-        <div className="h-4 w-40 rounded sadi-skeleton" />
-
-        <div className="flex items-center gap-2">
-          <div className="h-10 w-24 rounded-xl sadi-skeleton" />
-          <div className="h-10 w-24 rounded-xl sadi-skeleton" />
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
         </div>
+        <span className="command-noir-chip" data-tone={tone}>{detail}</span>
       </div>
     </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="command-noir-metric text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.05)]"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="command-noir-metric text-left">
+      {content}
+    </div>
+  );
 }
 
+function TableSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <AdminTableSkeleton
+      rows={rows}
+      columns={[
+        { label: "ID", widthClass: "w-14", variant: "text" },
+        { label: "Usuario", widthClass: "w-64", variant: "stack" },
+        { label: "Nombre", widthClass: "w-52", variant: "text" },
+        { label: "Rol", widthClass: "w-44", variant: "pillStack" },
+        { label: "Estado", widthClass: "w-44", variant: "pillStack" },
+        { label: "Documento", widthClass: "w-40", variant: "text" },
+        { label: "Sede", widthClass: "w-36", variant: "text" },
+        { label: "Programa", widthClass: "w-44", variant: "text" },
+        { label: "Acciones", widthClass: "w-32", align: "right", variant: "button" },
+      ]}
+    />
+  );
+}
 
 export default function AdminUsuariosPage() {
   const { sedes } = useSedes();
@@ -305,7 +267,7 @@ export default function AdminUsuariosPage() {
 
   // pagination
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   // modal editar
   const [open, setOpen] = useState(false);
@@ -443,7 +405,7 @@ export default function AdminUsuariosPage() {
     setPage(1);
     cargar(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dq, dRol, dEstado, dSede]);
+  }, [dq, dRol, dEstado, dSede, pageSize]);
 
   // recargar al cambiar page
   useEffect(() => {
@@ -504,7 +466,7 @@ export default function AdminUsuariosPage() {
   const pageItems = useMemo(() => {
     if (serverPaginated) return usuarios;
     return filtrados.slice((page - 1) * pageSize, page * pageSize);
-  }, [usuarios, filtrados, page, serverPaginated]);
+  }, [usuarios, filtrados, page, pageSize, serverPaginated]);
 
   const stats = useMemo(() => {
     // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseño)
@@ -967,12 +929,12 @@ export default function AdminUsuariosPage() {
           </>
         ) : (
           <>
-            <StatCard label="Total" value={stats.total} icon={<IconHistory className="h-5 w-5" />} onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
-            <StatCard label="Activos" value={stats.activos} icon={<IconShield className="h-5 w-5" />} tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
-            <StatCard label="Bloqueados" value={stats.bloqueados} icon={<IconBell className="h-5 w-5" />} tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
-            <StatCard label="Admins" value={stats.admins} icon={<IconUser className="h-5 w-5" />} tone="purple" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })} />
-            <StatCard label="Guardas" value={stats.guardas} icon={<IconClock className="h-5 w-5" />} tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
-            <StatCard label="Aprendices" value={stats.aprendices} icon={<IconLaptop className="h-5 w-5" />} tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
+            <MetricPanel label="Total" value={stats.total} detail="universo" onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
+            <MetricPanel label="Activos" value={stats.activos} detail="operativos" tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
+            <MetricPanel label="Bloqueados" value={stats.bloqueados} detail="atencion" tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
+            <MetricPanel label="Admins" value={stats.admins} detail="control" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })} />
+            <MetricPanel label="Guardas" value={stats.guardas} detail="cobertura" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
+            <MetricPanel label="Aprendices" value={stats.aprendices} detail="poblacion" tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
           </>
         )}
       </div>
@@ -983,13 +945,13 @@ export default function AdminUsuariosPage() {
         <FilterBar
           footer={
             error ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50/90 p-3 text-sm text-red-700">{error}</div>
+              <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] p-3 text-sm text-[color:var(--danger)]">{error}</div>
             ) : null
           }
         >
           <div className="relative w-full md:col-span-12 lg:col-span-4">
             <input
-              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+              className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition"
               placeholder="Buscar: username, email, documento, nombre..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -997,7 +959,7 @@ export default function AdminUsuariosPage() {
           </div>
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
+            className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
             value={rolFilter}
             onChange={(e) => setRolFilter(e.target.value as "todos" | "admin" | "guarda" | "aprendiz")}
           >
@@ -1008,7 +970,7 @@ export default function AdminUsuariosPage() {
           </select>
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
+            className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
             value={estadoFilter}
             onChange={(e) => setEstadoFilter(e.target.value as "todos" | "activo" | "bloqueado")}
           >
@@ -1018,7 +980,7 @@ export default function AdminUsuariosPage() {
           </select>
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100 md:col-span-4 lg:col-span-2"
+            className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
             value={sedeFilter}
             onChange={(e) => setSedeFilter(e.target.value)}
           >
@@ -1046,7 +1008,7 @@ export default function AdminUsuariosPage() {
           </Button>
 
           <div className="flex h-11 items-center justify-end md:col-span-6 lg:col-span-1">
-            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
+            <span className="command-noir-chip whitespace-nowrap">
               {totalCount} usuarios
             </span>
           </div>
@@ -1086,12 +1048,12 @@ export default function AdminUsuariosPage() {
           }
         >
           {pageItems.map((u, idx) => (
-            <tr key={u.id} className={cx("align-top transition hover:bg-sky-50/35", idx % 2 === 1 && "bg-zinc-50/35")}>
+            <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(255,255,255,0.015)]")}>
               <td className="p-3">{u.id}</td>
 
               <td className="p-3">
-                <div className="max-w-[220px] truncate font-semibold text-sky-900">{u.username}</div>
-                {u.email ? <div className="max-w-[220px] truncate text-zinc-500">{u.email}</div> : null}
+                <div className="max-w-[220px] truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
+                {u.email ? <div className="max-w-[220px] truncate text-[color:var(--color-text-muted)]">{u.email}</div> : null}
               </td>
 
               <td className="p-3">
@@ -1102,7 +1064,7 @@ export default function AdminUsuariosPage() {
                 <div className="flex flex-col gap-2">
                   <BadgeChip tone={u.rol === "admin" ? "purple" : u.rol === "guarda" ? "info" : "success"}>{u.rol ?? "-"}</BadgeChip>
                   <select
-                    className="w-full rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                    className="command-noir-control w-full rounded-xl p-2 outline-none transition"
                     value={u.rol ?? "aprendiz"}
                     onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
                     title="Cambiar rol (rapido)"
@@ -1121,7 +1083,7 @@ export default function AdminUsuariosPage() {
                 <div className="flex flex-col gap-2">
                   <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
                   <select
-                    className="w-full rounded-xl border border-zinc-200 p-2 bg-white outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                    className="command-noir-control w-full rounded-xl p-2 outline-none transition"
                     value={(u.estado ?? "activo").toLowerCase()}
                     onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
                     title="Cambiar estado (rapido)"
@@ -1151,7 +1113,7 @@ export default function AdminUsuariosPage() {
                   >
                     Editar
                   </Button>
-                  {rowSaving[u.id] ? <div className="text-[11px] text-zinc-500">Guardando...</div> : null}
+                  {rowSaving[u.id] ? <div className="text-[11px] text-[color:var(--color-text-muted)]">Guardando...</div> : null}
                   {rowError[u.id] ? (
                     <InlineNotice type="error" className="max-w-[190px] text-right" message={`No se pudo guardar. ${rowError[u.id]}`}>
                       {rowRetryPatch[u.id] ? (
@@ -1178,6 +1140,11 @@ export default function AdminUsuariosPage() {
           totalPages={totalPages}
           totalCount={totalCount}
           pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
           onPrev={() => setPage((p) => Math.max(1, p - 1))}
           onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
         />
@@ -1198,12 +1165,12 @@ export default function AdminUsuariosPage() {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1">
-              <div className="text-xs text-gray-500">Rol</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">Rol</div>
               <select
                 ref={editRolRef}
                 className={cx(
-                  "w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                  editFieldErrors.rol && "border-rose-300 focus:ring-rose-200",
+                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                  editFieldErrors.rol && "border-[color:rgba(255,107,122,0.45)]",
                 )}
                 value={rol}
                 aria-invalid={Boolean(editFieldErrors.rol)}
@@ -1223,12 +1190,12 @@ export default function AdminUsuariosPage() {
             </label>
 
             <label className="space-y-1">
-              <div className="text-xs text-gray-500">Estado</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">Estado</div>
               <select
                 ref={editEstadoRef}
                 className={cx(
-                  "w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                  editFieldErrors.estado && "border-rose-300 focus:ring-rose-200",
+                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                  editFieldErrors.estado && "border-[color:rgba(255,107,122,0.45)]",
                 )}
                 value={estado.toLowerCase()}
                 aria-invalid={Boolean(editFieldErrors.estado)}
@@ -1245,11 +1212,11 @@ export default function AdminUsuariosPage() {
             </label>
 
             <label className="space-y-1 sm:col-span-2">
-              <div className="text-xs text-gray-500">Correo (email)</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">Correo (email)</div>
               <input
                 className={cx(
-                  "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                  editFieldErrors.email && "border-rose-300 focus:ring-rose-200",
+                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                  editFieldErrors.email && "border-[color:rgba(255,107,122,0.45)]",
                 )}
                 value={email}
                 aria-invalid={Boolean(editFieldErrors.email)}
@@ -1264,11 +1231,11 @@ export default function AdminUsuariosPage() {
             </label>
 
             <label className="space-y-1 sm:col-span-2">
-              <div className="text-xs text-gray-500">Documento</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">Documento</div>
               <input
                 className={cx(
-                  "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                  editFieldErrors.documento && "border-rose-300 focus:ring-rose-200",
+                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                  editFieldErrors.documento && "border-[color:rgba(255,107,122,0.45)]",
                 )}
                 value={documento}
                 aria-invalid={Boolean(editFieldErrors.documento)}
@@ -1283,11 +1250,11 @@ export default function AdminUsuariosPage() {
             </label>
 
             <label className="space-y-1">
-              <div className="text-xs text-gray-500">Sede principal</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">Sede principal</div>
               <select
                 className={cx(
-                  "w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                  editFieldErrors.sede_principal && "border-rose-300 focus:ring-rose-200",
+                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                  editFieldErrors.sede_principal && "border-[color:rgba(255,107,122,0.45)]",
                 )}
                 value={sede}
                 aria-invalid={Boolean(editFieldErrors.sede_principal)}
@@ -1311,11 +1278,11 @@ export default function AdminUsuariosPage() {
             </label>
 
             <label className="space-y-1">
-              <div className="text-xs text-gray-500">Programa formacion</div>
+              <div className="text-xs text-[color:var(--color-text-muted)]">Programa formacion</div>
               <input
                 className={cx(
-                  "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                  editFieldErrors.programa_formacion && "border-rose-300 focus:ring-rose-200",
+                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                  editFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
                 )}
                 value={programa}
                 aria-invalid={Boolean(editFieldErrors.programa_formacion)}
@@ -1334,7 +1301,7 @@ export default function AdminUsuariosPage() {
             <button
               onClick={() => setOpen(false)}
               disabled={editSaving}
-              className="border rounded-xl px-4 py-2 hover:bg-gray-50 transition disabled:opacity-50"
+              className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)] disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -1342,7 +1309,7 @@ export default function AdminUsuariosPage() {
             <button
               disabled={editSaving}
               onClick={guardarModal}
-              className="bg-sky-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-sky-700 shadow-sm transition"
+              className="rounded-xl border border-[color:rgba(111,211,255,0.28)] bg-[linear-gradient(135deg,rgba(111,211,255,0.2),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] shadow-sm transition hover:border-[color:rgba(111,211,255,0.4)] disabled:opacity-50"
             >
               {editSaving ? "Guardando..." : "Guardar cambios"}
             </button>
@@ -1365,12 +1332,12 @@ export default function AdminUsuariosPage() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Username *</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Username *</div>
                   <input
                     ref={createUsernameRef}
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.username && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.username && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_username}
                     aria-invalid={Boolean(createFieldErrors.username)}
@@ -1384,13 +1351,13 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Password *</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Password *</div>
                   <input
                     type="password"
                     ref={createPasswordRef}
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.password && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.password && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_password}
                     aria-invalid={Boolean(createFieldErrors.password)}
@@ -1404,11 +1371,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Nombres</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Nombres</div>
                   <input
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.first_name && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.first_name && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_first}
                     aria-invalid={Boolean(createFieldErrors.first_name)}
@@ -1422,11 +1389,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Apellidos</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Apellidos</div>
                   <input
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.last_name && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.last_name && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_last}
                     aria-invalid={Boolean(createFieldErrors.last_name)}
@@ -1440,11 +1407,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
-                  <div className="text-xs text-gray-500">Email</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Email</div>
                   <input
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.email && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.email && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_email}
                     aria-invalid={Boolean(createFieldErrors.email)}
@@ -1459,11 +1426,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1 sm:col-span-2">
-                  <div className="text-xs text-gray-500">Documento (QR)</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Documento (QR)</div>
                   <input
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.documento && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.documento && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_documento}
                     aria-invalid={Boolean(createFieldErrors.documento)}
@@ -1478,11 +1445,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Rol</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Rol</div>
                   <select
                     className={cx(
-                      "w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.rol && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.rol && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_rol}
                     aria-invalid={Boolean(createFieldErrors.rol)}
@@ -1502,11 +1469,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Estado</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Estado</div>
                   <select
                     className={cx(
-                      "w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.estado && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.estado && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_estado}
                     aria-invalid={Boolean(createFieldErrors.estado)}
@@ -1523,11 +1490,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Sede principal</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Sede principal</div>
                   <select
                     className={cx(
-                      "w-full border rounded-xl p-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.sede_principal && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.sede_principal && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_sede}
                     aria-invalid={Boolean(createFieldErrors.sede_principal)}
@@ -1551,11 +1518,11 @@ export default function AdminUsuariosPage() {
                 </label>
 
                 <label className="space-y-1">
-                  <div className="text-xs text-gray-500">Programa</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Programa</div>
                   <input
                     className={cx(
-                      "w-full border rounded-xl p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400",
-                      createFieldErrors.programa_formacion && "border-rose-300 focus:ring-rose-200",
+                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                      createFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
                     )}
                     value={c_programa}
                     aria-invalid={Boolean(createFieldErrors.programa_formacion)}
@@ -1574,7 +1541,7 @@ export default function AdminUsuariosPage() {
                 <button
                   onClick={() => setOpenCrear(false)}
                   disabled={creating}
-                  className="border rounded-xl px-4 py-2 hover:bg-gray-50 transition disabled:opacity-50"
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)] disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -1582,7 +1549,7 @@ export default function AdminUsuariosPage() {
                 <button
                   onClick={crearUsuario}
                   disabled={creating}
-                  className="bg-sky-600 text-white rounded-xl px-4 py-2 disabled:opacity-50 hover:bg-sky-700 shadow-sm transition"
+                  className="rounded-xl border border-[color:rgba(111,211,255,0.28)] bg-[linear-gradient(135deg,rgba(111,211,255,0.2),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] shadow-sm transition hover:border-[color:rgba(111,211,255,0.4)] disabled:opacity-50"
                 >
                   {creating ? "Creando..." : "Crear usuario"}
                 </button>
@@ -1598,7 +1565,7 @@ export default function AdminUsuariosPage() {
           closeDisabled={validandoImport || confirmandoImport}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] p-3 text-sm text-[color:var(--color-text-soft)]">
               Flujo: 1) Selecciona el archivo. 2) Valida. 3) Importa. Los duplicados por documento siempre se omiten por seguridad.
             </div>
 
@@ -1611,26 +1578,26 @@ export default function AdminUsuariosPage() {
                 type="file"
                 accept=".xlsx,.xlsm,.xltx,.xltm,.csv"
                 onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-                className="min-w-0 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                className="command-noir-control min-w-0 w-full rounded-xl px-3 py-2 text-sm"
               />
               <button
                 onClick={validarImportacion}
                 disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-[color:rgba(111,211,255,0.24)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {validandoImport ? "Validando..." : "Validar archivo"}
               </button>
               <button
                 onClick={confirmarImportacion}
                 disabled={!importId || confirmandoImport || validandoImport || (duplicatesInFile.length > 0 && !allowSkipFileDuplicates)}
-                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[linear-gradient(135deg,rgba(66,199,154,0.16),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(66,199,154,0.38)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {confirmandoImport ? "Importando..." : "Importar"}
               </button>
               <button
                 onClick={reintentarFallidos}
                 disabled={confirmandoImport || validandoImport || importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length === 0}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Reintentar fallidos
               </button>
@@ -1638,46 +1605,46 @@ export default function AdminUsuariosPage() {
 
             {importResumen ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="text-xs text-slate-500">Total</div>
-                  <div className="text-xl font-semibold text-slate-900">{importResumen.total}</div>
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] p-3">
+                  <div className="text-xs text-[color:var(--color-text-muted)]">Total</div>
+                  <div className="text-xl font-semibold text-[color:var(--color-text)]">{importResumen.total}</div>
                 </div>
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                  <div className="text-xs text-emerald-700">Válidos</div>
-                  <div className="text-xl font-semibold text-emerald-800">{importResumen.validos}</div>
+                <div className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[rgba(66,199,154,0.08)] p-3">
+                  <div className="text-xs text-[color:var(--success)]">Válidos</div>
+                  <div className="text-xl font-semibold text-[color:var(--success)]">{importResumen.validos}</div>
                 </div>
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                  <div className="text-xs text-rose-700">Errores</div>
-                  <div className="text-xl font-semibold text-rose-800">{importResumen.errores}</div>
+                <div className="rounded-xl border border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] p-3">
+                  <div className="text-xs text-[color:var(--danger)]">Errores</div>
+                  <div className="text-xl font-semibold text-[color:var(--danger)]">{importResumen.errores}</div>
                 </div>
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                  <div className="text-xs text-amber-700">Duplicados en archivo</div>
-                  <div className="text-xl font-semibold text-amber-800">{duplicatesInFile.length}</div>
+                <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] p-3">
+                  <div className="text-xs text-[color:var(--warning)]">Duplicados en archivo</div>
+                  <div className="text-xl font-semibold text-[color:var(--warning)]">{duplicatesInFile.length}</div>
                 </div>
               </div>
             ) : null}
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <div className="mb-2 flex items-center justify-between text-xs text-slate-600">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] p-3">
+              <div className="mb-2 flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
                 <span>Estado: {importStage}</span>
                 <span>Progreso: {importProgress.processed}/{importProgress.total}</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[color:rgba(255,255,255,0.06)]">
                 <div
-                  className="h-full bg-sky-500 transition-all"
+                  className="h-full bg-[linear-gradient(90deg,rgba(111,211,255,0.92),rgba(79,163,255,0.62))] transition-all"
                   style={{ width: `${importProgress.total > 0 ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
                 />
               </div>
             </div>
 
             {duplicatesInFile.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-amber-200">
-                <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800">
+              <div className="overflow-hidden rounded-2xl border border-[color:rgba(240,178,77,0.28)]">
+                <div className="border-b border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-2 text-sm font-semibold text-[color:var(--warning)]">
                   Duplicados en el archivo
                 </div>
-                <div className="max-h-48 overflow-auto bg-white">
+                <div className="max-h-48 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
+                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1688,18 +1655,18 @@ export default function AdminUsuariosPage() {
                       {duplicatesInFile.map((err, idx) => (
                         <tr key={`dup-${err.row}-${err.documento ?? ""}-${idx}`}>
                           <td className="px-3 py-2">{err.row}</td>
-                          <td className="px-3 py-2 font-medium text-amber-700">{err.documento ?? "-"}</td>
-                          <td className="px-3 py-2 text-slate-700">{err.message}</td>
+                          <td className="px-3 py-2 font-medium text-[color:var(--warning)]">{err.documento ?? "-"}</td>
+                          <td className="px-3 py-2 text-[color:var(--color-text-soft)]">{err.message}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 border-t border-amber-200 bg-amber-50 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2 border-t border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-3">
                   <button
                     type="button"
                     onClick={() => setAllowSkipFileDuplicates(true)}
-                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
+                    className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.16)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[rgba(240,178,77,0.22)]"
                   >
                     Omitir duplicados del archivo
                   </button>
@@ -1709,11 +1676,11 @@ export default function AdminUsuariosPage() {
                       setAllowSkipFileDuplicates(false);
                       setImportBanner({ type: "error", message: "Corrige el archivo y vuelve a validar para continuar." });
                     }}
-                    className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                    className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[color:rgba(255,255,255,0.02)] px-3 py-1.5 text-xs font-medium text-[color:var(--warning)] hover:bg-[rgba(240,178,77,0.12)]"
                   >
                     Cancelar y corregir Excel
                   </button>
-                  <span className="text-xs text-amber-800">
+                  <span className="text-xs text-[color:var(--warning)]">
                     Estado: {allowSkipFileDuplicates ? "Omisión de duplicados confirmada" : "Decisión pendiente"}
                   </span>
                 </div>
@@ -1721,13 +1688,13 @@ export default function AdminUsuariosPage() {
             ) : null}
 
             {importPreviewRows.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-800">
+              <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
+                <div className="border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)]">
                   Vista previa de filas válidas ({importPreviewRows.length} de {importProgress.total})
                 </div>
-                <div className="max-h-56 overflow-auto bg-white">
+                <div className="max-h-56 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
+                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1753,20 +1720,20 @@ export default function AdminUsuariosPage() {
             ) : null}
 
             {importRowResults.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
-                  <div className="text-sm font-semibold text-slate-800">Resultados por fila</div>
+              <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
+                <div className="flex items-center justify-between border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-2">
+                  <div className="text-sm font-semibold text-[color:var(--color-text)]">Resultados por fila</div>
                   <button
                     type="button"
                     onClick={downloadImportErrorsCsv}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.86)] px-3 py-1 text-xs font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.06)]"
                   >
                     Descargar errores (CSV)
                   </button>
                 </div>
-                <div className="max-h-64 overflow-auto bg-white">
+                <div className="max-h-64 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
+                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1783,16 +1750,16 @@ export default function AdminUsuariosPage() {
                           <td className="px-3 py-2">
                             <span
                               className={cx(
-                                "rounded-full px-2 py-1 text-xs font-semibold",
-                                row.status === "created" && "bg-emerald-100 text-emerald-700",
-                                row.status === "skipped" && "bg-amber-100 text-amber-700",
-                                row.status === "failed" && "bg-rose-100 text-rose-700",
+                                "command-noir-chip px-2 py-1 text-xs font-semibold",
+                                row.status === "created" && "bg-transparent text-[color:var(--success)]",
+                                row.status === "skipped" && "bg-transparent text-[color:var(--warning)]",
+                                row.status === "failed" && "bg-transparent text-[color:var(--danger)]",
                               )}
                             >
                               {row.status}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-slate-700">{row.reason}</td>
+                          <td className="px-3 py-2 text-[color:var(--color-text-soft)]">{row.reason}</td>
                           <td className="px-3 py-2">{row.username_asignado ?? "-"}</td>
                         </tr>
                       ))}
@@ -1803,20 +1770,20 @@ export default function AdminUsuariosPage() {
             ) : null}
 
             {importErrores.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-rose-200">
-                <div className="flex items-center justify-between border-b border-rose-200 bg-rose-50 px-4 py-2">
-                  <div className="text-sm font-semibold text-rose-800">Errores por fila</div>
+              <div className="overflow-hidden rounded-2xl border border-[color:rgba(255,107,122,0.26)]">
+                <div className="flex items-center justify-between border-b border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] px-4 py-2">
+                  <div className="text-sm font-semibold text-[color:var(--danger)]">Errores por fila</div>
                   <button
                     type="button"
                     onClick={downloadImportErrorsCsv}
-                    className="rounded-lg border border-rose-300 bg-white px-3 py-1 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                    className="rounded-lg border border-rose-300 bg-[color:rgba(10,16,24,0.86)] px-3 py-1 text-xs font-medium text-[color:var(--danger)] hover:bg-[rgba(255,107,122,0.12)]"
                   >
                     Descargar errores (CSV)
                   </button>
                 </div>
-                <div className="max-h-64 overflow-auto bg-white">
+                <div className="max-h-64 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-left text-slate-600">
+                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1830,7 +1797,7 @@ export default function AdminUsuariosPage() {
                           <td className="px-3 py-2">{err.row}</td>
                           <td className="px-3 py-2">{err.documento ?? "-"}</td>
                           <td className="px-3 py-2">{err.field ?? err.fields?.join(", ") ?? "-"}</td>
-                          <td className="px-3 py-2 text-slate-700">{err.message}</td>
+                          <td className="px-3 py-2 text-[color:var(--color-text-soft)]">{err.message}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1848,12 +1815,12 @@ export default function AdminUsuariosPage() {
           maxWidthClassName="max-w-3xl"
         >
           <div className="space-y-4">
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-3 text-sm text-[color:var(--warning)]">
               Estos aprendices ya existen. Por seguridad, no se crean duplicados.
             </div>
-            <div className="max-h-64 overflow-auto rounded-xl border border-slate-200">
+            <div className="max-h-64 overflow-auto rounded-xl border border-[color:var(--color-border)]">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 text-left text-slate-600">
+                <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
                   <tr>
                     <th className="px-3 py-2">Fila</th>
                     <th className="px-3 py-2">Documento</th>
@@ -1875,12 +1842,12 @@ export default function AdminUsuariosPage() {
                 </tbody>
               </table>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
+            <label className="flex items-center gap-2 text-sm text-[color:var(--color-text-soft)]">
               <input
                 type="checkbox"
                 checked={hideConflictSummary}
                 onChange={(e) => setHideConflictSummary(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent"
               />
               No volver a mostrar este resumen en esta importación
             </label>
@@ -1888,21 +1855,21 @@ export default function AdminUsuariosPage() {
               <button
                 type="button"
                 onClick={downloadDuplicateConflictsCsv}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.86)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.04)]"
               >
                 Descargar reporte de duplicados (CSV)
               </button>
               <button
                 type="button"
                 onClick={() => setShowConflictsModal(false)}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.86)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.04)]"
               >
                 Cancelar para corregir Excel
               </button>
               <button
                 type="button"
                 onClick={() => setShowConflictsModal(false)}
-                className="rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
+                className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[linear-gradient(135deg,rgba(66,199,154,0.16),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] hover:border-[color:rgba(66,199,154,0.38)]"
               >
                 Omitir y continuar
               </button>

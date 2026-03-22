@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
-import StatCard from "@/components/admin/StatCard";
+import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import Button from "@/components/dashboard/shared/Button";
@@ -63,12 +63,11 @@ type Paginated<T> = {
 };
 
 function clsBadge(variant: "green" | "red" | "blue" | "amber" | "gray") {
-  const base = "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
-  if (variant === "green") return `${base} border-emerald-200 bg-emerald-100 text-emerald-800`;
-  if (variant === "red") return `${base} border-rose-200 bg-rose-100 text-rose-800`;
-  if (variant === "blue") return `${base} border-sky-200 bg-sky-100 text-sky-800`;
-  if (variant === "amber") return `${base} border-amber-200 bg-amber-100 text-amber-800`;
-  return `${base} border-zinc-200 bg-zinc-100 text-zinc-700`;
+  if (variant === "green") return "success";
+  if (variant === "red") return "danger";
+  if (variant === "blue") return "info";
+  if (variant === "amber") return "warning";
+  return "neutral";
 }
 
 function Badge({
@@ -78,7 +77,7 @@ function Badge({
   variant: "green" | "red" | "blue" | "amber" | "gray";
   label: string;
 }) {
-  return <span className={clsBadge(variant)}>{label}</span>;
+  return <span className="command-noir-chip" data-tone={clsBadge(variant)}>{label}</span>;
 }
 
 function nombreUsuario(u?: Usuario | null) {
@@ -120,12 +119,12 @@ function useDebounced<T>(value: T, delay = 450) {
 }
 
 function StatSkeleton() {
-  return <div className="h-[92px] animate-pulse rounded-2xl border bg-white p-4 shadow-sm" />;
+  return <div className="command-noir-metric h-[124px] animate-pulse" />;
 }
 
 function FilterSkeleton() {
   return (
-    <section className="rounded-3xl border border-white/80 bg-white/75 p-5 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
+    <section className="sadi-card-strong rounded-[1.75rem] p-5">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-12 lg:col-span-5" />
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
@@ -142,15 +141,53 @@ function FilterSkeleton() {
   );
 }
 
+function MetricPanel({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+}) {
+  return (
+    <article className="command-noir-metric">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+        </div>
+        <span className="command-noir-chip" data-tone={tone}>{detail}</span>
+      </div>
+      <p className="mt-4 text-sm text-[color:var(--color-text-soft)]">
+        {label === "Total"
+          ? "Ledger operativo del rango filtrado."
+          : label === "Ingresos"
+            ? "Flujo de entradas registradas con trazabilidad."
+            : label === "Salidas"
+              ? "Eventos de salida confirmados en el periodo."
+              : "Registros con activos asociados listos para auditoria."}
+      </p>
+    </article>
+  );
+}
+
 function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="rounded-3xl border border-white/80 bg-white/80 shadow-[0_10px_28px_rgba(2,6,23,0.06)]">
-      <div className="p-4 space-y-3">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="h-10 animate-pulse rounded-xl bg-zinc-100" />
-        ))}
-      </div>
-    </div>
+    <AdminTableSkeleton
+      rows={rows}
+      columns={[
+        { label: "Fecha", widthClass: "w-44", variant: "stack" },
+        { label: "Tipo", widthClass: "w-28", variant: "pill" },
+        { label: "Sede", widthClass: "w-28", variant: "text" },
+        { label: "Aprendiz", widthClass: "w-56", variant: "stack" },
+        { label: "Registrado por", widthClass: "w-52", variant: "stack" },
+        { label: "Equipos", widthClass: "w-36", variant: "stack" },
+        { label: "Acciones", widthClass: "w-32", align: "right", variant: "button" },
+      ]}
+    />
   );
 }
 
@@ -330,22 +367,10 @@ export default function AdminAccesosPage() {
       <PageHeader
         breadcrumb="ADMIN > ACCESOS"
         title="Accesos"
-        description="Paginado y filtros por usuario, sede, tipo y rango de fechas."
+        description="Ledger operativo premium para auditar eventos por usuario, sede, tipo y ventana temporal sin perder claridad."
         actions={
           <>
-            <select
-              className="h-10 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
-              value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-            >
-              {[10, 20, 50, 100].map((n) => (
-                <option key={n} value={n}>
-                  {n}/página
-                </option>
-              ))}
-            </select>
-
-            <Button onClick={() => cargarAccesos(page)} variant="secondary">
+            <Button onClick={() => cargarAccesos(page)} variant="secondary" className="min-w-[132px]">
               Recargar
             </Button>
           </>
@@ -362,10 +387,10 @@ export default function AdminAccesosPage() {
           </>
         ) : (
           <>
-            <StatCard label="Total" value={stats.total} />
-            <StatCard label="Ingresos" value={stats.ingresos} tone="success" />
-            <StatCard label="Salidas" value={stats.salidas} tone="danger" />
-            <StatCard label="Con equipos" value={stats.conEquipos} tone="warning" />
+            <MetricPanel label="Total" value={stats.total} detail={`${count} registros`} />
+            <MetricPanel label="Ingresos" value={stats.ingresos} detail="flujo activo" tone="success" />
+            <MetricPanel label="Salidas" value={stats.salidas} detail="egreso trazado" tone="danger" />
+            <MetricPanel label="Con equipos" value={stats.conEquipos} detail="cadena completa" tone="warning" />
           </>
         )}
       </div>
@@ -375,18 +400,18 @@ export default function AdminAccesosPage() {
       ) : (
         <FilterBar
           footer={
-            error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null
+            error ? <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] p-3 text-sm text-[color:var(--danger)]">{error}</div> : null
           }
         >
           <input
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-12 lg:col-span-5"
+            className="command-noir-control h-11 w-full md:col-span-12 lg:col-span-5"
             placeholder="Buscar por documento o username..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
+            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-2"
             value={tipo}
             onChange={(e) => setTipo(e.target.value as any)}
           >
@@ -396,7 +421,7 @@ export default function AdminAccesosPage() {
           </select>
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
+            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-2"
             value={sede}
             onChange={(e) => setSede(e.target.value as any)}
           >
@@ -409,7 +434,7 @@ export default function AdminAccesosPage() {
           </select>
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
+            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-3"
             value={aprendizId}
             onChange={(e) => setAprendizId(e.target.value ? Number(e.target.value) : "")}
           >
@@ -422,7 +447,7 @@ export default function AdminAccesosPage() {
           </select>
 
           <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
+            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-3"
             value={guardaId}
             onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
           >
@@ -435,9 +460,9 @@ export default function AdminAccesosPage() {
           </select>
 
           <div className="md:col-span-6 lg:col-span-2">
-            <label className="text-xs text-gray-500">Desde</label>
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Desde</label>
             <input
-              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              className="command-noir-control h-11 w-full"
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
@@ -445,9 +470,9 @@ export default function AdminAccesosPage() {
           </div>
 
           <div className="md:col-span-6 lg:col-span-2">
-            <label className="text-xs text-gray-500">Hasta</label>
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hasta</label>
             <input
-              className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm"
+              className="command-noir-control h-11 w-full"
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
@@ -461,14 +486,14 @@ export default function AdminAccesosPage() {
           </div>
 
           <div className="flex h-11 items-center justify-end md:col-span-12 lg:col-span-2">
-            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
+            <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
               {count} accesos
             </span>
           </div>
         </FilterBar>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4 text-[color:var(--color-text-soft)]">
         <DataTable
           loading={loadingTable}
           skeleton={<TableSkeleton />}
@@ -505,8 +530,8 @@ export default function AdminAccesosPage() {
             const equiposCount = (a.equipos ?? []).length;
 
             return (
-              <tr key={a.id} className="transition hover:bg-sky-50/35">
-                <td className="px-4 py-3 whitespace-nowrap">{formatFecha(a.fecha)}</td>
+              <tr key={a.id} className="command-noir-table-row">
+                <td className="px-4 py-4 whitespace-nowrap text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
                 <td className="px-4 py-3">
                   {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </td>
@@ -518,10 +543,10 @@ export default function AdminAccesosPage() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-gray-900">{nombreUsuario(aprendiz)}</div>
-                  <div className="text-xs text-gray-500">{aprendiz?.documento ?? "—"}</div>
+                  <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(aprendiz)}</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "—"}</div>
                 </td>
-                <td className="px-4 py-3 text-gray-800">{registrado ? nombreUsuario(registrado) : "—"}</td>
+                <td className="px-4 py-3 text-[color:var(--color-text-soft)]">{registrado ? nombreUsuario(registrado) : "—"}</td>
                 <td className="px-4 py-3">
                   {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "—"}
                 </td>
@@ -540,6 +565,11 @@ export default function AdminAccesosPage() {
           totalPages={totalPages}
           totalCount={count}
           pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
           onPrev={() => setPage((p) => Math.max(1, p - 1))}
           onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
         />
@@ -558,20 +588,20 @@ export default function AdminAccesosPage() {
         {!selected ? null : (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="rounded-xl border p-3">
-                <div className="text-xs text-gray-500">Fecha</div>
+              <div className="command-noir-detail-card">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Fecha</div>
                 <div className="font-semibold">{formatFecha(selected.fecha)}</div>
               </div>
 
-              <div className="rounded-xl border p-3">
-                <div className="text-xs text-gray-500">Tipo</div>
+              <div className="command-noir-detail-card">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Tipo</div>
                 <div className="mt-1">
                   {selected.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </div>
               </div>
 
-              <div className="rounded-xl border p-3">
-                <div className="text-xs text-gray-500">Sede</div>
+              <div className="command-noir-detail-card">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Sede</div>
                 <div className="mt-1">
                   {selected.sede ? (
                     <Badge variant="blue" label={sedesByCode.get(selected.sede) || selected.sede} />
@@ -581,8 +611,8 @@ export default function AdminAccesosPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border p-3">
-                <div className="text-xs text-gray-500">Turno</div>
+              <div className="command-noir-detail-card">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Turno</div>
                 <div className="font-semibold">
                   {selected.turno ? `#${selected.turno}` : "—"}
                   {detalleTurno ? ` (${detalleTurno.activo ? "activo" : "finalizado"})` : ""}
@@ -590,15 +620,15 @@ export default function AdminAccesosPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border p-4">
-              <div className="text-sm font-bold text-gray-900">Personas</div>
-              <div className="mt-2 space-y-1 text-sm text-gray-700">
+            <div className="command-noir-detail-card">
+              <div className="text-sm font-bold text-[color:var(--color-text)]">Personas</div>
+              <div className="mt-2 space-y-1 text-sm text-[color:var(--color-text-soft)]">
                 <div>
-                  <span className="text-gray-500">Aprendiz:</span>{" "}
+                  <span className="text-[color:var(--color-text-muted)]">Aprendiz:</span>{" "}
                   <span className="font-medium">{nombreUsuario(usuariosMap.get(selected.usuario))}</span>
                 </div>
                 <div>
-                  <span className="text-gray-500">Registrado por:</span>{" "}
+                  <span className="text-[color:var(--color-text-muted)]">Registrado por:</span>{" "}
                   <span className="font-medium">
                     {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "—"}
                   </span>
@@ -606,22 +636,22 @@ export default function AdminAccesosPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border p-4">
+            <div className="command-noir-detail-card">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-bold text-gray-900">Equipos</div>
-                {loadingDetalle ? <div className="text-xs text-gray-500">Cargando...</div> : null}
+                <div className="text-sm font-bold text-[color:var(--color-text)]">Equipos</div>
+                {loadingDetalle ? <div className="text-xs text-[color:var(--color-text-muted)]">Cargando...</div> : null}
               </div>
 
               <div className="mt-2">
                 {(selected.equipos ?? []).length === 0 ? (
-                  <div className="text-sm text-gray-500">Sin equipos asociados.</div>
+                  <div className="text-sm text-[color:var(--color-text-muted)]">Sin equipos asociados.</div>
                 ) : detalleEquipos.length ? (
                   <div className="space-y-2">
                     {detalleEquipos.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between rounded-xl border p-3">
+                      <div key={e.id} className="flex items-center justify-between rounded-[1.1rem] border border-[color:var(--color-border-strong)] bg-[color:rgba(255,255,255,0.02)] p-3">
                         <div>
-                          <div className="font-semibold text-gray-900">{e.serial}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="font-semibold text-[color:var(--color-text)]">{e.serial}</div>
+                          <div className="text-xs text-[color:var(--color-text-muted)]">
                             {e.marca} {e.modelo} - propietario #{e.propietario}
                           </div>
                         </div>
@@ -645,9 +675,9 @@ export default function AdminAccesosPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-[color:var(--color-text-soft)]">
                     IDs: {(selected.equipos ?? []).join(", ")}{" "}
-                    <span className="text-xs text-gray-500">(sin detalles)</span>
+                    <span className="text-xs text-[color:var(--color-text-muted)]">(sin detalles)</span>
                   </div>
                 )}
               </div>

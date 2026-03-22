@@ -15,11 +15,12 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
 type ThemeName = "default" | "aprendiz" | "guard";
+type ButtonTone = "primary" | "dark" | "danger" | "light" | "aprendiz" | "guard";
+type NoticeTone = "info" | "success" | "danger";
 
 type ScreenProps = {
   children: React.ReactNode;
@@ -27,9 +28,6 @@ type ScreenProps = {
   contentStyle?: ViewStyle;
   theme?: ThemeName;
 };
-
-type ButtonTone = "primary" | "dark" | "danger" | "light" | "aprendiz" | "guard";
-type NoticeTone = "info" | "success" | "danger";
 
 type ButtonProps = {
   label: string;
@@ -42,53 +40,39 @@ type ButtonProps = {
 };
 
 export const uiTheme = {
-  ink: "#0f172a",
-  inkSoft: "#334155",
-  muted: "#64748b",
-  border: "rgba(148, 163, 184, 0.22)",
-  surface: "rgba(255,255,255,0.78)",
-  surfaceStrong: "#ffffff",
-  panel: "#e2e8f0",
-  accent: "#4f46e5",
-  accentSoft: "rgba(79, 70, 229, 0.12)",
-  accentDeep: "#4338ca",
-  warn: "#a16207",
-  danger: "#b91c1c",
-  success: "#15803d",
-  navy: "#0f172a",
-  shadow: "#0f172a",
-  page: "#f8fafc",
+  bg0: "#070B11",
+  bg1: "#0B1118",
+  bg2: "#101722",
+  surface1: "rgba(18,27,38,0.92)",
+  surface2: "rgba(24,34,49,0.96)",
+  surface3: "rgba(29,42,58,0.98)",
+  border: "rgba(255,255,255,0.08)",
+  borderStrong: "rgba(255,255,255,0.14)",
+  text: "#F3F7FB",
+  textSoft: "#B8C3D1",
+  textMuted: "#7F90A3",
+  accent: "#6FD3FF",
+  accentDeep: "#4FA3FF",
+  guard: "#4FA3FF",
+  aprendiz: "#5FD1C4",
+  success: "#42C79A",
+  warning: "#F0B24D",
+  warn: "#F0B24D",
+  danger: "#FF6B7A",
+  navy: "#132133",
+  ink: "#F3F7FB",
+  inkSoft: "#B8C3D1",
+  muted: "#7F90A3",
+  page: "#070B11",
+  shadow: "#000000",
 };
-
-const PATTERN_ICONS: (keyof typeof Ionicons.glyphMap)[] = [
-  "shield-outline",
-  "shield-checkmark-outline",
-  "key-outline",
-  "lock-closed-outline",
-  "finger-print-outline",
-  "id-card-outline",
-  "school-outline",
-  "book-outline",
-  "library-outline",
-  "person-outline",
-  "people-outline",
-  "scan-outline",
-  "barcode-outline",
-  "time-outline",
-  "location-outline",
-  "checkmark-circle-outline",
-  "eye-outline",
-  "document-text-outline",
-  "desktop-outline",
-  "briefcase-outline",
-];
 
 const themePalette: Record<
   ThemeName,
   {
-    gradient: string[];
-    orbPrimary: string;
-    orbSecondary: string;
+    gradient: [string, string, string];
+    meshPrimary: string;
+    meshSecondary: string;
     accent: string;
     accentDeep: string;
     pillBg: string;
@@ -96,31 +80,31 @@ const themePalette: Record<
   }
 > = {
   default: {
-    gradient: ["#f8fafc", "#eef2ff", "#ffffff"],
-    orbPrimary: "rgba(99, 102, 241, 0.22)",
-    orbSecondary: "rgba(236, 72, 153, 0.14)",
-    accent: "#4f46e5",
-    accentDeep: "#4338ca",
-    pillBg: "rgba(99, 102, 241, 0.14)",
-    pillBorder: "rgba(99, 102, 241, 0.26)",
+    gradient: ["#070B11", "#0B1118", "#101722"],
+    meshPrimary: "rgba(111,211,255,0.12)",
+    meshSecondary: "rgba(79,163,255,0.08)",
+    accent: uiTheme.accent,
+    accentDeep: uiTheme.accentDeep,
+    pillBg: "rgba(111,211,255,0.12)",
+    pillBorder: "rgba(111,211,255,0.22)",
   },
   aprendiz: {
-    gradient: ["#f0f9ff", "#e0f2fe", "#ffffff"],
-    orbPrimary: "rgba(14, 165, 233, 0.22)",
-    orbSecondary: "rgba(56, 189, 248, 0.14)",
-    accent: "#0ea5e9",
-    accentDeep: "#0369a1",
-    pillBg: "rgba(14, 165, 233, 0.14)",
-    pillBorder: "rgba(14, 165, 233, 0.26)",
+    gradient: ["#070B11", "#0C141C", "#0E1820"],
+    meshPrimary: "rgba(95,209,196,0.12)",
+    meshSecondary: "rgba(79,163,255,0.06)",
+    accent: uiTheme.aprendiz,
+    accentDeep: "#36B7A8",
+    pillBg: "rgba(95,209,196,0.12)",
+    pillBorder: "rgba(95,209,196,0.24)",
   },
   guard: {
-    gradient: ["#eff6ff", "#dbeafe", "#ffffff"],
-    orbPrimary: "rgba(30, 58, 138, 0.2)",
-    orbSecondary: "rgba(59, 130, 246, 0.14)",
-    accent: "#1e40af",
-    accentDeep: "#1e3a8a",
-    pillBg: "rgba(30, 58, 138, 0.14)",
-    pillBorder: "rgba(30, 58, 138, 0.28)",
+    gradient: ["#050A11", "#09111B", "#0C1520"],
+    meshPrimary: "rgba(79,163,255,0.16)",
+    meshSecondary: "rgba(111,211,255,0.08)",
+    accent: uiTheme.guard,
+    accentDeep: "#2E7FE8",
+    pillBg: "rgba(79,163,255,0.12)",
+    pillBorder: "rgba(79,163,255,0.24)",
   },
 };
 
@@ -135,95 +119,71 @@ function alpha(hex: string, opacity: number) {
 }
 
 export function SwirlingConstellations() {
-  const anim = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(0.45)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(anim, { toValue: 1, duration: 8000, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0, duration: 8000, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.72, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.45, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
-  }, [anim]);
-
-  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -15] });
-  const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "4deg"] });
-
-  const positions = [
-    { top: "8%", left: "12%", icon: PATTERN_ICONS[0], size: 36, o: 0.12 },
-    { top: "15%", left: "5%", icon: PATTERN_ICONS[1], size: 22, o: 0.08 },
-    { top: "22%", left: "18%", icon: PATTERN_ICONS[2], size: 28, o: 0.15 },
-    { top: "12%", left: "26%", icon: PATTERN_ICONS[3], size: 20, o: 0.06 },
-    { top: "5%", left: "45%", icon: PATTERN_ICONS[4], size: 40, o: 0.09 },
-    { top: "10%", left: "65%", icon: PATTERN_ICONS[5], size: 26, o: 0.11 },
-    { top: "18%", left: "80%", icon: PATTERN_ICONS[6], size: 32, o: 0.14 },
-    { top: "8%", left: "88%", icon: PATTERN_ICONS[7], size: 24, o: 0.07 },
-    { top: "35%", left: "8%", icon: PATTERN_ICONS[8], size: 30, o: 0.1 },
-    { top: "45%", left: "16%", icon: PATTERN_ICONS[9], size: 45, o: 0.05 },
-    { top: "55%", left: "5%", icon: PATTERN_ICONS[10], size: 22, o: 0.12 },
-    { top: "32%", left: "35%", icon: PATTERN_ICONS[11], size: 25, o: 0.08 },
-    { top: "40%", left: "60%", icon: PATTERN_ICONS[12], size: 38, o: 0.11 },
-    { top: "50%", left: "45%", icon: PATTERN_ICONS[13], size: 28, o: 0.14 },
-    { top: "65%", left: "35%", icon: PATTERN_ICONS[14], size: 34, o: 0.09 },
-    { top: "32%", left: "85%", icon: PATTERN_ICONS[15], size: 26, o: 0.13 },
-    { top: "45%", left: "92%", icon: PATTERN_ICONS[16], size: 32, o: 0.07 },
-    { top: "55%", left: "78%", icon: PATTERN_ICONS[17], size: 24, o: 0.1 },
-    { top: "75%", left: "15%", icon: PATTERN_ICONS[18], size: 30, o: 0.08 },
-    { top: "85%", left: "25%", icon: PATTERN_ICONS[19], size: 20, o: 0.11 },
-    { top: "70%", left: "55%", icon: PATTERN_ICONS[0], size: 36, o: 0.06 },
-    { top: "80%", left: "70%", icon: PATTERN_ICONS[1], size: 26, o: 0.12 },
-    { top: "88%", left: "85%", icon: PATTERN_ICONS[2], size: 28, o: 0.09 },
-    { top: "92%", left: "45%", icon: PATTERN_ICONS[3], size: 22, o: 0.07 },
-  ];
+  }, [opacity]);
 
   return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { transform: [{ translateY }, { rotate }] }]}>
-      {positions.map((item, idx) => (
-        <Ionicons
-          key={idx}
-          name={item.icon}
-          size={item.size}
-          color="#94a3b8"
-          style={{
-            position: "absolute",
-            top: item.top as never,
-            left: item.left as never,
-            opacity: item.o,
-          }}
-        />
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}> 
+      <View style={styles.gridOverlay} />
+      <View style={[styles.signalLine, { top: "18%", left: "8%", width: "36%" }]} />
+      <View style={[styles.signalLine, { top: "28%", right: "10%", width: "24%" }]} />
+      <View style={[styles.signalLine, { bottom: "22%", left: "14%", width: "42%" }]} />
+      {[
+        { top: "12%", left: "18%" },
+        { top: "20%", left: "66%" },
+        { top: "34%", left: "12%" },
+        { top: "42%", left: "78%" },
+        { top: "58%", left: "25%" },
+        { top: "70%", left: "62%" },
+        { top: "82%", left: "16%" },
+      ].map((dot, index) => (
+        <View key={index} style={[styles.signalDot, dot as never]} />
       ))}
     </Animated.View>
   );
 }
 
 export function ModernScreen({ children, scroll = false, contentStyle, theme = "default" }: ScreenProps) {
-  const Container: React.ComponentType<any> = scroll ? ScrollView : View;
   const palette = themePalette[theme];
-
-  return (
-    <View style={styles.root}>
-      <LinearGradient colors={palette.gradient as [string, string, ...string[]]} style={StyleSheet.absoluteFill} />
-      <View style={[styles.bgOrb, styles.bgOrbPrimary, { backgroundColor: palette.orbPrimary }]} />
-      <View style={[styles.bgOrb, styles.bgOrbSecondary, { backgroundColor: palette.orbSecondary }]} />
-      {theme === "guard" ? <SwirlingConstellations /> : null}
-      <Container
-        contentContainerStyle={scroll ? [styles.scrollContent, contentStyle] : undefined}
-        style={!scroll ? [styles.content, contentStyle] : undefined}
-        showsVerticalScrollIndicator={false}
-      >
-        {children}
-      </Container>
-    </View>
+  const content = (
+    <>
+      <LinearGradient colors={palette.gradient} style={StyleSheet.absoluteFill} />
+      <View style={[styles.meshOrb, styles.meshOrbPrimary, { backgroundColor: palette.meshPrimary }]} />
+      <View style={[styles.meshOrb, styles.meshOrbSecondary, { backgroundColor: palette.meshSecondary }]} />
+      <SwirlingConstellations />
+      {scroll ? (
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, contentStyle]}
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={[styles.content, contentStyle]}>{children}</View>
+      )}
+    </>
   );
+
+  return <View style={styles.root}>{content}</View>;
 }
 
 export function FadeInCard({
   children,
   delay = 0,
   style,
-  intensity = 60,
+  intensity = 0,
 }: {
   children: React.ReactNode;
   delay?: number;
@@ -231,22 +191,22 @@ export function FadeInCard({
   intensity?: number;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(30)).current;
+  const translateY = useRef(new Animated.Value(18)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 500,
+        duration: 360,
         delay,
-        easing: Easing.out(Easing.bezier(0.25, 1, 0.5, 1)),
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 500,
+        duration: 420,
         delay,
-        easing: Easing.out(Easing.back(1.5)),
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
@@ -256,53 +216,27 @@ export function FadeInCard({
     <Animated.View
       style={[
         styles.cardContainer,
+        intensity > 70 ? styles.cardContainerStrong : null,
         style,
-        {
-          opacity,
-          transform: [{ translateY }],
-        },
+        { opacity, transform: [{ translateY }] },
       ]}
     >
-      {Platform.OS === "android" ? (
-        <View style={[styles.glassCard, styles.androidCardFallback]}>{children}</View>
-      ) : (
-        <BlurView intensity={intensity} tint="light" style={styles.glassCard}>
-          {children}
-        </BlurView>
-      )}
+      {children}
     </Animated.View>
   );
 }
 
-function usePulse(min = 0.45, max = 0.9) {
-  const opacity = useRef(new Animated.Value(min)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: max, duration: 820, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: min, duration: 820, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [max, min, opacity]);
-
-  return opacity;
-}
-
 export function SkeletonLine({ width = "100%", height = 14 }: { width?: ViewStyle["width"]; height?: number }) {
-  const opacity = usePulse();
-  return <Animated.View style={[styles.skeletonLine, { width, height, opacity }]} />;
+  return <View style={[styles.skeletonLine, { width, height }]} />;
 }
 
 export function SkeletonCard({ rows = 3 }: { rows?: number }) {
   return (
     <View style={styles.skeletonCard}>
-      <SkeletonLine width="36%" height={12} />
-      <SkeletonLine width="72%" height={24} />
+      <SkeletonLine width="42%" height={12} />
+      <SkeletonLine width="68%" height={28} />
       {Array.from({ length: rows }).map((_, index) => (
-        <SkeletonLine key={index} width={index === rows - 1 ? "58%" : "100%"} height={14} />
+        <SkeletonLine key={index} width={`${88 - index * 8}%`} height={12} />
       ))}
     </View>
   );
@@ -310,15 +244,14 @@ export function SkeletonCard({ rows = 3 }: { rows?: number }) {
 
 export function SkeletonList({ items = 3 }: { items?: number }) {
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 12 }}>
       {Array.from({ length: items }).map((_, index) => (
-        <View key={index} style={styles.listSkeletonItem}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-            <SkeletonLine width="24%" height={14} />
-            <SkeletonLine width={70} height={22} />
+        <View key={index} style={styles.skeletonListItem}>
+          <View style={styles.skeletonDot} />
+          <View style={{ flex: 1, gap: 10 }}>
+            <SkeletonLine width="56%" height={12} />
+            <SkeletonLine width="82%" height={10} />
           </View>
-          <SkeletonLine width="78%" height={14} />
-          <SkeletonLine width="46%" height={12} />
         </View>
       ))}
     </View>
@@ -327,7 +260,7 @@ export function SkeletonList({ items = 3 }: { items?: number }) {
 
 export function TitleBlock({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 8 }}>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
     </View>
@@ -335,84 +268,43 @@ export function TitleBlock({ title, subtitle }: { title: string; subtitle?: stri
 }
 
 export function ModernButton({ label, onPress, disabled, tone = "primary", icon, imageIcon, glow = false }: ButtonProps) {
-  const map: Record<ButtonTone, { bg: string; fg: string; border: string; gradient: [string, string] }> = {
-    primary: { bg: "#4f46e5", fg: "#ffffff", border: "rgba(255,255,255,0.2)", gradient: ["#6366f1", "#4f46e5"] },
-    dark: { bg: "#0f172a", fg: "#f8fafc", border: "rgba(255,255,255,0.1)", gradient: ["#1e293b", "#0f172a"] },
-    danger: { bg: "#e11d48", fg: "#ffffff", border: "rgba(255,255,255,0.2)", gradient: ["#f43f5e", "#e11d48"] },
-    light: { bg: "rgba(255,255,255,0.8)", fg: "#0f172a", border: "#e2e8f0", gradient: ["#ffffff", "#f8fafc"] },
-    aprendiz: { bg: "#0ea5e9", fg: "#ffffff", border: "rgba(255,255,255,0.2)", gradient: ["#38bdf8", "#0ea5e9"] },
-    guard: { bg: "#1e3a8a", fg: "#ffffff", border: "rgba(255,255,255,0.2)", gradient: ["#1e40af", "#172554"] },
+  const map: Record<ButtonTone, { bg: string; fg: string; border: string; overlay: string }> = {
+    primary: { bg: uiTheme.accentDeep, fg: uiTheme.text, border: alpha(uiTheme.accent, 0.36), overlay: alpha(uiTheme.accent, 0.12) },
+    dark: { bg: uiTheme.surface2, fg: uiTheme.text, border: uiTheme.borderStrong, overlay: "rgba(255,255,255,0.03)" },
+    danger: { bg: alpha(uiTheme.danger, 0.16), fg: "#FFD6DC", border: alpha(uiTheme.danger, 0.34), overlay: alpha(uiTheme.danger, 0.08) },
+    light: { bg: alpha("#FFFFFF", 0.02), fg: uiTheme.text, border: uiTheme.border, overlay: alpha("#FFFFFF", 0.03) },
+    aprendiz: { bg: alpha(uiTheme.aprendiz, 0.16), fg: "#D9FFFA", border: alpha(uiTheme.aprendiz, 0.3), overlay: alpha(uiTheme.aprendiz, 0.1) },
+    guard: { bg: alpha(uiTheme.guard, 0.16), fg: "#E9F3FF", border: alpha(uiTheme.guard, 0.3), overlay: alpha(uiTheme.guard, 0.1) },
   };
 
-  const scaleAnim = useRef(new Animated.Value(1)).current;
   const palette = map[tone];
+  const scale = useRef(new Animated.Value(1)).current;
 
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.96,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 0,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 25,
-      bounciness: 12,
-    }).start();
+  const pressTo = (value: number) => {
+    Animated.timing(scale, { toValue: value, duration: 120, useNativeDriver: true }).start();
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <Pressable disabled={disabled} onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress}>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable disabled={disabled} onPress={onPress} onPressIn={() => pressTo(0.985)} onPressOut={() => pressTo(1)}>
         {({ pressed }) => (
-          <LinearGradient
-            colors={disabled ? ["#cbd5e1", "#cbd5e1"] : palette.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <View
             style={[
               styles.button,
               {
-                borderColor: disabled ? "#94a3b8" : palette.border,
-                opacity: pressed && !disabled ? 0.88 : 1,
-                ...(glow && !disabled
-                  ? {
-                      shadowColor: "#ffffff",
-                      shadowOpacity: 0.8,
-                      shadowRadius: 10,
-                      shadowOffset: { width: 0, height: 0 },
-                      elevation: 10,
-                    }
-                  : {}),
+                backgroundColor: palette.bg,
+                borderColor: palette.border,
+                opacity: disabled ? 0.45 : 1,
+                shadowColor: glow ? palette.border : uiTheme.shadow,
+                shadowOpacity: glow ? 0.24 : 0.2,
               },
             ]}
           >
-            {imageIcon ? (
-              <Image source={imageIcon} style={styles.leadingImageIcon} />
-            ) : icon ? (
-              <Ionicons
-                name={icon}
-                size={20}
-                color={disabled ? "#f8fafc" : palette.fg}
-                style={[
-                  styles.leadingIcon,
-                  glow && !disabled ? styles.glowText : undefined,
-                ]}
-              />
-            ) : null}
-            <Text
-              style={[
-                styles.buttonText,
-                { color: disabled ? "#f8fafc" : palette.fg },
-                glow && !disabled ? styles.glowText : undefined,
-              ]}
-            >
-              {label}
-            </Text>
-          </LinearGradient>
+            <View style={[styles.buttonOverlay, { backgroundColor: pressed ? alpha("#FFFFFF", 0.04) : palette.overlay }]} />
+            {imageIcon ? <Image source={imageIcon} style={styles.leadingImageIcon} /> : null}
+            {icon ? <Ionicons name={icon} size={18} color={palette.fg} style={styles.leadingIcon} /> : null}
+            {!!label && <Text style={[styles.buttonText, { color: palette.fg }]}>{label}</Text>}
+          </View>
         )}
       </Pressable>
     </Animated.View>
@@ -445,19 +337,18 @@ export function InputField({
     <View style={{ gap: 8 }}>
       <Text style={styles.inputLabel}>{label}</Text>
       <View style={[styles.inputWrapper, wrapperStyle]}>
-        {imageIcon ? (
-          <Image source={imageIcon} style={styles.inputImageIcon} />
-        ) : icon ? (
-          <Ionicons name={icon} size={20} color={iconColor ?? "#0ea5e9"} style={styles.inputIcon} />
-        ) : null}
-        <TextInput {...props} placeholderTextColor="#94a3b8" style={[styles.input, props.style as any]} />
+        {imageIcon ? <Image source={imageIcon} style={styles.inputImageIcon} /> : null}
+        {icon ? <Ionicons name={icon} size={18} color={iconColor ?? uiTheme.textMuted} style={styles.inputIcon} /> : null}
+        <TextInput
+          {...props}
+          placeholderTextColor={uiTheme.textMuted}
+          style={[styles.input, props.style as any]}
+          selectionColor={uiTheme.accent}
+        />
         {(rightIcon || rightImageIcon) && (
-          <Pressable onPress={onRightIconPress} style={{ padding: 4 }}>
-            {rightImageIcon ? (
-              <Image source={rightImageIcon} style={styles.trailingImageIcon} />
-            ) : rightIcon ? (
-              <Ionicons name={rightIcon} size={22} color={rightIconColor ?? "#94a3b8"} />
-            ) : null}
+          <Pressable onPress={onRightIconPress} style={styles.trailingPressable}>
+            {rightImageIcon ? <Image source={rightImageIcon} style={styles.trailingImageIcon} /> : null}
+            {rightIcon ? <Ionicons name={rightIcon} size={20} color={rightIconColor ?? uiTheme.textMuted} /> : null}
           </Pressable>
         )}
       </View>
@@ -477,26 +368,19 @@ export function Pill({
   tone?: "primary" | "warning" | "success" | "danger" | "aprendiz" | "guard";
 }) {
   const map = {
-    primary: { bg: "rgba(99, 102, 241, 0.15)", text: "#4338ca", border: "rgba(99, 102, 241, 0.3)" },
-    warning: { bg: "rgba(245, 158, 11, 0.15)", text: "#b45309", border: "rgba(245, 158, 11, 0.3)" },
-    success: { bg: "rgba(16, 185, 129, 0.15)", text: "#047857", border: "rgba(16, 185, 129, 0.3)" },
-    danger: { bg: "rgba(225, 29, 72, 0.15)", text: "#be123c", border: "rgba(225, 29, 72, 0.3)" },
-    aprendiz: themePalette.aprendiz,
-    guard: themePalette.guard,
+    primary: { bg: alpha(uiTheme.accent, 0.12), text: uiTheme.text, border: alpha(uiTheme.accent, 0.22) },
+    warning: { bg: alpha(uiTheme.warning, 0.14), text: "#FFE8BF", border: alpha(uiTheme.warning, 0.24) },
+    success: { bg: alpha(uiTheme.success, 0.14), text: "#D8FFF1", border: alpha(uiTheme.success, 0.24) },
+    danger: { bg: alpha(uiTheme.danger, 0.14), text: "#FFD6DC", border: alpha(uiTheme.danger, 0.24) },
+    aprendiz: { bg: themePalette.aprendiz.pillBg, text: "#D9FFFA", border: themePalette.aprendiz.pillBorder },
+    guard: { bg: themePalette.guard.pillBg, text: "#E9F3FF", border: themePalette.guard.pillBorder },
   };
 
-  const palette =
-    tone === "aprendiz" || tone === "guard"
-      ? { bg: map[tone].pillBg, text: map[tone].accentDeep, border: map[tone].pillBorder }
-      : map[tone];
-
+  const palette = map[tone];
   return (
     <View style={[styles.pill, { backgroundColor: palette.bg, borderColor: palette.border }]}>
-      {imageIcon ? (
-        <Image source={imageIcon} style={styles.pillImageIcon} />
-      ) : icon ? (
-        <Ionicons name={icon} size={14} color={palette.text} style={{ marginRight: 4 }} />
-      ) : null}
+      {imageIcon ? <Image source={imageIcon} style={styles.pillImageIcon} /> : null}
+      {icon ? <Ionicons name={icon} size={13} color={palette.text} style={{ marginRight: 6 }} /> : null}
       <Text style={[styles.pillText, { color: palette.text }]}>{text}</Text>
     </View>
   );
@@ -506,24 +390,16 @@ export function LoadingBlock({ label = "Cargando..." }: { label?: string }) {
   return (
     <View style={styles.statusBlock}>
       <ActivityIndicator color={uiTheme.accent} />
-      <Text style={[styles.statusText, { color: uiTheme.muted }]}>{label}</Text>
+      <Text style={styles.statusText}>{label}</Text>
     </View>
   );
 }
 
-export function EmptyState({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle: string;
-}) {
+export function EmptyState({ icon, title, subtitle }: { icon: keyof typeof Ionicons.glyphMap; title: string; subtitle: string }) {
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconWrap}>
-        <Ionicons name={icon} size={24} color={uiTheme.accentDeep} />
+        <Ionicons name={icon} size={22} color={uiTheme.accent} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySubtitle}>{subtitle}</Text>
@@ -533,9 +409,9 @@ export function EmptyState({
 
 export function NoticeBanner({ tone = "info", text }: { tone?: NoticeTone; text: string }) {
   const palette = {
-    info: { bg: alpha(uiTheme.accent, 0.08), border: alpha(uiTheme.accent, 0.16), fg: uiTheme.accentDeep, icon: "information-circle-outline" as const },
-    success: { bg: "rgba(21,128,61,0.08)", border: "rgba(21,128,61,0.16)", fg: uiTheme.success, icon: "checkmark-circle-outline" as const },
-    danger: { bg: "rgba(185,28,28,0.08)", border: "rgba(185,28,28,0.16)", fg: uiTheme.danger, icon: "alert-circle-outline" as const },
+    info: { bg: alpha(uiTheme.accent, 0.12), border: alpha(uiTheme.accent, 0.22), fg: uiTheme.text, icon: "information-circle-outline" as const },
+    success: { bg: alpha(uiTheme.success, 0.14), border: alpha(uiTheme.success, 0.22), fg: "#D8FFF1", icon: "checkmark-circle-outline" as const },
+    danger: { bg: alpha(uiTheme.danger, 0.14), border: alpha(uiTheme.danger, 0.22), fg: "#FFD6DC", icon: "alert-circle-outline" as const },
   }[tone];
 
   return (
@@ -551,220 +427,266 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: uiTheme.page,
   },
-  bgOrb: {
-    position: "absolute",
-    borderRadius: 999,
-  },
-  bgOrbPrimary: {
-    width: 350,
-    height: 350,
-    top: -80,
-    right: -100,
-  },
-  bgOrbSecondary: {
-    width: 400,
-    height: 400,
-    bottom: -150,
-    left: -120,
+  scrollView: {
+    flex: 1,
   },
   content: {
     flex: 1,
-    padding: 24,
-    gap: 20,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 28 : 24,
+    paddingBottom: 20,
+    gap: 16,
   },
   scrollContent: {
-    padding: 24,
-    gap: 20,
-    paddingBottom: 50,
-    paddingTop: Platform.OS === "ios" ? 30 : 40,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 28 : 24,
+    paddingBottom: 40,
+    gap: 16,
+  },
+  meshOrb: {
+    position: "absolute",
+    borderRadius: 999,
+  },
+  meshOrbPrimary: {
+    width: 280,
+    height: 280,
+    top: -90,
+    right: -90,
+  },
+  meshOrbSecondary: {
+    width: 300,
+    height: 300,
+    bottom: -120,
+    left: -120,
+  },
+  gridOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderColor: "rgba(255,255,255,0.03)",
+    borderWidth: 0,
+  },
+  signalLine: {
+    position: "absolute",
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  signalDot: {
+    position: "absolute",
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.22)",
   },
   cardContainer: {
-    borderRadius: 28,
+    borderRadius: 24,
+    padding: 18,
+    backgroundColor: uiTheme.surface1,
+    borderWidth: 1,
+    borderColor: uiTheme.border,
+    shadowColor: uiTheme.shadow,
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
     overflow: "hidden",
-    borderWidth: 1.5,
-    borderColor: "rgba(255, 255, 255, 0.6)",
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.08,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 15 },
-    elevation: Platform.OS === "android" ? 0 : 5,
-    backgroundColor: Platform.OS === "android" ? "rgba(255,255,255,0.9)" : "transparent",
+    gap: 12,
   },
-  glassCard: {
-    padding: 24,
-    backgroundColor: "rgba(255, 255, 255, 0.4)",
-  },
-  androidCardFallback: {
-    backgroundColor: "rgba(255,255,255,0.92)",
+  cardContainerStrong: {
+    backgroundColor: uiTheme.surface2,
+    borderColor: uiTheme.borderStrong,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: uiTheme.ink,
-    letterSpacing: -1,
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: "800",
+    color: uiTheme.text,
+    letterSpacing: -0.6,
   },
   subtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: uiTheme.textSoft,
+  },
+  button: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    gap: 8,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+    overflow: "hidden",
+  },
+  buttonOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  leadingIcon: {
+    zIndex: 1,
+  },
+  leadingImageIcon: {
+    width: 18,
+    height: 18,
+    resizeMode: "contain",
+    zIndex: 1,
+  },
+  buttonText: {
     fontSize: 15,
-    color: "#475569",
-    fontWeight: "500",
-    lineHeight: 22,
+    fontWeight: "800",
+    letterSpacing: 0.1,
+    zIndex: 1,
   },
   inputLabel: {
     fontSize: 12,
-    color: uiTheme.muted,
-    fontWeight: "800",
-    letterSpacing: 0.5,
     textTransform: "uppercase",
-    marginLeft: 4,
+    letterSpacing: 0.7,
+    color: uiTheme.textMuted,
+    fontWeight: "700",
   },
   inputWrapper: {
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: uiTheme.border,
+    backgroundColor: uiTheme.surface2,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "rgba(14, 165, 233, 0.4)",
-    borderRadius: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    gap: 10,
   },
   inputIcon: {
-    marginRight: 12,
-  },
-  inputImageIcon: {
-    width: 20,
-    height: 20,
-    marginRight: 12,
-    resizeMode: "contain",
-  },
-  trailingImageIcon: {
-    width: 22,
-    height: 22,
-    resizeMode: "contain",
-  },
-  leadingImageIcon: {
-    width: 22,
-    height: 22,
-    marginRight: 8,
-    resizeMode: "contain",
-  },
-  pillImageIcon: {
-    width: 16,
-    height: 16,
-    marginRight: 4,
-    resizeMode: "contain",
+    opacity: 0.9,
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
-    color: uiTheme.ink,
-    fontSize: 16,
-    fontWeight: "600",
+    color: uiTheme.text,
+    fontSize: 15,
+    paddingVertical: 14,
   },
-  button: {
-    flexDirection: "row",
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 15,
-    shadowOffset: { width: 0, height: 8 },
+  inputImageIcon: {
+    width: 18,
+    height: 18,
+    resizeMode: "contain",
   },
-  leadingIcon: {
-    marginRight: 8,
+  trailingPressable: {
+    paddingLeft: 8,
+    paddingVertical: 4,
   },
-  glowText: {
-    textShadowColor: "rgba(255,255,255,0.7)",
-    textShadowRadius: 8,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-  buttonText: {
-    fontWeight: "800",
-    fontSize: 16,
-    letterSpacing: 0.5,
+  trailingImageIcon: {
+    width: 18,
+    height: 18,
+    resizeMode: "contain",
   },
   pill: {
     alignSelf: "flex-start",
+    minHeight: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
     flexDirection: "row",
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  pillText: {
-    fontWeight: "900",
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  skeletonCard: {
-    gap: 12,
-    paddingVertical: 4,
-  },
-  skeletonLine: {
-    borderRadius: 999,
-    backgroundColor: "rgba(148,163,184,0.26)",
-  },
-  listSkeletonItem: {
-    backgroundColor: "rgba(255,255,255,0.78)",
-    borderWidth: 1,
-    borderColor: uiTheme.border,
-    borderRadius: 20,
-    padding: 14,
-    gap: 10,
-  },
-  statusBlock: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 18,
+  },
+  pillText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  pillImageIcon: {
+    width: 14,
+    height: 14,
+    resizeMode: "contain",
+    marginRight: 6,
+  },
+  statusBlock: {
+    minHeight: 76,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: uiTheme.border,
+    backgroundColor: alpha(uiTheme.surface3, 0.9),
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
+    paddingHorizontal: 16,
   },
   statusText: {
-    fontWeight: "700",
+    color: uiTheme.textSoft,
+    fontSize: 14,
+    fontWeight: "600",
   },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 20,
-    paddingHorizontal: 12,
     gap: 10,
+    paddingVertical: 10,
   },
   emptyIconWrap: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: 26,
     backgroundColor: alpha(uiTheme.accent, 0.1),
     borderWidth: 1,
-    borderColor: alpha(uiTheme.accent, 0.14),
+    borderColor: alpha(uiTheme.accent, 0.18),
+    alignItems: "center",
+    justifyContent: "center",
   },
   emptyTitle: {
-    color: uiTheme.ink,
+    color: uiTheme.text,
     fontSize: 16,
-    fontWeight: "900",
-    textAlign: "center",
+    fontWeight: "700",
   },
   emptySubtitle: {
-    color: uiTheme.inkSoft,
-    lineHeight: 20,
+    color: uiTheme.textSoft,
+    fontSize: 13,
     textAlign: "center",
+    lineHeight: 19,
   },
   noticeBanner: {
+    minHeight: 46,
+    borderRadius: 16,
+    borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderRadius: 18,
-    borderWidth: 1,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   noticeText: {
     flex: 1,
-    lineHeight: 20,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  skeletonCard: {
+    borderRadius: 18,
+    backgroundColor: alpha("#FFFFFF", 0.03),
+    borderWidth: 1,
+    borderColor: uiTheme.border,
+    padding: 16,
+    gap: 10,
+  },
+  skeletonLine: {
+    borderRadius: 999,
+    backgroundColor: alpha("#FFFFFF", 0.08),
+  },
+  skeletonListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    backgroundColor: alpha("#FFFFFF", 0.03),
+    borderWidth: 1,
+    borderColor: uiTheme.border,
+    padding: 14,
+  },
+  skeletonDot: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: alpha("#FFFFFF", 0.08),
   },
 });
+

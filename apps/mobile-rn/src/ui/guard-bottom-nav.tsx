@@ -30,7 +30,7 @@ async function tapFeedback(kind: "primary" | "secondary") {
     }
     await Haptics.selectionAsync();
   } catch {
-    // Ignore unsupported haptics.
+    // ignore unsupported haptics
   }
 }
 
@@ -43,7 +43,7 @@ function NavPill({ item, active }: { item: NavItem; active: boolean }) {
       }}
       style={({ pressed }) => [styles.navPill, active ? styles.navPillActive : null, pressed ? styles.navPressed : null]}
     >
-      <Ionicons name={active ? activeIcon(item.icon) : item.icon} size={20} color={active ? uiTheme.accentDeep : uiTheme.muted} />
+      <Ionicons name={active ? activeIcon(item.icon) : item.icon} size={18} color={active ? uiTheme.text : uiTheme.textMuted} />
       <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>{item.label}</Text>
     </Pressable>
   );
@@ -76,7 +76,7 @@ export function GuardBottomNav() {
       >
         <View style={styles.scanHalo} />
         <View style={styles.scanInnerRing}>
-          <Ionicons name={pathname === "/guard/scan" ? "scan" : "scan-outline"} size={30} color="#ffffff" />
+          <Ionicons name={pathname === "/guard/scan" ? "scan" : "scan-outline"} size={28} color="#F3F7FB" />
         </View>
         <Text style={styles.scanText}>Escanear</Text>
       </Pressable>
@@ -92,28 +92,28 @@ const styles = StyleSheet.create({
   },
   shell: {
     width: "100%",
-    minHeight: 90,
-    borderRadius: 32,
-    backgroundColor: "rgba(255,255,255,0.92)",
+    minHeight: 94,
+    borderRadius: 28,
+    backgroundColor: "rgba(18,27,38,0.96)",
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
+    borderColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 12,
-    paddingTop: 14,
+    paddingTop: 16,
     paddingBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    shadowColor: uiTheme.shadow,
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+    shadowColor: "#000000",
+    shadowOpacity: 0.26,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 12,
   },
   sideGroupLeft: {
     flexDirection: "row",
     gap: 8,
     alignItems: "center",
-    width: "40%",
+    width: "42%",
   },
   sideGroupRight: {
     flexDirection: "row",
@@ -123,10 +123,10 @@ const styles = StyleSheet.create({
     width: "28%",
   },
   centerGap: {
-    width: 92,
+    width: 96,
   },
   navPill: {
-    minWidth: 76,
+    minWidth: 78,
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderRadius: 18,
@@ -134,21 +134,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 4,
     backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   navPillActive: {
-    backgroundColor: "rgba(15,118,110,0.1)",
+    backgroundColor: "rgba(79,163,255,0.12)",
+    borderColor: "rgba(79,163,255,0.24)",
   },
   navPressed: {
     opacity: 0.92,
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: 0.985 }],
   },
   navLabel: {
     fontSize: 11,
     fontWeight: "800",
-    color: uiTheme.muted,
+    color: uiTheme.textMuted,
   },
   navLabelActive: {
-    color: uiTheme.accentDeep,
+    color: uiTheme.text,
   },
   scanButton: {
     position: "absolute",
@@ -158,7 +161,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   scanButtonActive: {
-    transform: [{ translateY: -3 }],
+    transform: [{ translateY: -2 }],
   },
   scanPressed: {
     opacity: 0.97,
@@ -167,28 +170,28 @@ const styles = StyleSheet.create({
   scanHalo: {
     position: "absolute",
     top: -2,
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    backgroundColor: "rgba(15,118,110,0.12)",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(79,163,255,0.12)",
   },
   scanInnerRing: {
     width: 86,
     height: 86,
     borderRadius: 43,
-    backgroundColor: uiTheme.accent,
-    borderWidth: 8,
-    borderColor: "rgba(237,244,245,0.96)",
+    backgroundColor: "#132133",
+    borderWidth: 1,
+    borderColor: "rgba(111,211,255,0.28)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: uiTheme.accent,
-    shadowOpacity: 0.34,
-    shadowRadius: 20,
+    shadowColor: "#4FA3FF",
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 10,
   },
   scanText: {
-    color: uiTheme.ink,
+    color: uiTheme.text,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 0.4,

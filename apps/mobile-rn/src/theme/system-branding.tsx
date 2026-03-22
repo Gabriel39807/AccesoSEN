@@ -17,23 +17,33 @@ type SystemBrandingContextValue = {
   config: SystemBrandingConfig;
   loading: boolean;
   refresh: () => Promise<void>;
+  rolePalette: {
+    admin: { light: string; dark: string };
+    aprendiz: { light: string; dark: string };
+    guarda: { light: string; dark: string };
+  };
 };
 
 const DEFAULT_CONFIG: SystemBrandingConfig = {
-  nombre_institucion: "Institución",
-  branding_preset: null,
-  color_aprendiz_light: "#14B8A6",
-  color_aprendiz_dark: "#0F766E",
-  color_admin_light: "#3B82F6",
-  color_admin_dark: "#1E3A8A",
-  color_guarda_light: "#F59E0B",
-  color_guarda_dark: "#B45309",
+  nombre_institucion: "Institucion",
+  branding_preset: "command-noir",
+  color_aprendiz_light: "#5FD1C4",
+  color_aprendiz_dark: "#36B7A8",
+  color_admin_light: "#7CC7FF",
+  color_admin_dark: "#4FA3FF",
+  color_guarda_light: "#6FD3FF",
+  color_guarda_dark: "#2E7FE8",
 };
 
 const SystemBrandingContext = createContext<SystemBrandingContextValue>({
   config: DEFAULT_CONFIG,
   loading: false,
   refresh: async () => {},
+  rolePalette: {
+    admin: { light: DEFAULT_CONFIG.color_admin_light, dark: DEFAULT_CONFIG.color_admin_dark },
+    aprendiz: { light: DEFAULT_CONFIG.color_aprendiz_light, dark: DEFAULT_CONFIG.color_aprendiz_dark },
+    guarda: { light: DEFAULT_CONFIG.color_guarda_light, dark: DEFAULT_CONFIG.color_guarda_dark },
+  },
 });
 
 export function SystemBrandingProvider({ children }: { children: React.ReactNode }) {
@@ -45,6 +55,7 @@ export function SystemBrandingProvider({ children }: { children: React.ReactNode
       const response = await api.get("/api/configuracion/");
       const payload = (response?.data?.configuracion || {}) as Partial<SystemBrandingConfig>;
       setConfig((prev) => ({
+        ...DEFAULT_CONFIG,
         ...prev,
         ...payload,
         nombre_institucion:
@@ -62,13 +73,26 @@ export function SystemBrandingProvider({ children }: { children: React.ReactNode
     refresh();
   }, []);
 
+  const rolePalette = useMemo(
+    () => ({
+      admin: { light: config.color_admin_light || DEFAULT_CONFIG.color_admin_light, dark: config.color_admin_dark || DEFAULT_CONFIG.color_admin_dark },
+      aprendiz: {
+        light: config.color_aprendiz_light || DEFAULT_CONFIG.color_aprendiz_light,
+        dark: config.color_aprendiz_dark || DEFAULT_CONFIG.color_aprendiz_dark,
+      },
+      guarda: { light: config.color_guarda_light || DEFAULT_CONFIG.color_guarda_light, dark: config.color_guarda_dark || DEFAULT_CONFIG.color_guarda_dark },
+    }),
+    [config]
+  );
+
   const value = useMemo<SystemBrandingContextValue>(
     () => ({
       config,
       loading,
       refresh,
+      rolePalette,
     }),
-    [config, loading],
+    [config, loading, rolePalette]
   );
 
   return <SystemBrandingContext.Provider value={value}>{children}</SystemBrandingContext.Provider>;

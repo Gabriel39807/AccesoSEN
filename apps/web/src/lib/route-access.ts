@@ -11,7 +11,7 @@ function isAdminRole(role: AuthenticatedRole) {
 export function resolveRouteAccess(pathname: string, role: AuthenticatedRole): RouteAccessDecision {
   if (pathname === "/login") {
     if (role === "aprendiz") return { kind: "redirect", destination: "/aprendiz/inicio" };
-    if (isAdminRole(role)) return { kind: "redirect", destination: "/admin/usuarios" };
+    if (isAdminRole(role)) return { kind: "redirect", destination: "/admin/inicio" };
     return { kind: "next" };
   }
 
