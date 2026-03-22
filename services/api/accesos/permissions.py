@@ -5,7 +5,7 @@ from rest_framework.permissions import BasePermission
 from accesos.domain.services.authorization import AuthorizationService
 from accesos.models import Usuario
 
-ADMIN_ROLES = {"superadmin", "admin_sede", "admin"}
+ADMIN_ROLES = {"superadmin", "admin_sede"}
 
 
 def is_superadmin(user) -> bool:

@@ -294,7 +294,7 @@ class AdminSedeRulesTests(BaseApiTest):
     def _auth_superadmin(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
 
-    def test_max_four_admins_per_sede(self):
+    def test_max_two_admins_per_sede(self):
         self._auth_superadmin()
         base_payload = {
             "estado": "activo",
@@ -305,7 +305,7 @@ class AdminSedeRulesTests(BaseApiTest):
             "password": "Passw0rd!",
         }
 
-        for i in range(4):
+        for i in range(2):
             payload = {
                 **base_payload,
                 "username": f"adminsede{i}",
@@ -314,17 +314,18 @@ class AdminSedeRulesTests(BaseApiTest):
             r = self.client.post("/api/usuarios/", payload, format="json")
             self.assertEqual(r.status_code, status.HTTP_201_CREATED, r.data)
 
-        r5 = self.client.post(
+        denied = self.client.post(
             "/api/usuarios/",
             {
                 **base_payload,
-                "username": "adminsede4",
-                "email": "adminsede4@sadi.test",
+                "username": "adminsede2",
+                "email": "adminsede2@sadi.test",
             },
             format="json",
         )
-        self.assertEqual(r5.status_code, status.HTTP_400_BAD_REQUEST, r5.data)
-        self.assertEqual(r5.data["code"], "MAX_ADMINS_PER_SEDE")
+        self.assertEqual(denied.status_code, status.HTTP_400_BAD_REQUEST, denied.data)
+        self.assertEqual(denied.data["code"], "MAX_ADMINS_PER_SEDE")
+        self.assertEqual(denied.data["detail"]["limit"], 2)
 
 
 class RolePermissionScopeTests(BaseApiTest):
@@ -744,7 +745,7 @@ class DataDrivenRBACAndPolicyTests(BaseApiTest):
         self.assertTrue(rows)
         self.assertTrue(all(item.get("sede_principal") == "sede-2" for item in rows))
 
-    def test_admin_access_creation_uses_membership_sede_as_source_of_truth(self):
+    def test_admin_operational_access_without_turno_is_rejected_even_when_membership_matches(self):
         role_admin = Role.objects.get(code="admin_sede")
         UserMembership.objects.filter(user=self.admin_sede).update(is_primary=False, is_active=False)
         UserMembership.objects.create(
@@ -770,10 +771,45 @@ class DataDrivenRBACAndPolicyTests(BaseApiTest):
             format="json",
         )
 
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN, response.data)
+        self.assertEqual(response.data["code"], "PERMISSION_DENIED")
+        self.assertIn("contingencia", response.data["message"].lower())
+
+    def test_admin_contingency_access_uses_membership_sede_as_source_of_truth(self):
+        role_admin = Role.objects.get(code="admin_sede")
+        UserMembership.objects.filter(user=self.admin_sede).update(is_primary=False, is_active=False)
+        UserMembership.objects.create(
+            user=self.admin_sede,
+            role=role_admin,
+            sede=self.sede("sede-2"),
+            is_primary=True,
+            is_active=True,
+        )
+        aprendiz_sede_2 = self.create_user(
+            username="scope_contingency_sede2",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="1234567894",
+            email="scope.contingency.sede2@sadi.test",
+            sede_principal="sede-2",
+        )
+
+        self.auth(self.admin_sede.username, "Passw0rd!", expected_role="admin")
+        response = self.client.post(
+            "/api/accesos/registrar_contingencia/",
+            {
+                "documento": aprendiz_sede_2.documento,
+                "tipo": Acceso.Tipo.INGRESO,
+                "motivo": "Caida controlada del lector QR",
+            },
+            format="json",
+        )
+
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertEqual(response.data["acceso"]["sede"], "sede-2")
+        self.assertEqual(response.data["acceso"]["usuario"], aprendiz_sede_2.id)
 
-    def test_policy_max_equipos_is_dynamic_per_sede(self):
+    def test_policy_max_equipos_is_canonical_global_four(self):
         policy, _ = SedePolicy.objects.get_or_create(sede=self.sede("sede-1"))
         policy.max_equipos_aprendiz = 2
         policy.save(update_fields=["max_equipos_aprendiz"])
@@ -782,12 +818,16 @@ class DataDrivenRBACAndPolicyTests(BaseApiTest):
         r1 = self.client.post("/api/equipos/", {"serial": "POL-1", "marca": "Dell", "modelo": "A"}, format="json")
         r2 = self.client.post("/api/equipos/", {"serial": "POL-2", "marca": "Dell", "modelo": "B"}, format="json")
         r3 = self.client.post("/api/equipos/", {"serial": "POL-3", "marca": "Dell", "modelo": "C"}, format="json")
+        r4 = self.client.post("/api/equipos/", {"serial": "POL-4", "marca": "Dell", "modelo": "D"}, format="json")
+        r5 = self.client.post("/api/equipos/", {"serial": "POL-5", "marca": "Dell", "modelo": "E"}, format="json")
 
         self.assertEqual(r1.status_code, status.HTTP_201_CREATED, r1.data)
         self.assertEqual(r2.status_code, status.HTTP_201_CREATED, r2.data)
-        self.assertEqual(r3.status_code, status.HTTP_400_BAD_REQUEST, r3.data)
-        self.assertEqual(r3.data.get("code"), "EQUIPO_LIMIT_REACHED")
-        self.assertIn("2", str(r3.data.get("message", "")))
+        self.assertEqual(r3.status_code, status.HTTP_201_CREATED, r3.data)
+        self.assertEqual(r4.status_code, status.HTTP_201_CREATED, r4.data)
+        self.assertEqual(r5.status_code, status.HTTP_400_BAD_REQUEST, r5.data)
+        self.assertEqual(r5.data.get("code"), "EQUIPO_LIMIT_REACHED")
+        self.assertIn("4", str(r5.data.get("message", "")))
 
     def test_allowed_email_domain_rejects_invalid_domain_for_role_and_sede(self):
         role_aprendiz = Role.objects.get(code="aprendiz")
@@ -1062,6 +1102,36 @@ class MultiRoleSessionRoleTests(BaseApiTest):
         )
         self.assertEqual(refreshed.status_code, status.HTTP_200_OK, refreshed.data)
         self.assertEqual(AccessToken(refreshed.data["access"])["rol"], Usuario.Rol.GUARDA)
+
+    def test_multi_role_refresh_rejects_stale_admin_session_after_admin_membership_loss(self):
+        login = self.client.post(
+            "/api/token/",
+            {
+                "username": self.user.documento,
+                "password": "Passw0rd!",
+                "expected_role": "admin",
+                "device_id": "multi-role-admin-device",
+            },
+            format="json",
+        )
+        self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
+
+        UserMembership.objects.filter(
+            user=self.user,
+            role__code=Usuario.Rol.ADMIN_SEDE,
+        ).update(is_active=False, is_primary=False)
+
+        refreshed = self.client.post(
+            "/api/token/refresh/",
+            {"refresh": login.data["refresh"], "device_id": "multi-role-admin-device"},
+            format="json",
+        )
+        self.assertEqual(refreshed.status_code, status.HTTP_401_UNAUTHORIZED, refreshed.data)
+        self.assertEqual(refreshed.data.get("code"), "NOT_AUTHENTICATED")
+
+        latest_session = RefreshSession.objects.order_by("-last_used_at").first()
+        self.assertIsNotNone(latest_session)
+        self.assertIsNotNone(latest_session.revoked_at)
 
     def test_multi_role_admin_token_blocks_guard_only_endpoint(self):
         login = self.client.post(

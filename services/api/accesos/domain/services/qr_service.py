@@ -56,15 +56,29 @@ class QRService:
         return clean
 
     @classmethod
+    def _is_production(cls) -> bool:
+        return str(getattr(settings, "CURRENT_DJANGO_ENV", "development") or "").strip().lower() == "production"
+
+    @classmethod
+    def _normalize_mode(cls, value: str | None) -> str:
+        normalized = str(value or SedePolicy.QrMode.SIGNED).strip().upper()
+        allowed = {choice for choice, _ in SedePolicy.QrMode.choices}
+        if normalized not in allowed:
+            return SedePolicy.QrMode.SIGNED
+        return normalized
+
+    @classmethod
     def _effective_mode(cls, sede: Sede | None, qr_mode: str | None = None) -> str:
+        if cls._is_production():
+            return SedePolicy.QrMode.SIGNED
         if qr_mode:
-            return str(qr_mode).strip().upper()
+            return cls._normalize_mode(qr_mode)
         if not sede:
-            return SedePolicy.QrMode.DUAL
+            return SedePolicy.QrMode.SIGNED
         policy = SedePolicy.objects.filter(sede=sede).only("qr_mode").first()
         if not policy or not policy.qr_mode:
-            return SedePolicy.QrMode.DUAL
-        return policy.qr_mode
+            return SedePolicy.QrMode.SIGNED
+        return cls._normalize_mode(policy.qr_mode)
 
     @classmethod
     def sign_document(
@@ -179,7 +193,7 @@ class QRService:
     @classmethod
     def parse_document(cls, raw: str, *, sede: Sede | None = None, qr_mode: str | None = None) -> QRPayload:
         mode = cls._effective_mode(sede=sede, qr_mode=qr_mode)
-        upper_mode = str(mode or SedePolicy.QrMode.DUAL).strip().upper()
+        upper_mode = str(mode or SedePolicy.QrMode.SIGNED).strip().upper()
 
         if upper_mode == SedePolicy.QrMode.SIGNED:
             parsed = cls._try_parse_signed(raw)
@@ -215,7 +229,7 @@ class QRService:
     ) -> tuple[str, str]:
         normalized = cls._normalize_documento(documento)
         mode = cls._effective_mode(sede=sede, qr_mode=qr_mode)
-        upper_mode = str(mode or SedePolicy.QrMode.DUAL).strip().upper()
+        upper_mode = str(mode or SedePolicy.QrMode.SIGNED).strip().upper()
 
         # Security hardening:
         # My QR generation is always signed and session-bound, even when sede
@@ -225,8 +239,6 @@ class QRService:
             session_id=session_id,
             user_id=user_id,
         )
-        if upper_mode == SedePolicy.QrMode.SIGNED:
+        if upper_mode in {SedePolicy.QrMode.SIGNED, SedePolicy.QrMode.PLAIN, SedePolicy.QrMode.DUAL}:
             return signed, SedePolicy.QrMode.SIGNED
-        if upper_mode == SedePolicy.QrMode.PLAIN:
-            return signed, SedePolicy.QrMode.SIGNED
-        return signed, SedePolicy.QrMode.DUAL
+        return signed, SedePolicy.QrMode.SIGNED

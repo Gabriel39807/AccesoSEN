@@ -1,3 +1,4 @@
+import hashlib
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -15,11 +16,13 @@ from .rate_limit import get_client_ip
 
 
 def control_panel_otp_cache_key(user_id: int, request_id: str) -> str:
-    return f"sadi:control-panel:otp:{user_id}:{request_id}"
+    digest = hashlib.sha256(f"{user_id}:{request_id}".encode("utf-8")).hexdigest()
+    return f"sadi:control-panel:otp:{digest}"
 
 
 def control_panel_passkey_cache_key(user_id: int, request_id: str) -> str:
-    return f"sadi:control-panel:passkey:{user_id}:{request_id}"
+    digest = hashlib.sha256(f"{user_id}:{request_id}".encode("utf-8")).hexdigest()
+    return f"sadi:control-panel:passkey:{digest}"
 
 
 def control_panel_reason(request) -> str:

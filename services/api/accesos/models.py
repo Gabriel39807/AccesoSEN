@@ -1,7 +1,7 @@
 import re
 
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
@@ -121,6 +121,83 @@ class RolePermission(models.Model):
         return f"{self.role.code}:{self.permission.code}:{self.scope}"
 
 
+SYSTEM_ROLE_NAMES: dict[str, str] = {
+    "superadmin": "Superadmin",
+    "admin_sede": "Admin de sede",
+    "guarda": "Guarda",
+    "aprendiz": "Aprendiz",
+}
+
+
+def canonical_role_code(role_code: str | None) -> str:
+    raw = str(role_code or "").strip().lower()
+    if raw == "admin":
+        return "admin_sede"
+    return raw
+
+
+def role_display_name(role_code: str | None) -> str:
+    normalized = canonical_role_code(role_code)
+    return SYSTEM_ROLE_NAMES.get(normalized, normalized.replace("_", " ").title())
+
+
+def sync_primary_membership(
+    *,
+    user,
+    role_code: str,
+    sede=None,
+    is_active: bool = True,
+    can_switch_sede: bool | None = None,
+):
+    """Synchronize the canonical runtime membership for a user.
+
+    This helper exists to keep all transitional compatibility flows writing the
+    same runtime source of truth (`UserMembership`) without re-encoding legacy
+    field logic in multiple call sites.
+    """
+
+    normalized_role = canonical_role_code(role_code)
+    if not normalized_role:
+        raise ValueError("role_code is required to sync memberships.")
+
+    if normalized_role == Usuario.Rol.SUPERADMIN:
+        sede = None
+        can_switch_sede = True if can_switch_sede is None else bool(can_switch_sede)
+    elif can_switch_sede is None:
+        can_switch_sede = False
+
+    role_obj, _ = Role.objects.get_or_create(
+        code=normalized_role,
+        defaults={"name": role_display_name(normalized_role), "is_system": True},
+    )
+
+    with transaction.atomic():
+        UserMembership.objects.filter(user=user, role=role_obj, is_primary=True).update(is_primary=False)
+        membership, _ = UserMembership.objects.get_or_create(
+            user=user,
+            role=role_obj,
+            sede=sede,
+            defaults={
+                "is_primary": True,
+                "is_active": is_active,
+                "can_switch_sede": bool(can_switch_sede),
+            },
+        )
+        update_fields: list[str] = []
+        if not membership.is_primary:
+            membership.is_primary = True
+            update_fields.append("is_primary")
+        if membership.is_active != is_active:
+            membership.is_active = is_active
+            update_fields.append("is_active")
+        if membership.can_switch_sede != bool(can_switch_sede):
+            membership.can_switch_sede = bool(can_switch_sede)
+            update_fields.append("can_switch_sede")
+        if update_fields:
+            membership.save(update_fields=update_fields)
+        return membership
+
+
 class Usuario(AbstractUser):
     class Rol(models.TextChoices):
         SUPERADMIN = "superadmin", "Superadmin"
@@ -185,6 +262,14 @@ class UserMembership(models.Model):
                 name="uniq_primary_membership_per_user_role",
             ),
         ]
+
+    def clean(self):
+        super().clean()
+        role_code = canonical_role_code(getattr(self.role, "code", ""))
+        if role_code == Usuario.Rol.SUPERADMIN and self.sede_id is not None:
+            raise ValidationError({"sede": "Las memberships de superadmin no pueden tener sede."})
+        if role_code in {Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA, Usuario.Rol.APRENDIZ} and self.sede_id is None:
+            raise ValidationError({"sede": "Las memberships con alcance de sede deben tener sede."})
 
     def __str__(self):
         sede_code = getattr(self.sede, "code", None) or "GLOBAL"

@@ -1,11 +1,11 @@
 from datetime import timedelta
 
-from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 
 from .models import RefreshSession
+from .rate_limit import reset_counter
 from .tests_support import BaseApiTest
 
 
@@ -23,14 +23,8 @@ class LoginAndLockTests(BaseApiTest):
     def _clear_login_rate_limit(self):
         login_key = (self.aprendiz.username or "").strip().lower()
         ip_key = "127.0.0.1"
-        keys = [
-            f"sadi:login-user:{login_key}",
-            f"sadi:login-user:{login_key}:lock",
-            f"sadi:login-ip:{ip_key}",
-            f"sadi:login-ip:{ip_key}:lock",
-        ]
-        for key in keys:
-            cache.delete(key)
+        reset_counter("login-user", [login_key], include_lock=True)
+        reset_counter("login-ip", [ip_key], include_lock=True)
 
     def test_lock_response_contains_countdown(self):
         for _ in range(4):

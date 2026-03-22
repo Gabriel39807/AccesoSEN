@@ -5,20 +5,34 @@ from uuid import uuid4
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, connection
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
 
 from accesos.api.permissions import RequiresPermission
 from accesos.domain.services.qr_service import QRParseError, QRService
 
-from .models import Acceso, Equipo, PasswordResetOTP, RefreshSession, Turno, Usuario
+from .models import Acceso, Equipo, PasswordResetOTP, Permission as RbacPermission, RefreshSession, Role, RolePermission, SedePolicy, Turno, Usuario
 from .otp_services import hash_code
 from .tests_support import BaseApiTest
 
 
 class SecurityHardeningTests(BaseApiTest):
+    @staticmethod
+    def _has_sqlite_trigger(table_name: str) -> bool:
+        if connection.vendor != "sqlite":
+            return False
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = %s AND tbl_name = %s",
+                ["trigger", table_name],
+            )
+            row = cursor.fetchone()
+        return bool(row and row[0])
+
     def setUp(self):
         super().setUp()
         self.sede_1 = self.sede("sede-1")
@@ -38,6 +52,29 @@ class SecurityHardeningTests(BaseApiTest):
             email="hardening.aprendiz@sadi.test",
             sede_principal="sede-1",
         )
+        self.admin_sede = self.create_user(
+            username="hardening_admin",
+            password="Passw0rd!",
+            rol="admin_sede",
+            documento="9999999999",
+            email="hardening.admin@sadi.test",
+            sede_principal="sede-1",
+        )
+
+    def _drf_request(self, method: str, path: str, *, user, data=None):
+        factory = APIRequestFactory()
+        raw_request = getattr(factory, method.lower())(path, data=data or {}, format="json")
+        force_authenticate(raw_request, user=user)
+        return APIView().initialize_request(raw_request)
+
+    def _ensure_role_permission(self, role_code: str, permission_code: str, scope: str):
+        role = Role.objects.get(code=role_code)
+        permission = RbacPermission.objects.get(code=permission_code)
+        RolePermission.objects.update_or_create(
+            role=role,
+            permission=permission,
+            defaults={"scope": scope},
+        )
 
     def test_requires_permission_denies_when_permission_map_missing(self):
         factory = APIRequestFactory()
@@ -46,6 +83,68 @@ class SecurityHardeningTests(BaseApiTest):
 
         class DummyView:
             action = "list"
+
+        permission = RequiresPermission()
+        self.assertFalse(permission.has_permission(request, DummyView()))
+
+    def test_requires_permission_keeps_read_queries_backend_scoped_without_forced_denial(self):
+        self._ensure_role_permission("admin_sede", "user.read", RolePermission.Scope.SEDE)
+        request = self._drf_request(
+            "get",
+            "/api/usuarios/?sede_id=sede-2",
+            user=self.admin_sede,
+        )
+
+        class DummyView:
+            action = "list"
+            permission_map = {"list": "user.read"}
+
+        permission = RequiresPermission()
+        self.assertTrue(permission.has_permission(request, DummyView()))
+
+    def test_requires_permission_allows_same_sede_query_scope_hint(self):
+        self._ensure_role_permission("admin_sede", "user.read", RolePermission.Scope.SEDE)
+        request = self._drf_request(
+            "get",
+            "/api/usuarios/?sede_id=sede-1",
+            user=self.admin_sede,
+        )
+
+        class DummyView:
+            action = "list"
+            permission_map = {"list": "user.read"}
+
+        permission = RequiresPermission()
+        self.assertTrue(permission.has_permission(request, DummyView()))
+
+    def test_requires_permission_blocks_admin_role_escalation_payload(self):
+        self._ensure_role_permission("admin_sede", "user.create", RolePermission.Scope.SEDE)
+        request = self._drf_request(
+            "post",
+            "/api/usuarios/",
+            user=self.admin_sede,
+            data={"rol": "admin_sede", "sede_principal": "sede-1"},
+        )
+
+        class DummyView:
+            action = "create"
+            permission_map = {"create": "user.create"}
+
+        permission = RequiresPermission()
+        self.assertFalse(permission.has_permission(request, DummyView()))
+
+    def test_requires_permission_blocks_cross_sede_user_mutation_payload(self):
+        self._ensure_role_permission("admin_sede", "user.create", RolePermission.Scope.SEDE)
+        request = self._drf_request(
+            "post",
+            "/api/usuarios/",
+            user=self.admin_sede,
+            data={"rol": "aprendiz", "sede_principal": "sede-2"},
+        )
+
+        class DummyView:
+            action = "create"
+            permission_map = {"create": "user.create"}
 
         permission = RequiresPermission()
         self.assertFalse(permission.has_permission(request, DummyView()))
@@ -122,9 +221,11 @@ class SecurityHardeningTests(BaseApiTest):
                 sede=self.sede("sede-2"),
             )
 
-    def test_postgres_trigger_blocks_fifth_equipo_even_with_raw_insert(self):
-        if connection.vendor != "postgresql":
-            self.skipTest("La validacion DB-level del hard-cap de equipos se prueba en PostgreSQL.")
+    def test_db_trigger_blocks_fifth_equipo_even_with_raw_insert(self):
+        if connection.vendor == "sqlite" and not self._has_sqlite_trigger("accesos_equipo"):
+            self.skipTest(
+                "DB-level hard-cap raw insert check unavailable in this environment: SQLite test database has no trigger installed on accesos_equipo."
+            )
 
         for idx in range(1, 5):
             Equipo.objects.create(
@@ -139,14 +240,23 @@ class SecurityHardeningTests(BaseApiTest):
                 cursor.execute(
                     """
                     INSERT INTO accesos_equipo (propietario_id, serial, marca, modelo, estado, creado_en)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    [self.aprendiz.id, "PG-HARD-5", "HP", "P5", Equipo.Estado.PENDIENTE],
+                    [
+                        self.aprendiz.id,
+                        "PG-HARD-5",
+                        "HP",
+                        "P5",
+                        Equipo.Estado.PENDIENTE,
+                        timezone.now(),
+                    ],
                 )
 
-    def test_postgres_trigger_blocks_acceso_turno_sede_mismatch_with_raw_insert(self):
-        if connection.vendor != "postgresql":
-            self.skipTest("La validacion DB-level del acceso/turno se prueba en PostgreSQL.")
+    def test_db_trigger_blocks_acceso_turno_sede_mismatch_with_raw_insert(self):
+        if connection.vendor == "sqlite" and not self._has_sqlite_trigger("accesos_acceso"):
+            self.skipTest(
+                "DB-level acceso/turno/sede raw insert check unavailable in this environment: SQLite test database has no trigger installed on accesos_acceso."
+            )
 
         turno = Turno.objects.create(
             guarda=self.guarda,
@@ -161,14 +271,16 @@ class SecurityHardeningTests(BaseApiTest):
                 cursor.execute(
                     """
                     INSERT INTO accesos_acceso (usuario_id, fecha, tipo, registrado_por_id, turno_id, sede_id, is_deleted)
-                    VALUES (%s, NOW(), %s, %s, %s, %s, FALSE)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     [
                         self.aprendiz.id,
+                        timezone.now(),
                         Acceso.Tipo.INGRESO,
                         self.guarda.id,
                         turno.id,
                         self.sede("sede-2").id,
+                        False,
                     ],
                 )
 
@@ -191,6 +303,33 @@ class SecurityHardeningTests(BaseApiTest):
         with self.assertRaises(QRParseError) as replay_exc:
             QRService.parse_document(qr_value, sede=self.sede_1)
         self.assertEqual(getattr(replay_exc.exception, "code", ""), "replay")
+
+    @override_settings(CURRENT_DJANGO_ENV="production")
+    def test_production_environment_forces_signed_qr_even_if_policy_is_plain(self):
+        policy, _ = SedePolicy.objects.get_or_create(sede=self.sede_1)
+        policy.qr_mode = SedePolicy.QrMode.PLAIN
+        policy.save(update_fields=["qr_mode"])
+        session = RefreshSession.objects.create(
+            user=self.aprendiz,
+            device_id="qr-production-device",
+            refresh_token_hash=uuid4().hex,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+        qr_value, qr_mode = QRService.build_aprendiz_qr_value(
+            self.aprendiz.documento,
+            sede=self.sede_1,
+            session_id=str(session.id),
+            user_id=self.aprendiz.id,
+        )
+
+        self.assertEqual(qr_mode, SedePolicy.QrMode.SIGNED)
+        parsed = QRService.parse_document(qr_value, sede=self.sede_1)
+        self.assertEqual(parsed.mode_used, SedePolicy.QrMode.SIGNED)
+
+        with self.assertRaises(QRParseError) as plain_exc:
+            QRService.parse_document(self.aprendiz.documento, sede=self.sede_1)
+        self.assertEqual(getattr(plain_exc.exception, "code", ""), "mode_violation")
 
     def test_register_access_without_active_turno_is_rejected_for_guarda(self):
         self.auth(self.guarda.documento, "Passw0rd!", expected_role="guarda")
@@ -427,7 +566,9 @@ class SecurityHardeningTests(BaseApiTest):
 
     def test_sensitive_tables_enable_rls_and_remove_anon_grants(self):
         if connection.vendor != "postgresql":
-            self.skipTest("RLS verification applies only to PostgreSQL environments.")
+            self.skipTest(
+                "RLS verification is PostgreSQL-only: SQLite in this environment has no pg_class catalogs or row-level security feature to assert."
+            )
 
         with connection.cursor() as cursor:
             cursor.execute(

@@ -16,7 +16,7 @@ from rest_framework import status
 
 from accesos.domain.services.email_domain_service import EmailDomainService
 from .error_codes import ErrorCode
-from .models import AprendizImportAudit, Role, Sede, UserMembership, Usuario
+from .models import AprendizImportAudit, Sede, Usuario, sync_primary_membership
 
 EXPECTED_COLUMNS_BASE = [
     "Nombres",
@@ -245,34 +245,14 @@ def _resolve_header_map(headers: list[str]) -> dict[str, int]:
     return mapping
 
 
-def _sync_primary_membership_for_user(user: Usuario):
-    role_code = str(getattr(user, "rol", "") or "").strip()
-    if not role_code:
-        return
-
-    role_obj, _ = Role.objects.get_or_create(
-        code=role_code,
-        defaults={"name": role_code.replace("_", " ").title(), "is_system": True},
-    )
-    target_sede = None if role_code == Usuario.Rol.SUPERADMIN else getattr(user, "sede_principal", None)
-
-    UserMembership.objects.filter(user=user, is_primary=True).update(is_primary=False)
-    membership, created = UserMembership.objects.get_or_create(
+def _sync_primary_membership_for_user(*, user: Usuario, role_code: str, sede: Sede | None):
+    sync_primary_membership(
         user=user,
-        role=role_obj,
-        sede=target_sede,
-        defaults={"is_primary": True, "is_active": True, "can_switch_sede": False},
+        role_code=role_code,
+        sede=sede,
+        is_active=True,
+        can_switch_sede=role_code == Usuario.Rol.SUPERADMIN,
     )
-    if not created:
-        updates: list[str] = []
-        if not membership.is_primary:
-            membership.is_primary = True
-            updates.append("is_primary")
-        if not membership.is_active:
-            membership.is_active = True
-            updates.append("is_active")
-        if updates:
-            membership.save(update_fields=updates)
 
 
 def validate_excel(
@@ -710,7 +690,11 @@ def execute_aprendices_import(
                 initial_password = documento[-6:]
                 created.set_password(initial_password)
                 created.save(update_fields=["password"])
-                _sync_primary_membership_for_user(created)
+                _sync_primary_membership_for_user(
+                    user=created,
+                    role_code=Usuario.Rol.APRENDIZ,
+                    sede=sede_obj,
+                )
                 existing_docs.add(documento)
                 reserved_usernames.add(str(username).lower())
                 created_count += 1

@@ -180,6 +180,19 @@ def _build_access_token(user: Usuario, sid, *, role_code: str | None = None) -> 
     return str(access)
 
 
+def _validated_session_role_code(
+    user: Usuario,
+    *,
+    preferred_role_code: str | None = None,
+    fallback_to_default: bool,
+) -> str:
+    return AuthorizationService.resolve_session_role(
+        user,
+        preferred_role_code=preferred_role_code,
+        fallback_to_default=fallback_to_default,
+    )
+
+
 def _normalize_device_id(raw: str | None) -> str | None:
     value = str(raw or "").strip()
     if not value:
@@ -307,6 +320,18 @@ def _issue_session_tokens(
     previous_session: RefreshSession | None = None,
 ) -> dict[str, str]:
     now = timezone.now()
+    resolved_role_code = _validated_session_role_code(
+        user,
+        preferred_role_code=role_code or getattr(previous_session, "role_code", ""),
+        fallback_to_default=previous_session is None,
+    )
+    if not resolved_role_code:
+        raise AuthenticationFailed(
+            {
+                "code": ErrorCode.NOT_AUTHENTICATED,
+                "message": "Sesion invalida o expirada. Inicia sesion nuevamente.",
+            }
+        )
     refresh_value = _new_refresh_token()
     refresh_hash = _hash_refresh_token(refresh_value)
 
@@ -329,9 +354,7 @@ def _issue_session_tokens(
         session = RefreshSession.objects.create(
             user=user,
             device_id=device_id,
-            role_code=role_code
-            or getattr(previous_session, "role_code", "")
-            or AuthorizationService.default_role_for_user(user),
+            role_code=resolved_role_code,
             refresh_token_hash=refresh_hash,
             expires_at=now + _refresh_token_lifetime(),
             last_used_at=now,
@@ -350,7 +373,7 @@ def _issue_session_tokens(
 
     return {
         "refresh": refresh_value,
-        "access": _build_access_token(user, session.id, role_code=session.role_code),
+        "access": _build_access_token(user, session.id, role_code=resolved_role_code),
     }
 
 
@@ -658,9 +681,25 @@ class SadiTokenRefreshView(APIView):
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
 
+            refreshed_role_code = _validated_session_role_code(
+                user,
+                preferred_role_code=session.role_code,
+                fallback_to_default=False,
+            )
+            if not refreshed_role_code:
+                session.revoked_at = now
+                session.last_used_at = now
+                session.save(update_fields=["revoked_at", "last_used_at"])
+                return error_response(
+                    code=ErrorCode.NOT_AUTHENTICATED,
+                    message="Sesion invalida o expirada. Inicia sesion nuevamente.",
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+
             tokens = _issue_session_tokens(
                 user,
                 device_id=session.device_id,
+                role_code=refreshed_role_code,
                 rotate_guard_session=True,
                 previous_session=session,
             )

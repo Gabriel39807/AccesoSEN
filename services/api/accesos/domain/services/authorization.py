@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
 
 from django.db.models import Q, QuerySet
 
@@ -27,16 +28,65 @@ class AuthorizationService:
     SUPERADMIN_CODE = "superadmin"
     LEGACY_ADMIN_CODE = "admin"
     ADMIN_SEDE_CODE = "admin_sede"
+    ADMIN_ONLY_PERMISSION_PREFIXES = ("role.", "permission.", "assignment.")
+    ADMIN_ONLY_PERMISSION_CODES = {"sede.manage"}
+    ADMIN_ROLE_CODES = {SUPERADMIN_CODE, ADMIN_SEDE_CODE, LEGACY_ADMIN_CODE}
+    SEDE_SCOPED_ROLE_CODES = {ADMIN_SEDE_CODE, "guarda", "aprendiz"}
+
+    @classmethod
+    def _coerce_sede_ids(cls, value) -> set[int]:
+        resolved: set[int] = set()
+        if value is None:
+            return resolved
+
+        items: Iterable = value if isinstance(value, (list, tuple, set, frozenset)) else [value]
+        for item in items:
+            candidate = getattr(item, "id", item)
+            if candidate in (None, ""):
+                continue
+            try:
+                resolved.add(int(candidate))
+            except (TypeError, ValueError):
+                continue
+        return resolved
+
+    @classmethod
+    def _candidate_sede_ids_from_obj(cls, obj) -> set[int]:
+        candidate_sede_ids: set[int] = set()
+        if obj is None:
+            return candidate_sede_ids
+
+        direct_sede_id = getattr(obj, "sede_id", None)
+        if direct_sede_id is not None:
+            candidate_sede_ids.add(int(direct_sede_id))
+
+        target_user = obj if isinstance(obj, Usuario) else None
+        if target_user is None and hasattr(obj, "user") and isinstance(getattr(obj, "user", None), Usuario):
+            target_user = obj.user
+        if target_user is None and hasattr(obj, "propietario") and isinstance(getattr(obj, "propietario", None), Usuario):
+            target_user = obj.propietario
+        if target_user is not None:
+            candidate_sede_ids.update(
+                int(value)
+                for value in target_user.memberships.filter(is_active=True, sede__isnull=False).values_list("sede_id", flat=True)
+            )
+        return candidate_sede_ids
+
+    @classmethod
+    def _membership_sede_q(cls, prefix: str, sede_ids: set[int]) -> Q:
+        if not sede_ids:
+            return Q(pk__in=[])
+        return Q(**{f"{prefix}memberships__is_active": True, f"{prefix}memberships__sede_id__in": tuple(sede_ids)})
 
     _RESOURCE_SCOPE_RULES = {
         "usuario": {
-            "admin_sede": lambda user, sede_ids: Q(sede_principal_id__in=sede_ids),
+            "admin_sede": lambda user, sede_ids: AuthorizationService._membership_sede_q("", sede_ids),
             "aprendiz": lambda user, sede_ids: Q(id=user.id),
             "guarda": lambda user, sede_ids: Q(id=user.id),
         },
         "equipo": {
-            "admin_sede": lambda user, sede_ids: Q(propietario__sede_principal_id__in=sede_ids),
-            "guarda": lambda user, sede_ids: Q(propietario__sede_principal_id__in=sede_ids),
+            "admin_sede": lambda user, sede_ids: AuthorizationService._membership_sede_q("propietario__", sede_ids),
+            "guarda": lambda user, sede_ids: AuthorizationService._membership_sede_q("propietario__", sede_ids),
             "aprendiz": lambda user, sede_ids: Q(propietario_id=user.id),
         },
         "turno": {
@@ -52,7 +102,7 @@ class AuthorizationService:
             "admin_sede": (
                 lambda user, sede_ids: Q(user__isnull=True)
                 | Q(user=user)
-                | Q(user__sede_principal_id__in=sede_ids)
+                | AuthorizationService._membership_sede_q("user__", sede_ids)
             ),
             "guarda": lambda user, sede_ids: Q(user=user) | Q(user__isnull=True),
             "aprendiz": lambda user, sede_ids: Q(user=user) | Q(user__isnull=True),
@@ -66,6 +116,23 @@ class AuthorizationService:
         if raw == cls.LEGACY_ADMIN_CODE:
             return cls.ADMIN_SEDE_CODE
         return raw
+
+    @classmethod
+    def is_admin_role_code(cls, role_code: str | None) -> bool:
+        return cls._normalize_role_code(role_code) in {cls.SUPERADMIN_CODE, cls.ADMIN_SEDE_CODE}
+
+    @classmethod
+    def role_requires_sede(cls, role_code: str | None) -> bool:
+        return cls._normalize_role_code(role_code) in cls.SEDE_SCOPED_ROLE_CODES
+
+    @classmethod
+    def is_admin_only_permission(cls, perm_code: str | None) -> bool:
+        normalized = str(perm_code or "").strip().lower()
+        if not normalized:
+            return False
+        if normalized in cls.ADMIN_ONLY_PERMISSION_CODES:
+            return True
+        return normalized.startswith(cls.ADMIN_ONLY_PERMISSION_PREFIXES)
 
     @classmethod
     def _active_memberships_qs(cls, user: Usuario):
@@ -86,13 +153,10 @@ class AuthorizationService:
         if not user or not getattr(user, "is_authenticated", False):
             return set()
 
-        role_codes = {
+        return {
             cls._normalize_role_code(code)
             for code in cls._active_memberships_qs(user).values_list("role__code", flat=True)
         }
-        if getattr(user, "is_superuser", False):
-            role_codes.add(cls.SUPERADMIN_CODE)
-        return role_codes
 
     @classmethod
     def runtime_role_for_user(cls, user: Usuario) -> str:
@@ -175,9 +239,10 @@ class AuthorizationService:
     @classmethod
     def context(cls, user: Usuario) -> AuthorizationContext:
         runtime_roles = cls.runtime_role_codes(user)
+        runtime_sede_ids = cls.allowed_sede_ids_for_roles(user, runtime_roles) if runtime_roles else set()
         return AuthorizationContext(
             role_codes=runtime_roles or cls.role_codes(user),
-            sede_ids=cls.allowed_sede_ids_for_roles(user, runtime_roles) or cls.allowed_sede_ids(user),
+            sede_ids=runtime_sede_ids if runtime_roles else cls.allowed_sede_ids(user),
         )
 
     @classmethod
@@ -185,27 +250,18 @@ class AuthorizationService:
         return cls.SUPERADMIN_CODE in (cls.runtime_role_codes(user) or cls.role_codes(user))
 
     @classmethod
-    def _matches_sede_scope(cls, user: Usuario, sede_id: int | None = None, obj=None) -> bool:
+    def _matches_sede_scope(cls, user: Usuario, sede=None, obj=None) -> bool:
         if cls.is_superadmin(user):
             return True
 
-        if sede_id is None and obj is not None:
-            for attr in ("sede_id",):
-                if hasattr(obj, attr):
-                    sede_id = getattr(obj, attr)
-                    break
-            if sede_id is None and hasattr(obj, "sede_principal_id"):
-                sede_id = getattr(obj, "sede_principal_id")
-            if sede_id is None and hasattr(obj, "propietario") and getattr(obj.propietario, "sede_principal_id", None):
-                sede_id = obj.propietario.sede_principal_id
-
-        if sede_id is None:
+        candidate_sede_ids = cls._coerce_sede_ids(sede) or cls._candidate_sede_ids_from_obj(obj)
+        if not candidate_sede_ids:
             return False
 
         runtime_roles = cls.runtime_role_codes(user)
-        return int(sede_id) in (
-            cls.allowed_sede_ids_for_roles(user, runtime_roles) if runtime_roles else cls.allowed_sede_ids(user)
-        )
+        allowed_sede_ids = cls.allowed_sede_ids_for_roles(user, runtime_roles) if runtime_roles else cls.allowed_sede_ids(user)
+        allowed = {int(value) for value in allowed_sede_ids}
+        return bool(allowed) and candidate_sede_ids.issubset(allowed)
 
     @classmethod
     def _matches_own_scope(cls, user: Usuario, obj=None) -> bool:
@@ -236,10 +292,10 @@ class AuthorizationService:
         role_codes = cls.runtime_role_codes(user) or cls.role_codes(user)
         if not role_codes:
             return False
+        if cls.ADMIN_SEDE_CODE in role_codes and cls.is_admin_only_permission(perm_code):
+            return False
 
-        sede_id = getattr(sede, "id", None) if sede is not None else None
-        if sede_id is None and isinstance(sede, int):
-            sede_id = sede
+        sede_ids = cls._coerce_sede_ids(sede)
 
         assignments = RolePermission.objects.filter(
             role__code__in=role_codes,
@@ -253,10 +309,10 @@ class AuthorizationService:
                 # Action-level checks (list/create) may not carry an object yet.
                 # In that case, allow the permission only when the actor has at
                 # least one active sede membership.
-                if obj is None and sede_id is None:
+                if obj is None and not sede_ids:
                     if bool(cls.allowed_sede_ids_for_roles(user, role_codes)):
                         return True
-                elif cls._matches_sede_scope(user, sede_id=sede_id, obj=obj):
+                elif cls._matches_sede_scope(user, sede=sede_ids, obj=obj):
                     return True
             if assignment.scope == RolePermission.Scope.OWN:
                 # OWN never grants implicit create/list without explicit object.
@@ -292,15 +348,46 @@ class AuthorizationService:
         combined = predicates[0]
         for predicate in predicates[1:]:
             combined |= predicate
-        return qs.filter(combined)
+        return qs.filter(combined).distinct()
 
     @classmethod
     def can_manage_role(cls, actor: Usuario, target_role_code: str) -> bool:
         if cls.is_superadmin(actor):
             return True
         if "admin_sede" in (cls.runtime_role_codes(actor) or cls.role_codes(actor)):
-            return target_role_code in {"guarda", "aprendiz"}
+            return cls._normalize_role_code(target_role_code) in {"guarda", "aprendiz"}
         return False
+
+    @classmethod
+    def can_admin_sede_mutate_role(
+        cls,
+        actor: Usuario,
+        *,
+        requested_role_code: str | None = None,
+        existing_role_code: str | None = None,
+    ) -> bool:
+        if cls.is_superadmin(actor):
+            return True
+        actor_roles = cls.runtime_role_codes(actor) or cls.role_codes(actor)
+        if cls.ADMIN_SEDE_CODE not in actor_roles:
+            return True
+        requested = cls._normalize_role_code(requested_role_code)
+        existing = cls._normalize_role_code(existing_role_code)
+        return requested not in cls.ADMIN_ROLE_CODES and existing not in cls.ADMIN_ROLE_CODES
+
+    @classmethod
+    def role_has_current_scope(cls, user: Usuario, role_code: str | None) -> bool:
+        normalized = cls._normalize_role_code(role_code)
+        if not normalized:
+            return False
+        if normalized == cls.SUPERADMIN_CODE:
+            return True
+        memberships = cls._memberships_for_role(user, normalized)
+        if not memberships.exists():
+            return False
+        if not cls.role_requires_sede(normalized):
+            return True
+        return memberships.filter(sede__isnull=False).exists()
 
     @classmethod
     def default_role_for_user(cls, user: Usuario) -> str:
@@ -322,11 +409,28 @@ class AuthorizationService:
         available_roles = cls.role_codes(user)
         requested = cls._normalize_role_code(expected_role)
         if not requested:
-            return cls.default_role_for_user(user)
+            default_role = cls.default_role_for_user(user)
+            return default_role if cls.role_has_current_scope(user, default_role) else ""
         if requested == cls.ADMIN_SEDE_CODE:
             if cls.SUPERADMIN_CODE in available_roles:
-                return cls.SUPERADMIN_CODE
+                return cls.SUPERADMIN_CODE if cls.role_has_current_scope(user, cls.SUPERADMIN_CODE) else ""
             if cls.ADMIN_SEDE_CODE in available_roles:
-                return cls.ADMIN_SEDE_CODE
+                return cls.ADMIN_SEDE_CODE if cls.role_has_current_scope(user, cls.ADMIN_SEDE_CODE) else ""
             return ""
-        return requested if requested in available_roles else ""
+        return requested if requested in available_roles and cls.role_has_current_scope(user, requested) else ""
+
+    @classmethod
+    def resolve_session_role(
+        cls,
+        user: Usuario,
+        preferred_role_code: str | None = None,
+        *,
+        fallback_to_default: bool,
+    ) -> str:
+        preferred = cls._normalize_role_code(preferred_role_code)
+        if preferred and preferred in cls.role_codes(user) and cls.role_has_current_scope(user, preferred):
+            return preferred
+        if not fallback_to_default:
+            return ""
+        default_role = cls.default_role_for_user(user)
+        return default_role if cls.role_has_current_scope(user, default_role) else ""

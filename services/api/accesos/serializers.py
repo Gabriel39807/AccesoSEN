@@ -1,9 +1,11 @@
 import re
 import secrets
 
+from django.conf import settings
 from rest_framework import serializers
 from accesos.domain.services.email_domain_service import EmailDomainService
 from accesos.domain.services.authorization import AuthorizationService
+from accesos.domain.services.policy_service import PolicyService
 from .error_codes import ErrorCode
 from .models import (
     Acceso,
@@ -232,6 +234,47 @@ class SedePolicySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at", "sede_name"]
+
+    @staticmethod
+    def _is_production() -> bool:
+        return str(getattr(settings, "CURRENT_DJANGO_ENV", "development") or "").strip().lower() == "production"
+
+    def _apply_canonical_policy(self, validated_data: dict):
+        validated_data["max_equipos_aprendiz"] = 4
+        validated_data["access_requires_active_turno"] = True
+        if self._is_production():
+            validated_data["qr_mode"] = SedePolicy.QrMode.SIGNED
+        return validated_data
+
+    def validate_max_equipos_aprendiz(self, value):
+        if int(value or 0) != 4:
+            raise serializers.ValidationError("La politica aprobada fija el maximo en 4 equipos por aprendiz.")
+        return 4
+
+    def validate_access_requires_active_turno(self, value):
+        if value is not True:
+            raise serializers.ValidationError("El flujo operativo siempre requiere turno activo.")
+        return True
+
+    def validate_qr_mode(self, value):
+        normalized = str(value or SedePolicy.QrMode.SIGNED).strip().upper()
+        if self._is_production() and normalized != SedePolicy.QrMode.SIGNED:
+            raise serializers.ValidationError("En produccion solo se permite QR firmado (SIGNED).")
+        return normalized
+
+    def create(self, validated_data):
+        return super().create(self._apply_canonical_policy(validated_data))
+
+    def update(self, instance, validated_data):
+        return super().update(instance, self._apply_canonical_policy(validated_data))
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        effective = PolicyService.get_policy(instance.sede)
+        data["max_equipos_aprendiz"] = effective.max_equipos_aprendiz
+        data["qr_mode"] = effective.qr_mode
+        data["access_requires_active_turno"] = effective.access_requires_active_turno
+        return data
 
 
 class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
@@ -569,7 +612,7 @@ class AccesoSerializer(serializers.ModelSerializer):
         if not user_has_role(usuario, Usuario.Rol.APRENDIZ):
             raise serializers.ValidationError({"usuario": "Solo se pueden registrar accesos para aprendices."})
 
-        ultimo = Acceso.objects.filter(usuario=usuario).order_by("-fecha").first()
+        ultimo = Acceso.objects.filter(usuario=usuario, is_deleted=False).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
             raise serializers.ValidationError("No puedes registrar una salida sin una entrada previa.")
@@ -600,6 +643,28 @@ class RegistrarAccesoDocumentoSerializer(serializers.Serializer):
         if value and not is_numeric_document(value) and not is_signed_scan_token(value):
             raise serializers.ValidationError("El documento debe tener entre 6 y 10 digitos.")
         return value
+
+
+class RegistrarAccesoContingenciaSerializer(serializers.Serializer):
+    documento = serializers.CharField(max_length=30)
+    tipo = serializers.ChoiceField(choices=Acceso.Tipo.choices)
+    equipos = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False, allow_empty=True)
+    sede = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=Sede.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    motivo = serializers.CharField(max_length=255)
+
+    def validate_documento(self, value):
+        return validateDocument6to10(value, required=True)
+
+    def validate_motivo(self, value):
+        clean = str(value or "").strip()
+        if not clean:
+            raise serializers.ValidationError("Debes indicar el motivo de la contingencia.")
+        return clean
 
 
 # --- NUEVO: Notificaciones + Password Reset ---

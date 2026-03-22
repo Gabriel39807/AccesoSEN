@@ -31,55 +31,51 @@ def ensure_superadmin_exists(sender, **kwargs):
     """
     from django.contrib.auth import get_user_model
     from django.conf import settings
-    from accesos.models import Role, UserMembership
+    from accesos.models import UserMembership, sync_primary_membership
 
-    def sync_superadmin_membership(user):
-        """Sync primary GLOBAL membership for superadmin role."""
-        role_obj, _ = Role.objects.get_or_create(
-            code="superadmin",
-            defaults={"name": "Superadmin", "is_system": True},
-        )
-        membership, _ = UserMembership.objects.get_or_create(
-            user=user,
-            role=role_obj,
-            sede=None,
-            defaults={
-                "is_primary": True,
-                "is_active": True,
-                "can_switch_sede": True,
-            },
-        )
-        updates = []
-        if not membership.is_primary:
-            membership.is_primary = True
-            updates.append("is_primary")
-        if not membership.is_active:
-            membership.is_active = True
-            updates.append("is_active")
-        if not membership.can_switch_sede:
-            membership.can_switch_sede = True
-            updates.append("can_switch_sede")
-        if updates:
-            membership.save(update_fields=updates)
-        UserMembership.objects.filter(user=user).exclude(id=membership.id).update(is_primary=False)
+    def promote_to_superadmin(user):
+        """Bootstrap superadmin canonically, preserving legacy fields only as compat."""
+        update_fields: list[str] = []
+        if getattr(user, "rol", "") != "superadmin":
+            user.rol = "superadmin"
+            update_fields.append("rol")
+        if not getattr(user, "is_staff", False):
+            user.is_staff = True
+            update_fields.append("is_staff")
+        if not getattr(user, "is_superuser", False):
+            user.is_superuser = True
+            update_fields.append("is_superuser")
+        if update_fields:
+            user.save(update_fields=update_fields)
+        sync_primary_membership(user=user, role_code="superadmin", sede=None, is_active=True, can_switch_sede=True)
 
     if not getattr(settings, "DEFAULT_SUPERADMIN_AUTO_CREATE", True):
         return
 
     User = get_user_model()
-    if User.objects.filter(rol="superadmin").exists():
-        user = User.objects.filter(rol="superadmin").order_by("id").first()
-        if user:
-            sync_superadmin_membership(user)
+    membership = (
+        UserMembership.objects.filter(role__code="superadmin", is_active=True)
+        .select_related("user")
+        .order_by("id")
+        .first()
+    )
+    if membership and membership.user:
+        promote_to_superadmin(membership.user)
         return
 
-    legacy_admin = User.objects.filter(rol="admin").order_by("id").first()
+    user = User.objects.filter(is_superuser=True).order_by("id").first()
+    if user:
+        promote_to_superadmin(user)
+        return
+
+    user = User.objects.filter(rol="superadmin").order_by("id").first()
+    if user:
+        promote_to_superadmin(user)
+        return
+
+    legacy_admin = User.objects.filter(rol__in=["admin", "admin_sede"]).order_by("id").first()
     if legacy_admin:
-        legacy_admin.rol = "superadmin"
-        legacy_admin.is_staff = True
-        legacy_admin.is_superuser = True
-        legacy_admin.save(update_fields=["rol", "is_staff", "is_superuser"])
-        sync_superadmin_membership(legacy_admin)
+        promote_to_superadmin(legacy_admin)
         return
 
     username = getattr(settings, "DEFAULT_SUPERADMIN_USERNAME", "superadmin")
@@ -90,12 +86,13 @@ def ensure_superadmin_exists(sender, **kwargs):
         return
     user = User.objects.filter(username=username).first()
     if user:
-        user.rol = "superadmin"
-        user.is_staff = True
-        user.is_superuser = True
-        user.email = user.email or email
-        user.save(update_fields=["rol", "is_staff", "is_superuser", "email"])
-        sync_superadmin_membership(user)
+        update_fields: list[str] = []
+        if not getattr(user, "email", ""):
+            user.email = email
+            update_fields.append("email")
+        if update_fields:
+            user.save(update_fields=update_fields)
+        promote_to_superadmin(user)
         return
 
     created = User.objects.create_superuser(
@@ -104,4 +101,4 @@ def ensure_superadmin_exists(sender, **kwargs):
         password=password,
         rol="superadmin",
     )
-    sync_superadmin_membership(created)
+    promote_to_superadmin(created)

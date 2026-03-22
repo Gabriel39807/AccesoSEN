@@ -129,6 +129,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
+    RegistrarAccesoContingenciaSerializer,
     RegistrarAccesoDocumentoSerializer,
     RolePermissionSerializer,
     RoleSerializer,
@@ -153,7 +154,7 @@ from .webauthn_guards import control_panel_passkey_disabled_response, passkey_au
 
 CONTROL_PANEL_SESSION_TTL_SEC = max(60, int(getattr(settings, "CONTROL_PANEL_SESSION_TTL_SEC", 15 * 60) or 15 * 60))
 CONTROL_PANEL_OTP_TTL_SEC = max(60, int(getattr(settings, "CONTROL_PANEL_OTP_TTL_SEC", 5 * 60) or 5 * 60))
-MAX_ADMINS_PER_SEDE = 4
+MAX_ADMINS_PER_SEDE = 2
 FILTER_ALL_VALUES = {"all", "todos", "todas", "*"}
 TURNO_AUTO_CLOSE_OBSERVATION = "Cierre por tiempo limite alcanzado"
 IDEMPOTENCY_TTL_SEC = max(60, int(getattr(settings, "IDEMPOTENCY_TTL_SEC", 600) or 600))
@@ -3043,6 +3044,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         "update": "acceso.read",
         "partial_update": "acceso.read",
         "destroy": "acceso.delete",
+        "registrar_contingencia": "acceso.create",
         "validar_documento": "acceso.scan",
         "registrar_por_documento": "acceso.scan",
         "stats": "acceso.stats",
@@ -3207,6 +3209,80 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 {"equipos": "Los equipos en la salida deben coincidir exactamente con los del último ingreso."}
             )
 
+    def _validar_sede_salida(self, *, ultimo_ingreso: Acceso, sede_operativa: Sede):
+        if not ultimo_ingreso.sede_id or not sede_operativa:
+            return
+        if ultimo_ingreso.sede_id != sede_operativa.id:
+            raise ValidationError(
+                {"sede": "La salida debe registrarse en la misma sede del ultimo ingreso del aprendiz."}
+            )
+
+    def _resolve_contingency_sede(
+        self,
+        *,
+        actor: Usuario,
+        aprendiz: Usuario,
+        requested_sede: Sede | None,
+        ultimo: Acceso | None,
+        tipo: str,
+    ) -> Sede:
+        actor_is_admin_sede = is_admin_sede(actor)
+        actor_sede = _scope_sede_obj(actor) if actor_is_admin_sede else None
+        aprendiz_sede_code = _scope_sede(aprendiz)
+        aprendiz_sede = Sede.objects.filter(code=aprendiz_sede_code).first() if aprendiz_sede_code else None
+
+        if actor_is_admin_sede and not actor_sede:
+            raise ValidationError({"sede": "Tu usuario ADMIN_SEDE no tiene sede configurada."})
+        if actor_is_admin_sede and requested_sede and actor_sede and requested_sede.id != actor_sede.id:
+            raise ValidationError({"sede": "Solo puedes registrar contingencias dentro de tu sede."})
+        if actor_is_admin_sede and aprendiz_sede and actor_sede and aprendiz_sede.id != actor_sede.id:
+            raise ValidationError({"usuario": "Solo puedes registrar contingencias para aprendices de tu sede."})
+
+        if tipo == Acceso.Tipo.SALIDA and ultimo and ultimo.sede_id:
+            resolved = ultimo.sede
+            if requested_sede and requested_sede.id != resolved.id:
+                raise ValidationError({"sede": "La salida debe registrarse en la misma sede del ultimo ingreso."})
+        else:
+            resolved = actor_sede or requested_sede or aprendiz_sede
+
+        if not resolved:
+            raise ValidationError({"sede": "Debes indicar la sede del acceso de contingencia."})
+
+        if aprendiz_sede and resolved.id != aprendiz_sede.id:
+            raise ValidationError({"sede": "La sede del acceso debe coincidir con la sede del aprendiz."})
+
+        return resolved
+
+    def _record_contingency_access_audit(
+        self,
+        *,
+        request,
+        acceso: Acceso,
+        motivo: str,
+        aprendiz: Usuario,
+        sede: Sede,
+        equipos: list[Equipo],
+    ):
+        ControlPanelAuditEvent.objects.create(
+            actor=getattr(request, "user", None),
+            session=getattr(request, "control_panel_session", None) or resolve_control_panel_session(request),
+            action=ControlPanelAuditEvent.Action.CREATE,
+            category=ControlPanelAuditEvent.Category.SEDE_MANAGEMENT,
+            target_type="acceso_contingencia",
+            target_id=str(acceso.id),
+            before_json=None,
+            after_json={
+                "acceso_id": acceso.id,
+                "usuario_id": getattr(aprendiz, "id", None),
+                "tipo": acceso.tipo,
+                "sede_id": getattr(sede, "id", None),
+                "equipos": [eq.id for eq in equipos],
+                "motivo": motivo,
+            },
+            reason=motivo,
+            ip_address=str(get_client_ip(request) or ""),
+        )
+
     def create(self, request, *args, **kwargs):
         replay_response, idem_cache_key, idem_lock_key = _idempotency_prepare(request, action="acceso.create")
         if replay_response is not None:
@@ -3220,49 +3296,33 @@ class AccesoViewSet(viewsets.ModelViewSet):
         request_user = request.user
         rol = _effective_role(request_user)
 
-        if rol not in [Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE, Usuario.Rol.GUARDA]:
+        if rol != Usuario.Rol.GUARDA:
             return _finish(
                 error_response(
                     code=ErrorCode.PERMISSION_DENIED,
-                    message="No tienes permisos para registrar accesos.",
+                    message="El flujo operativo solo puede ejecutarse desde un turno activo de guarda. Usa contingencia para excepciones.",
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
             )
 
-        turno = None
-        sede = None
-
-        if rol == Usuario.Rol.GUARDA:
-            turno = obtener_turno_activo(request_user)
-            guarda_sede = _scope_sede_obj(request_user)
-            policy = PolicyService.get_policy(turno.sede if turno else guarda_sede)
-            if policy.access_requires_active_turno and not turno:
-                return _finish(
-                    error_response(
-                        code=ErrorCode.TURNO_REQUIRED,
-                        message="Debes iniciar turno antes de registrar accesos.",
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                    )
+        turno = obtener_turno_activo(request_user)
+        if not turno:
+            return _finish(
+                error_response(
+                    code=ErrorCode.TURNO_REQUIRED,
+                    message="Debes iniciar turno antes de registrar accesos.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
                 )
-            sede = turno.sede if turno else guarda_sede
-            if not sede:
-                return _finish(
-                    error_response(
-                        code=ErrorCode.PERMISSION_DENIED,
-                        message="No tienes una sede operativa para registrar accesos.",
-                        status_code=status.HTTP_403_FORBIDDEN,
-                    )
+            )
+        sede = turno.sede
+        if not sede:
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="No tienes una sede operativa para registrar accesos.",
+                    status_code=status.HTTP_403_FORBIDDEN,
                 )
-        elif is_admin_sede(request_user):
-            sede = _scope_sede_obj(request_user)
-            if not sede:
-                return _finish(
-                    error_response(
-                        code=ErrorCode.PERMISSION_DENIED,
-                        message="Tu usuario ADMIN_SEDE no tiene sede configurada.",
-                        status_code=status.HTTP_403_FORBIDDEN,
-                    )
-                )
+            )
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -3270,16 +3330,14 @@ class AccesoViewSet(viewsets.ModelViewSet):
         aprendiz = serializer.validated_data["usuario"]
         tipo = serializer.validated_data["tipo"]
         equipos_enviados = serializer.validated_data.get("equipos", [])
-        if is_admin_sede(request_user):
-            actor_sede = _scope_sede(request_user)
-            if _scope_sede(aprendiz) != actor_sede:
-                return _finish(
-                    error_response(
-                        code=ErrorCode.PERMISSION_DENIED,
-                        message="Solo puedes registrar accesos para aprendices de tu sede.",
-                        status_code=status.HTTP_403_FORBIDDEN,
-                    )
+        if _scope_sede(aprendiz) != getattr(sede, "code", None):
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes registrar accesos operativos para aprendices de tu sede activa.",
+                    status_code=status.HTTP_403_FORBIDDEN,
                 )
+            )
 
         ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
 
@@ -3313,18 +3371,17 @@ class AccesoViewSet(viewsets.ModelViewSet):
                         status_code=status.HTTP_400_BAD_REQUEST,
                     )
                 )
-            sede = ultimo.sede
-            turno = ultimo.turno
-            if is_admin_sede(request_user):
-                actor_sede = _scope_sede(request_user)
-                if getattr(ultimo.sede, "code", None) != actor_sede:
-                    return _finish(
-                        error_response(
-                            code=ErrorCode.PERMISSION_DENIED,
-                            message="Solo puedes registrar salidas de tu sede.",
-                            status_code=status.HTTP_403_FORBIDDEN,
-                        )
+            try:
+                self._validar_sede_salida(ultimo_ingreso=ultimo, sede_operativa=sede)
+            except ValidationError as exc:
+                return _finish(
+                    error_response(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=str(exc.detail.get("sede", ["Salida invalida."])[0]),
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        field="sede",
                     )
+                )
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos_enviados))
 
         acceso = serializer.save(registrado_por=request_user, turno=turno, sede=sede)
@@ -3357,6 +3414,157 @@ class AccesoViewSet(viewsets.ModelViewSet):
             status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
         )
 
+    @action(detail=False, methods=["post"], url_path="registrar_contingencia")
+    def registrar_contingencia(self, request):
+        replay_response, idem_cache_key, idem_lock_key = _idempotency_prepare(
+            request, action="acceso.registrar_contingencia"
+        )
+        if replay_response is not None:
+            return replay_response
+
+        def _finish(response: Response):
+            _idempotency_store_success(idem_cache_key, response)
+            _idempotency_release(idem_lock_key)
+            return response
+
+        request_user = request.user
+        rol = _effective_role(request_user)
+        if rol not in [Usuario.Rol.SUPERADMIN, Usuario.Rol.ADMIN_SEDE]:
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo administradores pueden registrar accesos de contingencia.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            )
+
+        serializer = RegistrarAccesoContingenciaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        documento = serializer.validated_data["documento"]
+        tipo = serializer.validated_data["tipo"]
+        motivo = serializer.validated_data["motivo"]
+        requested_sede = serializer.validated_data.get("sede")
+        equipos_ids = serializer.validated_data.get("equipos", [])
+        equipos = list(Equipo.objects.filter(id__in=equipos_ids)) if equipos_ids else []
+
+        aprendiz = Usuario.objects.filter(documento=documento).first()
+        if not aprendiz:
+            return _finish(
+                error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="Documento no registrado.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            )
+
+        if not _has_role(aprendiz, Usuario.Rol.APRENDIZ):
+            return _finish(
+                error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="El documento no pertenece a un aprendiz.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            )
+
+        ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
+
+        if ultimo is None and tipo == Acceso.Tipo.SALIDA:
+            return _finish(
+                error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message="Salida sin ingreso previo.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            )
+
+        if ultimo is not None and ultimo.tipo == tipo:
+            return _finish(
+                error_response(
+                    code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                    message=f"Doble {tipo}.",
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
+            )
+
+        try:
+            sede = self._resolve_contingency_sede(
+                actor=request_user,
+                aprendiz=aprendiz,
+                requested_sede=requested_sede,
+                ultimo=ultimo,
+                tipo=tipo,
+            )
+        except ValidationError as exc:
+            detail = getattr(exc, "detail", {})
+            field = next(iter(detail.keys()), "sede") if isinstance(detail, dict) and detail else "sede"
+            message = detail.get(field, ["Solicitud invalida."])[0] if isinstance(detail, dict) else str(exc)
+            return _finish(
+                error_response(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message=str(message),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    field=field,
+                )
+            )
+
+        if tipo == Acceso.Tipo.INGRESO and equipos:
+            self._validar_equipos_ingreso(aprendiz, list(equipos))
+
+        if tipo == Acceso.Tipo.SALIDA:
+            if not ultimo or ultimo.tipo != Acceso.Tipo.INGRESO:
+                return _finish(
+                    error_response(
+                        code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
+                        message="Salida invalida: el ultimo registro no es un ingreso.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                )
+            try:
+                self._validar_sede_salida(ultimo_ingreso=ultimo, sede_operativa=sede)
+            except ValidationError as exc:
+                return _finish(
+                    error_response(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=str(exc.detail.get("sede", ["Salida invalida."])[0]),
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        field="sede",
+                    )
+                )
+            self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos))
+
+        acceso = Acceso.objects.create(
+            usuario=aprendiz,
+            tipo=tipo,
+            fecha=timezone.now(),
+            sede=sede,
+            turno=None,
+            registrado_por=request_user,
+        )
+        if equipos:
+            acceso.equipos.set(list(equipos))
+
+        self._record_contingency_access_audit(
+            request=request,
+            acceso=acceso,
+            motivo=motivo,
+            aprendiz=aprendiz,
+            sede=sede,
+            equipos=equipos,
+        )
+        logger.warning(
+            "audit_access_contingency_created actor_id=%s actor_role=%s acceso_id=%s aprendiz_id=%s tipo=%s sede_id=%s motivo=%s",
+            getattr(request_user, "id", None),
+            rol,
+            acceso.id,
+            getattr(aprendiz, "id", None),
+            tipo,
+            getattr(sede, "id", None),
+            motivo,
+        )
+        incr_metric("acceso_contingencia_success_total")
+        return _finish(ok_response({"acceso": AccesoSerializer(acceso).data}, status_code=status.HTTP_201_CREATED))
+
     @action(detail=False, methods=["post"], url_path="validar_documento")
     def validar_documento(self, request):
         if not _has_active_role(request.user, Usuario.Rol.GUARDA):
@@ -3368,15 +3576,13 @@ class AccesoViewSet(viewsets.ModelViewSet):
         s = ValidarDocumentoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         turno = obtener_turno_activo(request.user)
-        default_sede = _scope_sede_obj(request.user)
-        policy = PolicyService.get_policy(turno.sede if turno else default_sede)
-        if policy.access_requires_active_turno and not turno:
+        if not turno:
             return error_response(
                 code=ErrorCode.TURNO_REQUIRED,
                 message="Debes iniciar turno para validar y registrar accesos.",
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-        scan_sede = turno.sede if turno else default_sede
+        scan_sede = turno.sede
         if not scan_sede:
             return error_response(
                 code=ErrorCode.PERMISSION_DENIED,
@@ -3421,6 +3627,13 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
 
+        if _scope_sede(aprendiz) != getattr(scan_sede, "code", None):
+            return error_response(
+                code=ErrorCode.PERMISSION_DENIED,
+                message="Solo puedes validar documentos de aprendices de tu sede activa.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
         ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
         estado = "dentro" if (ultimo and ultimo.tipo == Acceso.Tipo.INGRESO) else "fuera"
         equipos_aprobados = Equipo.objects.filter(propietario=aprendiz, estado=Equipo.Estado.APROBADO).order_by(
@@ -3459,9 +3672,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
         s.is_valid(raise_exception=True)
 
         turno = obtener_turno_activo(request.user)
-        default_sede = _scope_sede_obj(request.user)
-        policy = PolicyService.get_policy(turno.sede if turno else default_sede)
-        if policy.access_requires_active_turno and not turno:
+        if not turno:
             return _finish(
                 error_response(
                     code=ErrorCode.TURNO_REQUIRED,
@@ -3469,7 +3680,7 @@ class AccesoViewSet(viewsets.ModelViewSet):
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
             )
-        scan_sede = turno.sede if turno else default_sede
+        scan_sede = turno.sede
         if not scan_sede:
             return _finish(
                 error_response(
@@ -3520,6 +3731,15 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 )
             )
 
+        if _scope_sede(aprendiz) != getattr(scan_sede, "code", None):
+            return _finish(
+                error_response(
+                    code=ErrorCode.PERMISSION_DENIED,
+                    message="Solo puedes registrar accesos operativos para aprendices de tu sede activa.",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            )
+
         ultimo = Acceso.objects.filter(usuario=aprendiz, is_deleted=False).order_by("-fecha").first()
 
         if ultimo is None and tipo == Acceso.Tipo.SALIDA:
@@ -3550,6 +3770,17 @@ class AccesoViewSet(viewsets.ModelViewSet):
                         code=ErrorCode.ACCESO_INCONSISTENTE_EQUIPO,
                         message="Salida inválida: el último registro no es un ingreso.",
                         status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                )
+            try:
+                self._validar_sede_salida(ultimo_ingreso=ultimo, sede_operativa=scan_sede)
+            except ValidationError as exc:
+                return _finish(
+                    error_response(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=str(exc.detail.get("sede", ["Salida invalida."])[0]),
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        field="sede",
                     )
                 )
             self._validar_salida_equipos_vs_ultimo_ingreso(ultimo, list(equipos))
@@ -3585,21 +3816,12 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 status_code=status.HTTP_403_FORBIDDEN,
             )
         turno = obtener_turno_activo(request.user)
-        default_sede = _scope_sede_obj(request.user)
-        policy = PolicyService.get_policy(turno.sede if turno else default_sede)
-        if policy.access_requires_active_turno and not turno:
+        if not turno:
             return error_response(
                 code=ErrorCode.TURNO_REQUIRED,
                 message="No tienes turno activo.",
                 status_code=status.HTTP_400_BAD_REQUEST,
                 extra={"stats": None},
-            )
-        if not turno:
-            return ok_response(
-                {
-                    "turno": None,
-                    "stats": {"ingresos": 0, "salidas": 0, "total": 0},
-                }
             )
 
         qs = Acceso.objects.filter(turno=turno, is_deleted=False)

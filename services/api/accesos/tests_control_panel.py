@@ -1,6 +1,10 @@
+from unittest.mock import patch
+
+from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
 
+from .control_panel_support import control_panel_otp_cache_key
 from .models import ControlPanelAuditEvent, ControlPanelQuotaCounter, TenantBrandingConfig
 from .tests_support import BaseApiTest
 
@@ -66,6 +70,62 @@ class ControlPanelSessionStepUpTests(BaseApiTest):
         self.auth(other_superadmin.username, "Passw0rd!", expected_role="admin")
         denied = self.client.get("/api/auditoria/eventos/", HTTP_X_CONTROL_PANEL_SESSION=session_id)
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN, denied.data)
+
+    def test_control_panel_otp_cache_key_is_obfuscated(self):
+        key = control_panel_otp_cache_key(self.superadmin.id, "request-raw-visible")
+        self.assertTrue(key.startswith("sadi:control-panel:otp:"))
+        self.assertNotIn(f":{self.superadmin.id}:", key)
+        self.assertNotIn("request-raw-visible", key)
+
+    def test_control_panel_verify_otp_is_one_time_and_clears_cache_payload(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        with patch("accesos.views.send_control_panel_otp_email") as send_mock:
+            requested = self.client.post("/api/control-panel/session/request-otp/", {}, format="json")
+            self.assertEqual(requested.status_code, status.HTTP_200_OK, requested.data)
+            otp_code = send_mock.call_args.args[1]
+
+        cache_key = control_panel_otp_cache_key(self.superadmin.id, requested.data["request_id"])
+        self.assertIsNotNone(cache.get(cache_key))
+
+        verified = self.client.post(
+            "/api/control-panel/session/verify-otp/",
+            {"request_id": requested.data["request_id"], "otp": otp_code},
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_200_OK, verified.data)
+        self.assertIsNone(cache.get(cache_key))
+
+        replay = self.client.post(
+            "/api/control-panel/session/verify-otp/",
+            {"request_id": requested.data["request_id"], "otp": otp_code},
+            format="json",
+        )
+        self.assertEqual(replay.status_code, status.HTTP_400_BAD_REQUEST, replay.data)
+        self.assertEqual(replay.data.get("code"), "OTP_EXPIRED")
+
+    def test_control_panel_verify_otp_blocks_after_max_attempts(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        with patch("accesos.views.send_control_panel_otp_email") as send_mock:
+            requested = self.client.post("/api/control-panel/session/request-otp/", {}, format="json")
+            self.assertEqual(requested.status_code, status.HTTP_200_OK, requested.data)
+            self.assertTrue(send_mock.called)
+
+        for _ in range(5):
+            wrong = self.client.post(
+                "/api/control-panel/session/verify-otp/",
+                {"request_id": requested.data["request_id"], "otp": "99999"},
+                format="json",
+            )
+            self.assertEqual(wrong.status_code, status.HTTP_400_BAD_REQUEST, wrong.data)
+            self.assertEqual(wrong.data.get("code"), "OTP_INVALID")
+
+        blocked = self.client.post(
+            "/api/control-panel/session/verify-otp/",
+            {"request_id": requested.data["request_id"], "otp": "99999"},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS, blocked.data)
+        self.assertEqual(blocked.data.get("code"), "OTP_TOO_MANY_ATTEMPTS")
 
     @override_settings(WEBAUTHN_MOCK=False)
     def test_control_panel_passkey_step_up_is_disabled_without_real_webauthn(self):

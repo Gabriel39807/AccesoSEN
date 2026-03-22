@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import time
 
 from django.core.cache import cache
 
 
-def _cache_key(prefix: str, parts: list[str]) -> str:
-    return f"sadi:{prefix}:{':'.join(parts)}"
+def _normalize_key_part(value) -> str:
+    return str(value if value is not None else "").strip().lower()
+
+
+def build_rate_limit_key(prefix: str, key_parts: list[str]) -> str:
+    normalized_parts = [_normalize_key_part(part) for part in key_parts]
+    payload = "|".join(normalized_parts)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"sadi:{prefix}:{digest}"
 
 
 def get_client_ip(request) -> str:
@@ -40,7 +48,7 @@ def _lock_remaining(lock_key: str) -> int:
 
 
 def bump_with_lock(prefix: str, key_parts: list[str], max_attempts: int, window_sec: int, lock_sec: int):
-    key = _cache_key(prefix, key_parts)
+    key = build_rate_limit_key(prefix, key_parts)
     lock_key = f"{key}:lock"
 
     remaining = _lock_remaining(lock_key)
@@ -72,15 +80,17 @@ def bump_with_lock(prefix: str, key_parts: list[str], max_attempts: int, window_
 
 
 def is_locked(prefix: str, key_parts: list[str]) -> bool:
-    key = _cache_key(prefix, key_parts)
+    key = build_rate_limit_key(prefix, key_parts)
     return _lock_remaining(f"{key}:lock") > 0
 
 
 def get_lock_remaining(prefix: str, key_parts: list[str]) -> int:
-    key = _cache_key(prefix, key_parts)
+    key = build_rate_limit_key(prefix, key_parts)
     return _lock_remaining(f"{key}:lock")
 
 
-def reset_counter(prefix: str, key_parts: list[str]):
-    key = _cache_key(prefix, key_parts)
+def reset_counter(prefix: str, key_parts: list[str], *, include_lock: bool = False):
+    key = build_rate_limit_key(prefix, key_parts)
     cache.delete(key)
+    if include_lock:
+        cache.delete(f"{key}:lock")
