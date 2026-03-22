@@ -529,7 +529,7 @@ export default function AdminInicioPage() {
   ];
 
   return (
-    <div className="min-w-0 space-y-6 2xl:space-y-7">
+    <div className="min-w-0 space-y-7 2xl:space-y-8">
       <section className="sadi-card-strong rounded-[2rem] p-6 xl:p-7">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-3xl space-y-3">
@@ -554,12 +554,12 @@ export default function AdminInicioPage() {
           </div>
 
           <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-[360px]">
-            <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-3">
+            <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-4 py-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Periodo activo</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{formatRangeLabel(periodRange.start, periodRange.end)}</p>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{activePeriodLabel}</p>
             </div>
-            <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-3">
+            <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-4 py-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hoy</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{currentDateLabel()}</p>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Vista pensada para supervision y respuesta.</p>
@@ -577,8 +577,8 @@ export default function AdminInicioPage() {
                 className={cx(
                   "rounded-full border px-4 py-2 text-sm font-semibold transition",
                   period === selectedPeriod
-                    ? "border-[color:var(--color-primary)] bg-[linear-gradient(135deg,rgba(111,211,255,0.22),rgba(255,255,255,0.04))] text-[color:var(--color-text)] shadow-[0_0_0_1px_rgba(111,211,255,0.18)_inset]"
-                    : "border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] text-[color:var(--color-text-soft)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]",
+                    ? "border-[color:var(--color-primary)] bg-[color:var(--primary-soft)] text-[color:var(--color-text)] shadow-[0_0_0_1px_rgba(111,211,255,0.18)_inset]"
+                    : "border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-text-soft)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)]",
                 )}
               >
                 {period}
@@ -620,7 +620,7 @@ export default function AdminInicioPage() {
                 setSelectedSede(isSuperadmin ? "" : me?.sede_principal ?? "");
                 setRefreshKey((value) => value + 1);
               }}
-              className="inline-flex items-center justify-center rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+              className="inline-flex items-center justify-center rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
             >
               Restablecer
             </button>
@@ -629,7 +629,7 @@ export default function AdminInicioPage() {
       </section>
 
       {dashboardError ? (
-        <div className="rounded-[1.7rem] border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] px-5 py-4 text-sm text-[color:var(--danger)] shadow-sm">
+        <div className="rounded-[1.7rem] border border-[color:rgba(255,107,122,0.28)] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-5 py-4 text-sm text-[color:var(--danger)] shadow-sm">
           <span className="font-semibold">No pudimos actualizar todo el panel.</span> {dashboardError}
         </div>
       ) : null}
@@ -649,7 +649,7 @@ export default function AdminInicioPage() {
               <Link
                 key={item.title}
                 href={item.href}
-                className="flex flex-col gap-3 rounded-[1.4rem] border border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))] px-4 py-4 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+                className="flex flex-col gap-3 rounded-[1.4rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -674,8 +674,8 @@ export default function AdminInicioPage() {
           title="Eventos recientes"
           description="Ultimos movimientos visibles en el rango activo para validar trazabilidad y detectar desviaciones."
         >
-          <div className="mt-5 overflow-hidden rounded-[1.6rem] border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.88)]">
-            <div className="hidden grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] md:grid">
+          <div className="mt-5 overflow-hidden rounded-[1.6rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)]">
+            <div className="hidden grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] md:grid">
               <span>Evento</span>
               <span>Contexto</span>
               <span>Estado</span>
@@ -704,7 +704,7 @@ export default function AdminInicioPage() {
           title="Tendencia del periodo"
           description="Una sola visual util: volumen de accesos para entender carga operativa sin distraer la lectura principal."
         >
-          <div className="mt-5 rounded-[1.6rem] border border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-4">
+          <div className="mt-5 rounded-[1.6rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[color:var(--color-text)]">Actividad por {selectedPeriod.toLowerCase()}</p>
@@ -719,7 +719,7 @@ export default function AdminInicioPage() {
               <div className={cx("grid items-end gap-3", trend.length <= 5 ? "grid-cols-5" : "grid-cols-6")}>
                 {trend.map((item) => (
                   <div key={item.label} className="flex flex-col items-center gap-2">
-                    <div className="flex h-44 w-full items-end justify-center rounded-3xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-3 py-3">
+                    <div className="flex h-44 w-full items-end justify-center rounded-3xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-3">
                       <div className="w-10 rounded-full bg-[linear-gradient(180deg,rgba(111,211,255,0.96),rgba(79,163,255,0.58))] shadow-[0_0_18px_rgba(111,211,255,0.22)]" style={{ height: `${Math.max(28, item.height)}px` }} />
                     </div>
                     <span className="text-xs font-semibold text-[color:var(--color-text-muted)]">{item.label}</span>
@@ -728,7 +728,7 @@ export default function AdminInicioPage() {
                 ))}
               </div>
             ) : (
-              <div className="grid min-h-[220px] place-items-center rounded-[1.5rem] border border-dashed border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] p-6 text-center">
+              <div className="grid min-h-[220px] place-items-center rounded-[1.5rem] border border-dashed border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-6 text-center">
                 <div className="max-w-sm">
                   <p className="text-sm font-semibold text-[color:var(--color-text)]">No hay suficiente actividad para graficar</p>
                   <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">Cambia el periodo o la sede para ver comportamiento operativo.</p>
@@ -749,7 +749,7 @@ export default function AdminInicioPage() {
                 <Link
                   key={action.title}
                   href={action.href}
-                  className="flex items-start gap-3 rounded-[1.4rem] border border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-4 py-4 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+                  className="flex items-start gap-3 rounded-[1.4rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
                 >
                   <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] text-[color:var(--color-text)] shadow-sm">
                     {action.icon}
@@ -772,12 +772,12 @@ export default function AdminInicioPage() {
             description="Informacion minima para orientarte sin llenar la pantalla de widgets redundantes."
           >
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-4 py-4">
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Usuarios visibles</p>
                 <p className="mt-2 text-2xl font-bold text-[color:var(--color-text)]">{stats.usersTotal}</p>
                 <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">{stats.usersActive} activos dentro del alcance actual.</p>
               </div>
-              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-4 py-4">
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Trazabilidad</p>
                 <p className="mt-2 text-2xl font-bold text-[color:var(--color-text)]">{stats.accesosConEquipos}</p>
                 <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">Accesos con equipo asociado en el periodo activo.</p>
@@ -789,3 +789,4 @@ export default function AdminInicioPage() {
     </div>
   );
 }
+

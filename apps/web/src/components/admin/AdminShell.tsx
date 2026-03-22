@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -66,23 +66,21 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     <div className="sadi-shell relative min-h-screen overflow-x-hidden">
       {mobileOpen ? (
         <button
-          aria-label="Cerrar navegaci?n"
-          className="fixed inset-0 z-40 bg-black/55 backdrop-blur-sm lg:hidden"
+          aria-label="Cerrar navegación"
+          className="fixed inset-0 z-40 bg-black/35 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       ) : null}
 
       <aside
         data-collapsed={desktopExpanded ? "false" : "true"}
-        className={cx(
-          "sadi-sidebar fixed inset-y-0 left-0 z-50 hidden border-r border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(6,10,16,0.98),rgba(10,16,24,0.94))] shadow-[0_18px_60px_rgba(0,0,0,0.34)] transition-[width,box-shadow] duration-300 lg:flex lg:flex-col",
-        )}
+        className="sadi-sidebar fixed inset-y-0 left-0 z-50 hidden border-r border-[color:var(--color-border)] bg-[color:var(--sidebar-bg)] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-[width,box-shadow] duration-300 lg:flex lg:flex-col"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
         <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(111,211,255,0.18),rgba(255,255,255,0.03))] text-[color:var(--color-primary)] shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+            <div className="grid h-11 w-11 place-items-center rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[color:var(--panel-bg)] text-[color:var(--color-primary)] shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
               <span className="text-sm font-black tracking-[0.18em]">SA</span>
             </div>
             {desktopExpanded ? (
@@ -96,7 +94,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
-            className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)] lg:inline-flex"
+            className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)] lg:inline-flex"
             aria-label={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
           >
             <IconRefresh className="h-4 w-4" />
@@ -106,18 +104,18 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
           <div className="sadi-card min-w-0 rounded-[1.6rem] px-4 py-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.04)] text-[color:var(--color-primary)]">
+              <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-primary)]">
                 <IconBell className="h-4 w-4" />
               </div>
               <span className="command-noir-chip" data-tone="info">
-                Operaci?n
+                Operación
               </span>
             </div>
             {desktopExpanded ? (
               <>
-                <div className="mt-4 text-sm font-semibold text-[color:var(--color-text)]">Control premium de accesos y operaci?n.</div>
-                <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">
-                  Navega por usuarios, trazabilidad y turnos con una vista clara, sobria y enfocada.
+                <div className="mt-4 text-sm font-semibold text-[color:var(--color-text)]">Control premium de accesos y operación.</div>
+                <div className="mt-1 text-xs leading-relaxed text-[color:var(--color-text-muted)]">
+                  Navega por usuarios, trazabilidad y turnos con una vista clara, ordenada y sin ruido visual.
                 </div>
               </>
             ) : null}
@@ -149,14 +147,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                   <button
                     type="button"
                     onClick={() => router.push("/admin/perfil")}
-                    className="flex-1 rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)]"
+                    className="flex-1 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)]"
                   >
                     Ver perfil
                   </button>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] px-3 py-2 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-110"
+                    className="flex items-center justify-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-3 py-2 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-105"
                   >
                     <IconLogout className="h-3.5 w-3.5" />
                     Salir
@@ -169,20 +167,20 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] px-4 py-3 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-110"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-4 py-3 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-105"
               >
                 <IconLogout className="h-3.5 w-3.5" />
               </button>
             ) : null}
 
-            <div className="text-[11px] text-[color:var(--color-text-muted)]">SADI ? 2026</div>
+            <div className="text-[11px] text-[color:var(--color-text-muted)]">SADI · 2026</div>
           </div>
         </div>
       </aside>
 
       <aside
         className={cx(
-          "fixed inset-y-0 left-0 z-50 w-[19rem] border-r border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(6,10,16,0.98),rgba(10,16,24,0.94))] shadow-[0_18px_60px_rgba(0,0,0,0.34)] transition-transform duration-300 lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-[19rem] border-r border-[color:var(--color-border)] bg-[color:var(--sidebar-bg)] shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-transform duration-300 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -195,7 +193,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-soft)]"
+              className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-soft)]"
             >
               Cerrar
             </button>
@@ -203,7 +201,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             <div className="mb-3 sadi-card rounded-[1.4rem] p-4">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sesi?n actual</div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sesión actual</div>
               <div className="mt-2 text-sm font-semibold text-[color:var(--color-text)]">{loadingMe ? "Cargando..." : displayName || "Administrador"}</div>
               <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{loadingMe ? "" : `Rol: ${me?.rol ?? "admin"}`}</div>
             </div>
@@ -227,7 +225,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 setMobileOpen(false);
                 router.push("/admin/perfil");
               }}
-              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)]"
+              className="mb-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)]"
             >
               <IconUser className="h-4 w-4" />
               Mi perfil
@@ -235,17 +233,17 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <button
               type="button"
               onClick={handleLogout}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] px-4 py-3 text-sm font-semibold text-[color:var(--danger)] transition hover:brightness-110"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-4 py-3 text-sm font-semibold text-[color:var(--danger)] transition hover:brightness-105"
             >
               <IconLogout className="h-4 w-4" />
-              Cerrar sesi?n
+              Cerrar sesión
             </button>
           </div>
         </div>
       </aside>
 
       <div className={cx("sadi-shell-content min-h-screen transition-[padding-left] duration-300", shellOffset)}>
-        <div className="mx-auto flex w-full min-w-0 max-w-[1680px] flex-col px-4 py-4 sm:px-6 lg:px-6 lg:py-5 xl:px-8">
+        <div className="mx-auto flex w-full min-w-0 max-w-[1720px] flex-col px-4 py-4 sm:px-6 lg:px-6 lg:py-5 xl:px-8">
           <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">SADI</div>
@@ -255,9 +253,9 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.04)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)] shadow-[0_16px_32px_rgba(0,0,0,0.18)]"
+              className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)] shadow-[0_16px_32px_rgba(0,0,0,0.12)]"
             >
-              Men?
+              Menú
             </button>
           </div>
 
@@ -282,3 +280,5 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     </div>
   );
 }
+
+

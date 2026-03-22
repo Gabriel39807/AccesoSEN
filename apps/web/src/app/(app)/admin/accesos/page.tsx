@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -29,7 +29,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: string;
-  jornada: "MANANA" | "MAÑANA" | "TARDE" | "NOCHE";
+  jornada: "MANANA" | "MAÃ‘ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -81,15 +81,15 @@ function Badge({
 }
 
 function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "—";
+  if (!u) return "â€”";
   const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
   return full || u.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "—";
+  if (!iso) return "â€”";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "â€”";
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
@@ -400,7 +400,7 @@ export default function AdminAccesosPage() {
       ) : (
         <FilterBar
           footer={
-            error ? <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[rgba(255,107,122,0.08)] p-3 text-sm text-[color:var(--danger)]">{error}</div> : null
+            error ? <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] p-3 text-sm text-[color:var(--danger)]">{error}</div> : null
           }
         >
           <input
@@ -498,7 +498,7 @@ export default function AdminAccesosPage() {
           loading={loadingTable}
           skeleton={<TableSkeleton />}
           hasRows={accesos.length > 0}
-          tableClassName="min-w-[920px] xl:min-w-full"
+          tableClassName="min-w-[840px] xl:min-w-full"
           headers={
             <tr className="text-left">
               <th className="px-4 py-3 font-semibold">Fecha</th>
@@ -544,11 +544,11 @@ export default function AdminAccesosPage() {
                 </td>
                 <td className="command-noir-table-cell px-4 py-3">
                   <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(aprendiz)}</div>
-                  <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "—"}</div>
+                  <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "â€”"}</div>
                 </td>
-                <td className="command-noir-table-cell px-4 py-3 text-[color:var(--color-text-soft)]">{registrado ? nombreUsuario(registrado) : "—"}</td>
+                <td className="command-noir-table-cell px-4 py-3 text-[color:var(--color-text-soft)]">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
                 <td className="command-noir-table-cell px-4 py-3">
-                  {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "—"}
+                  {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "â€”"}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Button onClick={() => abrirDetalle(a)} variant="secondary" className="px-3 py-1.5 text-xs">
@@ -614,7 +614,7 @@ export default function AdminAccesosPage() {
               <div className="command-noir-detail-card">
                 <div className="text-xs text-[color:var(--color-text-muted)]">Turno</div>
                 <div className="font-semibold">
-                  {selected.turno ? `#${selected.turno}` : "—"}
+                  {selected.turno ? `#${selected.turno}` : "â€”"}
                   {detalleTurno ? ` (${detalleTurno.activo ? "activo" : "finalizado"})` : ""}
                 </div>
               </div>
@@ -630,7 +630,7 @@ export default function AdminAccesosPage() {
                 <div>
                   <span className="text-[color:var(--color-text-muted)]">Registrado por:</span>{" "}
                   <span className="font-medium">
-                    {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "—"}
+                    {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "â€”"}
                   </span>
                 </div>
               </div>
@@ -648,7 +648,7 @@ export default function AdminAccesosPage() {
                 ) : detalleEquipos.length ? (
                   <div className="space-y-2">
                     {detalleEquipos.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between rounded-[1.1rem] border border-[color:var(--color-border-strong)] bg-[color:rgba(255,255,255,0.02)] p-3">
+                      <div key={e.id} className="flex items-center justify-between rounded-[1.1rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] p-3">
                         <div>
                           <div className="font-semibold text-[color:var(--color-text)]">{e.serial}</div>
                           <div className="text-xs text-[color:var(--color-text-muted)]">
@@ -688,3 +688,4 @@ export default function AdminAccesosPage() {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -374,7 +374,7 @@ export default function AdminUsuariosPage() {
       if (rid !== requestIdRef.current) return;
 
       if (Array.isArray(payload)) {
-        // fallback: backend sin paginación
+        // fallback: backend sin paginaciÃ³n
         setServerPaginated(false);
         setUsuarios(payload);
         setCount(payload.length);
@@ -469,7 +469,7 @@ export default function AdminUsuariosPage() {
   }, [usuarios, filtrados, page, pageSize, serverPaginated]);
 
   const stats = useMemo(() => {
-    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseño)
+    // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseÃ±o)
     const base = serverPaginated ? usuarios : usuarios;
 
     const total = serverPaginated ? count : base.length;
@@ -897,7 +897,7 @@ export default function AdminUsuariosPage() {
       <PageHeader
         breadcrumb="ADMIN > USUARIOS"
         title="Usuarios"
-      description="Gestión de cuentas, roles, estado y carga de aprendices."
+      description="GestiÃ³n de cuentas, roles, estado y carga de aprendices."
         actions={
           <>
             <Button onClick={abrirCrear} variant="primary">
@@ -1020,7 +1020,7 @@ export default function AdminUsuariosPage() {
           loading={loadingTable}
           skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
           hasRows={pageItems.length > 0}
-          tableClassName="min-w-[980px] xl:min-w-full table-auto"
+          tableClassName="min-w-[900px] xl:min-w-full table-auto"
           headers={
             <tr className="text-left">
               <th className="w-14 p-3">ID</th>
@@ -1052,12 +1052,12 @@ export default function AdminUsuariosPage() {
               <td className="command-noir-table-cell p-3">{u.id}</td>
 
               <td className="command-noir-table-cell p-3">
-                <div className="max-w-[220px] truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
-                {u.email ? <div className="max-w-[220px] truncate text-[color:var(--color-text-muted)]">{u.email}</div> : null}
+                <div className="max-w-[280px] truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
+                {u.email ? <div className="max-w-[280px] truncate text-[color:var(--color-text-muted)]">{u.email}</div> : null}
               </td>
 
               <td className="command-noir-table-cell p-3">
-                <div className="max-w-[180px] truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
+                <div className="max-w-[240px] truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
               </td>
 
               <td className="p-3">
@@ -1095,13 +1095,13 @@ export default function AdminUsuariosPage() {
                 </div>
               </td>
 
-              <td className="command-noir-table-cell p-3"><div className="max-w-[130px] truncate">{u.documento ?? "-"}</div></td>
+              <td className="command-noir-table-cell p-3"><div className="max-w-[180px] truncate">{u.documento ?? "-"}</div></td>
               <td className="p-3">
-                <div className="max-w-[110px] truncate">
+                <div className="max-w-[150px] truncate">
                   {u.sede_principal ? sedesByCode.get(u.sede_principal) || u.sede_principal : "-"}
                 </div>
               </td>
-              <td className="command-noir-table-cell p-3"><div className="max-w-[170px] truncate">{u.programa_formacion ?? "-"}</div></td>
+              <td className="command-noir-table-cell p-3"><div className="max-w-[240px] truncate">{u.programa_formacion ?? "-"}</div></td>
 
               <td className="p-3 text-right">
                 <div className="flex flex-col items-end gap-1">
@@ -1301,7 +1301,7 @@ export default function AdminUsuariosPage() {
             <button
               onClick={() => setOpen(false)}
               disabled={editSaving}
-              className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)] disabled:opacity-50"
+              className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -1541,7 +1541,7 @@ export default function AdminUsuariosPage() {
                 <button
                   onClick={() => setOpenCrear(false)}
                   disabled={creating}
-                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)] disabled:opacity-50"
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -1565,7 +1565,7 @@ export default function AdminUsuariosPage() {
           closeDisabled={validandoImport || confirmandoImport}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] p-3 text-sm text-[color:var(--color-text-soft)]">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3 text-sm text-[color:var(--color-text-soft)]">
               Flujo: 1) Selecciona el archivo. 2) Valida. 3) Importa. Los duplicados por documento siempre se omiten por seguridad.
             </div>
 
@@ -1597,7 +1597,7 @@ export default function AdminUsuariosPage() {
               <button
                 onClick={reintentarFallidos}
                 disabled={confirmandoImport || validandoImport || importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length === 0}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Reintentar fallidos
               </button>
@@ -1605,12 +1605,12 @@ export default function AdminUsuariosPage() {
 
             {importResumen ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] p-3">
+                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
                   <div className="text-xs text-[color:var(--color-text-muted)]">Total</div>
                   <div className="text-xl font-semibold text-[color:var(--color-text)]">{importResumen.total}</div>
                 </div>
                 <div className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[rgba(66,199,154,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--success)]">Válidos</div>
+                  <div className="text-xs text-[color:var(--success)]">VÃ¡lidos</div>
                   <div className="text-xl font-semibold text-[color:var(--success)]">{importResumen.validos}</div>
                 </div>
                 <div className="rounded-xl border border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] p-3">
@@ -1624,7 +1624,7 @@ export default function AdminUsuariosPage() {
               </div>
             ) : null}
 
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] p-3">
+            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
               <div className="mb-2 flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
                 <span>Estado: {importStage}</span>
                 <span>Progreso: {importProgress.processed}/{importProgress.total}</span>
@@ -1642,9 +1642,9 @@ export default function AdminUsuariosPage() {
                 <div className="border-b border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-2 text-sm font-semibold text-[color:var(--warning)]">
                   Duplicados en el archivo
                 </div>
-                <div className="max-h-48 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
+                <div className="max-h-48 overflow-auto bg-[color:var(--surface-subtle)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
+                    <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1676,12 +1676,12 @@ export default function AdminUsuariosPage() {
                       setAllowSkipFileDuplicates(false);
                       setImportBanner({ type: "error", message: "Corrige el archivo y vuelve a validar para continuar." });
                     }}
-                    className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[color:rgba(255,255,255,0.02)] px-3 py-1.5 text-xs font-medium text-[color:var(--warning)] hover:bg-[rgba(240,178,77,0.12)]"
+                    className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[color:var(--surface-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--warning)] hover:bg-[rgba(240,178,77,0.12)]"
                   >
                     Cancelar y corregir Excel
                   </button>
                   <span className="text-xs text-[color:var(--warning)]">
-                    Estado: {allowSkipFileDuplicates ? "Omisión de duplicados confirmada" : "Decisión pendiente"}
+                    Estado: {allowSkipFileDuplicates ? "OmisiÃ³n de duplicados confirmada" : "DecisiÃ³n pendiente"}
                   </span>
                 </div>
               </div>
@@ -1689,12 +1689,12 @@ export default function AdminUsuariosPage() {
 
             {importPreviewRows.length > 0 ? (
               <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
-                <div className="border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)]">
-                  Vista previa de filas válidas ({importPreviewRows.length} de {importProgress.total})
+                <div className="border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)]">
+                  Vista previa de filas vÃ¡lidas ({importPreviewRows.length} de {importProgress.total})
                 </div>
-                <div className="max-h-56 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
+                <div className="max-h-56 overflow-auto bg-[color:var(--surface-subtle)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
+                    <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1721,19 +1721,19 @@ export default function AdminUsuariosPage() {
 
             {importRowResults.length > 0 ? (
               <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
-                <div className="flex items-center justify-between border-b border-[color:var(--color-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 py-2">
+                <div className="flex items-center justify-between border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-2">
                   <div className="text-sm font-semibold text-[color:var(--color-text)]">Resultados por fila</div>
                   <button
                     type="button"
                     onClick={downloadImportErrorsCsv}
-                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.86)] px-3 py-1 text-xs font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.06)]"
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-1 text-xs font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.06)]"
                   >
                     Descargar errores (CSV)
                   </button>
                 </div>
-                <div className="max-h-64 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
+                <div className="max-h-64 overflow-auto bg-[color:var(--surface-subtle)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
+                    <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1776,14 +1776,14 @@ export default function AdminUsuariosPage() {
                   <button
                     type="button"
                     onClick={downloadImportErrorsCsv}
-                    className="rounded-lg border border-rose-300 bg-[color:rgba(10,16,24,0.86)] px-3 py-1 text-xs font-medium text-[color:var(--danger)] hover:bg-[rgba(255,107,122,0.12)]"
+                    className="rounded-lg border border-rose-300 bg-[color:var(--surface-subtle)] px-3 py-1 text-xs font-medium text-[color:var(--danger)] hover:bg-[rgba(255,107,122,0.12)]"
                   >
                     Descargar errores (CSV)
                   </button>
                 </div>
-                <div className="max-h-64 overflow-auto bg-[color:rgba(10,16,24,0.86)]">
+                <div className="max-h-64 overflow-auto bg-[color:var(--surface-subtle)]">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
+                    <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
                         <th className="px-3 py-2">Fila</th>
                         <th className="px-3 py-2">Documento</th>
@@ -1820,7 +1820,7 @@ export default function AdminUsuariosPage() {
             </div>
             <div className="max-h-64 overflow-auto rounded-xl border border-[color:var(--color-border)]">
               <table className="min-w-full text-sm">
-                <thead className="bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] text-left text-[color:var(--color-text-muted)]">
+                <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                   <tr>
                     <th className="px-3 py-2">Fila</th>
                     <th className="px-3 py-2">Documento</th>
@@ -1849,20 +1849,20 @@ export default function AdminUsuariosPage() {
                 onChange={(e) => setHideConflictSummary(e.target.checked)}
                 className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent"
               />
-              No volver a mostrar este resumen en esta importación
+              No volver a mostrar este resumen en esta importaciÃ³n
             </label>
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={downloadDuplicateConflictsCsv}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.86)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.04)]"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:var(--surface-muted)]"
               >
                 Descargar reporte de duplicados (CSV)
               </button>
               <button
                 type="button"
                 onClick={() => setShowConflictsModal(false)}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:rgba(10,16,24,0.86)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:rgba(255,255,255,0.04)]"
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:var(--surface-muted)]"
               >
                 Cancelar para corregir Excel
               </button>
@@ -1879,5 +1879,6 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
+
 
 

@@ -1,4 +1,4 @@
-function cx(...c: Array<string | false | null | undefined>) {
+﻿function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
 }
 
@@ -28,13 +28,13 @@ export default function DataTable({
         <table className={cx("min-w-full text-sm text-[color:var(--text-soft)]", tableClassName)}>
           <thead
             className={cx(
-              "bg-[linear-gradient(180deg,rgba(22,33,47,0.98),rgba(14,21,31,0.98))] text-[color:var(--text-soft)]",
-              stickyHeader && "sticky top-0 z-10 backdrop-blur-sm",
+              "bg-[color:var(--table-head-bg)] text-[color:var(--text-soft)]",
+              stickyHeader && "sticky top-0 z-10 backdrop-blur-md",
             )}
           >
             {headers}
           </thead>
-          <tbody className="divide-y divide-[color:var(--surface-border)] bg-[rgba(8,14,21,0.72)]">
+          <tbody className="divide-y divide-[color:var(--surface-border)] bg-[color:var(--table-body-bg)]">
             {children}
             {!hasRows && emptyState ? emptyState : null}
           </tbody>
@@ -43,3 +43,4 @@ export default function DataTable({
     </section>
   );
 }
+

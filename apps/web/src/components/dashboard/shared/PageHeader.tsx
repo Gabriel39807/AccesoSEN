@@ -1,4 +1,4 @@
-export default function PageHeader({
+﻿export default function PageHeader({
   breadcrumb,
   title,
   description,
@@ -15,7 +15,7 @@ export default function PageHeader({
     <section
       className={[
         "sadi-card-strong min-w-0 overflow-hidden rounded-[1.9rem] border px-5 py-5 sm:px-6 sm:py-6",
-        sticky ? "sticky top-3 z-20 sm:top-4" : "",
+        sticky ? "sticky top-3 z-20 backdrop-blur-md sm:top-4" : "",
       ].join(" ")}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
@@ -35,3 +35,4 @@ export default function PageHeader({
     </section>
   );
 }
+
