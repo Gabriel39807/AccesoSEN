@@ -1,8 +1,11 @@
-import React, { useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+
 import * as Auth from "../../src/api/auth";
 import { toUiErrorMessage } from "../../src/api/client";
+import { GuardThemeMode, guardHomeThemes } from "../../src/components/guard/GuardHomeSections";
+import { useResolvedThemeMode } from "../../src/store/preferences";
 import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
 
 type Step = "email" | "otp" | "newpass" | "done";
@@ -32,8 +35,58 @@ export default function PasswordRecovery() {
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const mode = useResolvedThemeMode() as GuardThemeMode;
+  const theme = guardHomeThemes[mode];
   const rules = buildPasswordRules(newPass, newPass2);
   const allRulesValid = rules.every((rule) => rule.valid);
+
+  const stepCopy = useMemo(() => {
+    switch (step) {
+      case "email":
+        return {
+          pill: "RECUPERACION",
+          title: "Recuperar contraseña",
+          subtitle: "Ingresa el correo registrado y te enviaremos un código de verificación.",
+          helper: "Te enviaremos un código al correo asociado a tu cuenta.",
+        };
+      case "otp":
+        return {
+          pill: "VERIFICACION",
+          title: "Verifica tu código",
+          subtitle: "Revisa tu correo e ingresa el OTP para continuar con la recuperación.",
+          helper: "Ingresa el código de verificación enviado a tu correo registrado.",
+        };
+      case "newpass":
+        return {
+          pill: "SEGURIDAD",
+          title: "Nueva contraseña",
+          subtitle: "Crea una contraseña segura para completar la recuperación del acceso.",
+          helper: "Asegúrate de cumplir todos los requisitos antes de continuar.",
+        };
+      case "done":
+        return {
+          pill: "COMPLETADO",
+          title: "Acceso recuperado",
+          subtitle: "Tu contraseña fue actualizada correctamente y ya puedes volver al login.",
+          helper: "Usa tu nueva contraseña para ingresar de nuevo.",
+        };
+      default:
+        return {
+          pill: "RECUPERACION",
+          title: "Recuperar contraseña",
+          subtitle: "Ingresa el correo registrado y te enviaremos un código de verificación.",
+          helper: "Te enviaremos un código al correo asociado a tu cuenta.",
+        };
+    }
+  }, [step]);
+
+  function onBackToLogin() {
+    if (typeof router.canGoBack === "function" && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/auth/login?rol=guarda" as any);
+  }
 
   async function onEmail() {
     if (!email.trim()) {
@@ -86,35 +139,38 @@ export default function PasswordRecovery() {
   }
 
   return (
-    <ModernScreen scroll>
-      <FadeInCard delay={0}>
-        <Pill text="RECUPERACION" />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock title="Recuperar contrasena" subtitle="Completa el flujo OTP enviado a tu correo." />
+    <ModernScreen scroll theme="guard" contentStyle={styles.screenContent}>
+      <FadeInCard delay={0} intensity={78} style={styles.heroCard}>
+        <Pill text={stepCopy.pill} tone="guard" />
+        <View style={styles.heroCopy}>
+          <TitleBlock title={stepCopy.title} subtitle={stepCopy.subtitle} />
+          <Text style={[styles.heroSupportText, { color: theme.textSoft }]}>{stepCopy.helper}</Text>
         </View>
       </FadeInCard>
 
-      <FadeInCard delay={70}>
-        <View style={{ gap: 10 }}>
+      <FadeInCard delay={70} intensity={72} style={styles.formCard}>
+        <View style={styles.formStack}>
           {step === "email" ? (
             <>
               <InputField
-                label="Correo"
+                label="Correo registrado"
+                icon="mail-outline"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="correo@dominio.com"
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
-              <Text style={{ color: "#64748b" }}>El OTP se enviara al correo registrado en la cuenta.</Text>
-              <ModernButton label={loading ? "Enviando..." : "Enviar codigo"} disabled={loading} onPress={onEmail} />
+              <Text style={[styles.helperText, { color: theme.textSoft }]}>Te enviaremos un código al correo asociado a tu cuenta.</Text>
+              <ModernButton label={loading ? "Enviando..." : "Enviar código"} tone="guard" disabled={loading} onPress={onEmail} />
             </>
           ) : null}
 
           {step === "otp" ? (
             <>
               <InputField
-                label="Codigo OTP (5 digitos)"
+                label="Código OTP (5 dígitos)"
+                icon="key-outline"
                 value={otp}
                 onChangeText={setOtp}
                 placeholder="12345"
@@ -122,27 +178,39 @@ export default function PasswordRecovery() {
                 maxLength={5}
                 style={{ letterSpacing: 6, textAlign: "center" }}
               />
-              <Text style={{ color: "#64748b" }}>Ingresa el codigo enviado por correo.</Text>
+              <Text style={[styles.helperText, { color: theme.textSoft }]}>Ingresa el código de verificación que enviamos a tu correo.</Text>
               <ModernButton label={loading ? "Verificando..." : "Verificar"} tone="dark" disabled={loading} onPress={onOtp} />
             </>
           ) : null}
 
           {step === "newpass" ? (
             <>
-              <InputField label="Nueva contrasena" value={newPass} onChangeText={setNewPass} placeholder="********" secureTextEntry />
-              <InputField label="Confirmar contrasena" value={newPass2} onChangeText={setNewPass2} placeholder="********" secureTextEntry />
+              <InputField label="Nueva contraseña" icon="lock-closed-outline" value={newPass} onChangeText={setNewPass} placeholder="********" secureTextEntry />
+              <InputField label="Confirmar contraseña" icon="shield-checkmark-outline" value={newPass2} onChangeText={setNewPass2} placeholder="********" secureTextEntry />
 
-              <View style={{ borderWidth: 1, borderColor: "#dbeafe", borderRadius: 12, padding: 12, gap: 6, backgroundColor: "#f8fafc" }}>
-                <Text style={{ fontWeight: "700", color: "#0f172a" }}>Checklist de seguridad</Text>
-                {rules.map((rule) => (
-                  <Text key={rule.id} style={{ color: rule.valid ? "#15803d" : "#64748b" }}>
-                    {rule.valid ? "[OK]" : "[ ]"} {rule.label}
-                  </Text>
-                ))}
+              <View
+                style={[
+                  styles.rulesCard,
+                  {
+                    borderColor: theme.summaryBorder,
+                    backgroundColor: mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.54)",
+                  },
+                ]}
+              >
+                <Text style={[styles.rulesTitle, { color: theme.text }]}>Checklist de seguridad</Text>
+                <View style={styles.rulesList}>
+                  {rules.map((rule) => (
+                    <View key={rule.id} style={styles.ruleRow}>
+                      <Text style={[styles.ruleIcon, { color: rule.valid ? theme.success : theme.textSoft }]}>{rule.valid ? "●" : "○"}</Text>
+                      <Text style={[styles.ruleText, { color: rule.valid ? theme.success : theme.textSoft }]}>{rule.label}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
 
               <ModernButton
-                label={loading ? "Actualizando..." : "Cambiar contrasena"}
+                label={loading ? "Actualizando..." : "Cambiar contraseña"}
+                tone="guard"
                 disabled={loading || !allRulesValid}
                 onPress={onConfirm}
               />
@@ -150,21 +218,146 @@ export default function PasswordRecovery() {
           ) : null}
 
           {step === "done" ? (
-            <>
-              <Text style={{ textAlign: "center", fontWeight: "900", fontSize: 18, color: "#0f172a" }}>Listo</Text>
-              <Text style={{ textAlign: "center", color: "#64748b" }}>
-                Tu contrasena fue actualizada. Ya puedes iniciar sesion.
-              </Text>
-              <ModernButton label="Volver al inicio" onPress={() => router.replace("/" as any)} />
-            </>
+            <View style={styles.doneState}>
+              <View style={[styles.doneIconWrap, { backgroundColor: mode === "dark" ? "rgba(77,226,173,0.12)" : "rgba(17,132,94,0.10)" }]}>
+                <Text style={[styles.doneIcon, { color: theme.success }]}>✓</Text>
+              </View>
+              <Text style={[styles.doneTitle, { color: theme.text }]}>Listo</Text>
+              <Text style={[styles.doneBody, { color: theme.textSoft }]}>Tu contraseña fue actualizada. Ya puedes iniciar sesión con la nueva clave.</Text>
+              <ModernButton label="Volver al login" tone="guard" onPress={() => router.replace("/auth/login?rol=guarda" as any)} />
+            </View>
           ) : null}
 
-          {msg ? <Text style={{ color: msg.toLowerCase().includes("listo") ? "#15803d" : "#b91c1c" }}>{msg}</Text> : null}
+          {msg ? (
+            <View
+              style={[
+                styles.messageCard,
+                {
+                  backgroundColor: msg.toLowerCase().includes("codigo") || msg.toLowerCase().includes("listo")
+                    ? mode === "dark"
+                      ? "rgba(77,226,173,0.10)"
+                      : "rgba(17,132,94,0.08)"
+                    : mode === "dark"
+                      ? "rgba(248,113,113,0.10)"
+                      : "rgba(220,38,38,0.08)",
+                  borderColor: msg.toLowerCase().includes("codigo") || msg.toLowerCase().includes("listo")
+                    ? mode === "dark"
+                      ? "rgba(77,226,173,0.16)"
+                      : "rgba(17,132,94,0.12)"
+                    : mode === "dark"
+                      ? "rgba(248,113,113,0.16)"
+                      : "rgba(220,38,38,0.12)",
+                },
+              ]}
+            >
+              <Text style={{ color: msg.toLowerCase().includes("codigo") || msg.toLowerCase().includes("listo") ? theme.success : theme.warning }}>{msg}</Text>
+            </View>
+          ) : null}
 
-          <ModernButton label="Volver" tone="light" onPress={() => router.back()} />
-          {loading ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
+          <View style={styles.footerActions}>
+            <ModernButton label="Volver al login" tone="light" onPress={onBackToLogin} />
+            {loading ? <ActivityIndicator color={theme.accentStrong} style={{ marginTop: 2 }} /> : null}
+          </View>
         </View>
       </FadeInCard>
     </ModernScreen>
   );
 }
+
+const styles = StyleSheet.create({
+  screenContent: {
+    gap: 18,
+    paddingBottom: 40,
+  },
+  heroCard: {
+    paddingTop: 6,
+  },
+  heroCopy: {
+    marginTop: 10,
+    gap: 10,
+  },
+  heroSupportText: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "600",
+    paddingRight: 8,
+  },
+  formCard: {
+    paddingTop: 2,
+  },
+  formStack: {
+    gap: 16,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "600",
+    paddingHorizontal: 2,
+  },
+  rulesCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    gap: 12,
+  },
+  rulesTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rulesList: {
+    gap: 8,
+  },
+  ruleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ruleIcon: {
+    fontSize: 12,
+    fontWeight: "900",
+    width: 12,
+    textAlign: "center",
+  },
+  ruleText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  doneState: {
+    gap: 14,
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  doneIconWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneIcon: {
+    fontSize: 30,
+    fontWeight: "900",
+  },
+  doneTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  doneBody: {
+    textAlign: "center",
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: "600",
+    paddingHorizontal: 10,
+  },
+  messageCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  footerActions: {
+    gap: 10,
+  },
+});

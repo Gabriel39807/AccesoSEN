@@ -1,0 +1,226 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Times New Roman;}}
+\paperw12240\paperh15840\margl1440\margr1440\margt1440\margb1440
+\fs24\sl480\slmult1
+\qc\b SISTEMA DE ACCESO DIGITAL INSTITUCIONAL (S.A.D.I)\b0\par
+\par
+\qc Diseno, desarrollo e implementacion de una plataforma multi-sede\par
+\qc para el control de accesos y gestion de equipos tecnologicos\par
+\par
+\par
+\qc Juan\par
+\qc Gabriel\par
+\qc Proyecto Formativo\par
+\qc Instructor: Juan Fernando\par
+\qc 2026\par
+\page
+\ql\b Resumen\b0\par
+\par
+El presente documento expone la formulacion, desarrollo e implementacion de S.A.D.I (Sistema de Acceso Digital Institucional), una solucion orientada al control de accesos de personas y equipos en ambientes institucionales con multiples sedes. La propuesta responde a problemas de operacion manual y sistemas fragmentados, que generan baja trazabilidad, reprocesos y riesgos de seguridad.\par
+\par
+La arquitectura del proyecto integra backend en Django + DRF, frontend web en Next.js y cliente movil en Expo React Native, bajo un enfoque de seguridad en backend con permisos explicitos, denegacion por defecto y aislamiento por sede. Se aplican mecanismos de autenticacion con JWT, renovacion de sesion por refresh token, flujos OTP para procesos sensibles y lineamientos para QR dinamico firmado y con expiracion.\par
+\par
+Para la validacion funcional se priorizaron pruebas E2E de mayor valor para exposicion: login principal, validacion de formulario, navegacion a vista critica y accion principal de usuario. La ejecucion de demo logro 4 de 4 pruebas aprobadas, mostrando estabilidad y coherencia con los objetivos planteados.\par
+\par
+\b Palabras clave:\b0 control de accesos, RBAC, JWT, OTP, QR dinamico, multi-sede, pruebas E2E.\par
+\page
+\ql\b Introduccion\b0\par
+\par
+En instituciones con alta circulacion de personas y equipos, el control de acceso es un proceso critico de operacion y seguridad. Cuando la gestion se realiza de forma manual o sin integracion entre herramientas, aparecen problemas de consistencia, demoras en validacion, baja auditabilidad y aumento de incidentes por permisos mal aplicados. Este contexto motiva la construccion de S.A.D.I como plataforma unificada para administrar accesos, sesiones y activos bajo reglas claras de negocio y seguridad.\par
+\par
+S.A.D.I fue concebido para operar en entornos multi-sede, donde el aislamiento de informacion es esencial. El proyecto prioriza que la seguridad no dependa solo de interfaz, sino de controles efectivos en backend. Por ello, el sistema adopta evaluacion explicita de roles, politicas de acceso por sede, trazabilidad de acciones criticas e invariantes funcionales no negociables.\par
+\par
+El documento se organiza siguiendo la estructura de sustentacion academica: problema, objetivos, justificacion, metodologia, fases de analisis-diseno-construccion-pruebas, despliegue, resultados, conclusiones y recomendaciones, adicionando referencias y anexos para soporte.\par
+\page
+\ql\b BLOQUE 2. Objetivos y justificacion\b0\par
+\par
+\b 2.1 Objetivo general\b0\par
+Desarrollar e implementar una plataforma institucional llamada S.A.D.I para gestionar el control de accesos de personas y equipos en multiples sedes, con enfoque en seguridad, trazabilidad, eficiencia operativa y escalabilidad.\par
+\par
+\b 2.2 Objetivos especificos\b0\par
+1. Disenar una arquitectura tecnologica integrada por backend, frontend web y app movil.\par
+2. Implementar autenticacion segura con JWT y sesion por dispositivo.\par
+3. Aplicar un modelo RBAC con aislamiento estricto por sede.\par
+4. Implementar gestion de accesos y equipos con reglas de dominio.\par
+5. Integrar QR dinamico y controles OTP para operaciones sensibles.\par
+6. Validar flujos criticos mediante pruebas E2E estables y demostrables.\par
+\par
+\b 2.3 Justificacion tecnica\b0\par
+La centralizacion de reglas de seguridad en backend mejora consistencia y reduce riesgo de fallas por validaciones solo visuales. El modelo multi-cliente permite reutilizacion de servicios y continuidad de evolucion tecnica.\par
+\par
+\b 2.4 Justificacion economica\b0\par
+La plataforma reduce tiempos de validacion, reprocesos y costos operativos derivados de errores manuales en control de acceso.\par
+\par
+\b 2.5 Justificacion social\b0\par
+Se mejora la experiencia de usuarios y personal de control, fortaleciendo confianza institucional y cultura de cumplimiento.\par
+\page
+\ql\b BLOQUE 3. Marco teorico y conceptual\b0\par
+\par
+\b 3.1 Control de acceso institucional\b0\par
+Un sistema de acceso institucional integra identidad, autorizacion y trazabilidad para garantizar que cada actor opere dentro de su alcance.\par
+\par
+\b 3.2 Arquitectura cliente-servidor\b0\par
+Permite separacion de responsabilidades entre presentacion y logica de negocio, escalabilidad por componente y centralizacion de seguridad.\par
+\par
+\b 3.3 RBAC\b0\par
+La autorizacion basada en roles organiza permisos por funcion institucional. En S.A.D.I los roles principales son: superadmin, admin_sede, guarda y aprendiz.\par
+\par
+\b 3.4 Aislamiento por sede\b0\par
+El sistema impone segregacion de datos por sede para evitar lectura o modificacion cruzada no autorizada.\par
+\par
+\b 3.5 JWT y sesiones\b0\par
+S.A.D.I usa access token de corta duracion y refresh token por dispositivo, con capacidad de rotacion/revocacion.\par
+\par
+\b 3.6 OTP\b0\par
+Se incorporan codigos de un solo uso con vencimiento, limites de intentos y control de frecuencia para reducir abuso.\par
+\par
+\b 3.7 QR seguro\b0\par
+El QR debe incluir identificador, expiracion, nonce y firma criptografica para reducir replay y manipulacion.\par
+\par
+\b 3.8 Pruebas de software\b0\par
+Se combinan pruebas funcionales y E2E para validar rutas criticas desde perspectiva de usuario real.\par
+\page
+\ql\b BLOQUE 4. Metodologia de desarrollo\b0\par
+\par
+Se aplico un enfoque iterativo incremental. Cada ciclo considero analisis, diseno, construccion, pruebas y ajuste. La prioridad estuvo en funcionalidades con mayor impacto operativo y riesgo de seguridad.\par
+\par
+\b Etapas ejecutadas\b0\par
+1. Definicion del problema y alcance.\par
+2. Modelado de actores y reglas de negocio.\par
+3. Diseno de arquitectura y seguridad.\par
+4. Construccion de modulos por capa.\par
+5. Integracion web/movil con API.\par
+6. Pruebas y estabilizacion para demo.\par
+\page
+\ql\b BLOQUE 5. Fase de analisis\b0\par
+\par
+\b 5.1 Actores\b0\par
+Superadmin, admin_sede, guarda y aprendiz.\par
+\par
+\b 5.2 Requerimientos funcionales destacados\b0\par
+RF-01 autenticacion y redireccion por rol.\par
+RF-02 gestion de equipos por aprendiz.\par
+RF-03 registro de acceso con turno activo.\par
+RF-04 consulta de historial y estado de acceso.\par
+RF-05 generacion de QR para operacion en porteria.\par
+\par
+\b 5.3 Requerimientos no funcionales\b0\par
+Seguridad, disponibilidad, rendimiento, escalabilidad y auditabilidad.\par
+\par
+\b 5.4 Invariantes de dominio\b0\par
+1. Maximo 4 equipos por aprendiz.\par
+2. Solo 1 turno activo por guarda.\par
+3. No acceso sin turno activo.\par
+4. Sede de acceso coincide con sede del turno.\par
+5. Aislamiento estricto por sede.\par
+\page
+\ql\b BLOQUE 6. Fase de diseno\b0\par
+\par
+\b 6.1 Arquitectura\b0\par
+Monorepo con tres aplicaciones: services/api, apps/web y apps/mobile-rn. API como fuente unica de reglas de negocio.\par
+\par
+\b 6.2 Diseno de seguridad\b0\par
+Permisos explicitos, denegacion por defecto, validaciones de backend y trazabilidad de acciones criticas.\par
+\par
+\b 6.3 Diseno de datos\b0\par
+Entidades principales: usuario, membership, rol-permiso, turno, acceso, equipo y politicas por sede.\par
+\par
+\b 6.4 Diseno de interfaz\b0\par
+Interfaz web orientada a claridad operativa. Interfaz movil orientada a rapidez en campo.\par
+\page
+\ql\b BLOQUE 7. Fase de construccion\b0\par
+\par
+\b 7.1 Backend\b0\par
+Implementacion de endpoints para autenticacion, perfil, equipos, accesos, turnos y politicas. Control de permisos por rol/sede y manejo consistente de errores.\par
+\par
+\b 7.2 Frontend web\b0\par
+Construccion de vistas de login, panel de aprendiz, registro de equipos, historial, perfil y QR.\par
+\par
+\b 7.3 Mobile\b0\par
+Pantallas orientadas a flujos de aprendiz y guarda, con enfoque operativo.\par
+\par
+\b 7.4 Integracion\b0\par
+Consumo de API central desde web y mobile, con sesion protegida y redireccion por estado de autenticacion.\par
+\page
+\ql\b BLOQUE 8. Fase de pruebas\b0\par
+\par
+Se priorizaron pruebas E2E de alto valor para sustentacion.\par
+\par
+\b Suite demo E2E\b0\par
+1. Login principal de aprendiz y redireccion correcta.\par
+2. Validacion de formulario en registro de equipo.\par
+3. Navegacion desde panel a vista critica Mi QR.\par
+4. Registro exitoso de equipo y verificacion en listado.\par
+\par
+\b Resultado\b0\par
+4 pruebas ejecutadas, 4 aprobadas, 0 fallidas.\par
+\par
+\b Criterios de estabilidad\b0\par
+Sin waits arbitrarios, selectores estables, mocks controlados y aserciones por estado visible real.\par
+\page
+\ql\b BLOQUE 9. Despliegue e implementacion\b0\par
+\par
+S.A.D.I puede ejecutarse en desarrollo por servicios o mediante Docker Compose. Se manejan variables de entorno por modulo y endpoints de salud para validacion operativa.\par
+\par
+\b Componentes\b0\par
+API: Django/DRF.\par
+Web: Next.js.\par
+Mobile: Expo React Native.\par
+\par
+\b Recomendacion de despliegue\b0\par
+Configurar secretos de produccion, monitorear salud y auditar logs de eventos criticos.\par
+\page
+\ql\b BLOQUE 10. Resultados\b0\par
+\par
+1. Plataforma funcional multi-cliente (web y mobile) conectada a API central.\par
+2. Control de acceso por rol y sede con seguridad por defecto.\par
+3. Flujos clave de aprendiz disponibles y estables para demo.\par
+4. Evidencia funcional mediante pruebas E2E en rutas criticas.\par
+\page
+\ql\b BLOQUE 11. Conclusiones\b0\par
+\par
+S.A.D.I aporta una solucion viable y escalable para control de acceso institucional. La centralizacion de reglas en backend y el modelo RBAC por sede reducen riesgos de fuga de informacion y privilegios indebidos. El enfoque incremental y la validacion por pruebas permitieron construir valor demostrable en condiciones reales de presentacion.\par
+\page
+\ql\b BLOQUE 12. Recomendaciones\b0\par
+\par
+1. Ampliar cobertura de pruebas E2E y adversariales.\par
+2. Fortalecer observabilidad con metricas y alertas.\par
+3. Consolidar pipeline de despliegue continuo.\par
+4. Mantener capacitacion operativa por rol.\par
+\page
+\ql\b BLOQUE 13. Referencias (APA 7)\b0\par
+\par
+Django Software Foundation. (2026). \i Django documentation\i0 . https://docs.djangoproject.com/\par
+Fielding, R. T., \& Reschke, J. (2022). \i HTTP semantics\i0  (RFC 9110). IETF. https://www.rfc-editor.org/rfc/rfc9110\par
+Jones, M., Bradley, J., \& Sakimura, N. (2015). \i JSON Web Token (JWT)\i0  (RFC 7519). IETF. https://www.rfc-editor.org/rfc/rfc7519\par
+OWASP Foundation. (2021). \i OWASP top 10\i0 . https://owasp.org/www-project-top-ten/\par
+Microsoft. (2026). \i Playwright documentation\i0 . https://playwright.dev/\par
+Vercel. (2026). \i Next.js documentation\i0 . https://nextjs.org/docs\par
+\page
+\ql\b BLOQUE 14. Anexos\b0\par
+\par
+\b Anexo A. Evidencias visuales\b0\par
+Capturas sugeridas: login, panel aprendiz, formulario equipos, Mi QR, resultados E2E.\par
+\par
+\b Anexo B. Evidencias tecnicas\b0\par
+Arbol de modulos, variables de entorno, endpoints principales, matriz rol-permiso.\par
+\par
+\b Anexo C. Cronograma\b0\par
+Analisis, diseno, construccion, integracion, pruebas, documentacion.\par
+\par
+\b Anexo D. Matriz de riesgos\b0\par
+Riesgos: acceso cruzado por sede, sesion comprometida, validaciones incompletas, inestabilidad de demo. Mitigaciones: filtros de sede, revocacion de sesion, doble validacion y mocks controlados.\par
+\page
+\ql\b BLOQUE 15. Guia de formato APA para version final\b0\par
+\par
+1. Fuente Times New Roman 12.\par
+2. Doble espacio en todo el documento.\par
+3. Margenes de 2.54 cm.\par
+4. Sangria de primera linea en parrafos.\par
+5. Numeracion de paginas en esquina superior derecha.\par
+6. Citas y referencias en formato APA 7.\par
+7. Lista de tablas y lista de figuras para fortalecer extensiones largas.\par
+\par
+\b Nota final\b0\par
+Este archivo consolida todos los bloques solicitados para base de documento completo. Puedes abrirlo en Word y guardarlo como .docx.\par
+}

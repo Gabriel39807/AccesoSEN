@@ -101,9 +101,10 @@ export const useSessionStore = create<SessionState>()(
             return;
           }
 
-          if (!sede || !jornada) throw new Error("Selecciona sede y jornada.");
+          const sedeFallback = (sede || (me.usuario.sede_principal as Turnos.Sede | null) || "") as Turnos.Sede;
+          if (!sedeFallback || !jornada) throw new Error("No se pudo resolver sede y jornada para iniciar turno.");
           try {
-            const r = await Turnos.iniciarTurno(sede, jornada);
+            const r = await Turnos.iniciarTurno(sedeFallback, jornada);
             set({ isReady: true, user: me.usuario, turno: r.turno });
             return;
           } catch (e: any) {
@@ -143,9 +144,10 @@ export const useSessionStore = create<SessionState>()(
             return;
           }
 
-          if (!sede || !jornada) throw new Error("Selecciona sede y jornada.");
+          const sedeFallback = (sede || (me.usuario.sede_principal as Turnos.Sede | null) || "") as Turnos.Sede;
+          if (!sedeFallback || !jornada) throw new Error("No se pudo resolver sede y jornada para iniciar turno.");
           try {
-            const r = await Turnos.iniciarTurno(sede, jornada);
+            const r = await Turnos.iniciarTurno(sedeFallback, jornada);
             set({ isReady: true, user: me.usuario, turno: r.turno });
             return;
           } catch (e: any) {

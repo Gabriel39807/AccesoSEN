@@ -1,50 +1,77 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import * as Auth from "../../src/api/auth";
 import { toUiErrorMessage } from "../../src/api/client";
-import { sanitizeDigits, validatePhone10 } from "../../src/lib/validators";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock } from "../../src/ui/modern";
+import AprendizBottomDock from "../../src/components/aprendiz/AprendizBottomDock";
+import { usePreferencesStore, useResolvedThemeMode } from "../../src/store/preferences";
+import { useSessionStore } from "../../src/store/session";
+import { ModernButton } from "../../src/ui/modern";
 
-type PasswordRule = {
-  id: string;
-  label: string;
-  valid: boolean;
+type Mode = "light" | "dark";
+
+const themes = {
+  light: {
+    background: ["#fbfdff", "#f3f8ff", "#e8f1ff"] as [string, string, string],
+    ambientTop: ["rgba(109,190,245,0.13)", "rgba(109,190,245,0.03)", "transparent"] as [string, string, string],
+    ambientBeam: ["transparent", "rgba(196,230,255,0.16)", "rgba(255,255,255,0.05)"] as [string, string, string],
+    ambientBottom: ["rgba(255,255,255,0.03)", "rgba(221,238,255,0.20)", "rgba(243,249,255,0.22)"] as [string, string, string],
+    meshBorder: "rgba(173, 210, 237, 0.20)",
+    cardBg: "rgba(255,255,255,0.80)",
+    cardBorder: "rgba(96, 173, 229, 0.18)",
+    sectionBg: "rgba(255,255,255,0.72)",
+    rowBg: "rgba(255,255,255,0.58)",
+    text: "#132844",
+    textMuted: "#4f6d8e",
+    textSoft: "#7b93ad",
+    accent: "#0b89d1",
+    accentStrong: "#0875b3",
+    accentSoft: "rgba(14,165,233,0.10)",
+    line: "rgba(96, 173, 229, 0.12)",
+    danger: "#c2410c",
+  },
+  dark: {
+    background: ["#07111c", "#0a1b2c", "#0f3044"] as [string, string, string],
+    ambientTop: ["rgba(82,195,255,0.13)", "rgba(82,195,255,0.03)", "transparent"] as [string, string, string],
+    ambientBeam: ["transparent", "rgba(25,144,209,0.10)", "transparent"] as [string, string, string],
+    ambientBottom: ["transparent", "rgba(37,164,229,0.08)", "rgba(37,164,229,0.02)"] as [string, string, string],
+    meshBorder: "rgba(96, 177, 230, 0.10)",
+    cardBg: "rgba(12,24,38,0.74)",
+    cardBorder: "rgba(71, 181, 245, 0.18)",
+    sectionBg: "rgba(12,24,38,0.66)",
+    rowBg: "rgba(255,255,255,0.03)",
+    text: "#f6fbff",
+    textMuted: "#d0eaf8",
+    textSoft: "#8fb0c4",
+    accent: "#4fc9ff",
+    accentStrong: "#1eb2ee",
+    accentSoft: "rgba(79,201,255,0.12)",
+    line: "rgba(79,201,255,0.12)",
+    danger: "#ff9b71",
+  },
 };
-
-function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
-  return [
-    { id: "len", label: "Minimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayuscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minuscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 numero", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 caracter especial", valid: /[^A-Za-z0-9]/.test(password) },
-    { id: "match", label: "Coincide con la confirmacion", valid: confirmPassword.length > 0 && password === confirmPassword },
-  ];
-}
 
 export default function AprendizPerfil() {
   const [perfil, setPerfil] = useState<Auth.AprendizPerfil | null>(null);
   const [loadingPerfil, setLoadingPerfil] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-
-  const [telefono, setTelefono] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [emailOtp, setEmailOtp] = useState("");
-
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const rules = buildPasswordRules(next, confirm);
-  const allRulesValid = rules.every((rule) => rule.valid);
+  const signOut = useSessionStore((s) => s.signOut);
+  const mode = useResolvedThemeMode() as Mode;
+  const theme = themes[mode];
+  const isDark = mode === "dark";
+  const toggleThemeMode = usePreferencesStore((s) => s.toggleThemeMode);
+  const insets = useSafeAreaInsets();
 
   async function loadPerfil() {
     setLoadingPerfil(true);
     try {
       const r = await Auth.getAprendizPerfil();
-      const p = r.perfil;
-      setPerfil(p);
-      setTelefono(p.telefono || "");
+      setPerfil(r.perfil);
+      setMsg(null);
     } catch (e: any) {
       setMsg(toUiErrorMessage(e, "No se pudo cargar el perfil."));
     } finally {
@@ -56,162 +83,372 @@ export default function AprendizPerfil() {
     void loadPerfil();
   }, []);
 
-  async function guardarTelefono() {
-    setMsg(null);
-    const phoneError = validatePhone10(telefono.trim());
-    if (phoneError) {
-      setMsg(phoneError);
-      return;
-    }
-    setSaving(true);
-    try {
-      const r = await Auth.updateAprendizPerfil({ telefono: sanitizeDigits(telefono).slice(0, 10) });
-      setPerfil(r.perfil);
-      setTelefono(r.perfil.telefono || "");
-      setMsg(r.mensaje || "Perfil actualizado.");
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo actualizar el telefono."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function solicitarCambioCorreo() {
-    setMsg(null);
-    setSaving(true);
-    try {
-      const r = await Auth.requestAprendizEmailChange(newEmail);
-      setMsg(r.mensaje || "Enviamos OTP al nuevo correo.");
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo solicitar el cambio de correo."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmarCambioCorreo() {
-    setMsg(null);
-    setSaving(true);
-    try {
-      const r = await Auth.confirmAprendizEmailChange(newEmail, emailOtp);
-      setPerfil(r.perfil);
-      setNewEmail("");
-      setEmailOtp("");
-      setMsg(r.mensaje || "Correo actualizado.");
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo confirmar el cambio de correo."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function actualizarClave() {
-    setMsg(null);
-    if (!allRulesValid) {
-      setMsg("La nueva contrasena no cumple todos los requisitos.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const r = await Auth.changeInitialPassword(current, next);
-      if (!r.permitido) throw new Error(r.motivo || "No se pudo actualizar.");
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      setMsg("Contrasena actualizada correctamente.");
-      await loadPerfil();
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo actualizar la contrasena."));
-    } finally {
-      setSaving(false);
-    }
-  }
+  const fullName = `${perfil?.first_name || ""} ${perfil?.last_name || ""}`.trim() || "Aprendiz";
 
   return (
-    <ModernScreen scroll>
-      <FadeInCard>
-        <Pill text="MI PERFIL" />
-        <View style={{ marginTop: 8 }}>
-          <TitleBlock
-            title={loadingPerfil ? "Cargando..." : `${perfil?.first_name || "-"} ${perfil?.last_name || ""}`.trim()}
-            subtitle={`Documento ${perfil?.documento || "-"}`}
-          />
+    <View style={[styles.root, { backgroundColor: theme.background[0] }]}>
+      <LinearGradient colors={theme.background} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={theme.ambientTop} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ambientTop} />
+      <LinearGradient colors={theme.ambientBeam} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ambientBeam} />
+      <LinearGradient colors={theme.ambientBottom} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.ambientBottom} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + 18,
+            paddingBottom: 132 + Math.max(insets.bottom, 20),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Perfil</Text>
         </View>
-        <Text style={{ color: "#64748b", marginTop: 6 }}>Correo: {perfil?.email || "-"}</Text>
-        <Text style={{ color: "#64748b" }}>Programa: {perfil?.programa_formacion || "-"}</Text>
-        <Text style={{ color: "#64748b" }}>Sede: {perfil?.sede_principal || "-"}</Text>
-        {perfil?.pending_email_change ? (
-          <Text style={{ color: "#b45309" }}>Correo pendiente: {perfil.pending_email_change}</Text>
-        ) : null}
-      </FadeInCard>
 
-      <FadeInCard delay={70}>
-        <TitleBlock title="Datos de contacto" subtitle="Solo puedes editar telefono y correo con OTP." />
-        <View style={{ marginTop: 8, gap: 8 }}>
-          <InputField
-            label="Telefono"
-            value={telefono}
-            onChangeText={(v) => setTelefono(sanitizeDigits(v).slice(0, 10))}
-            placeholder="3001234567"
-            keyboardType="phone-pad"
-            maxLength={10}
-          />
-          <ModernButton label={saving ? "Guardando..." : "Guardar telefono"} disabled={saving} onPress={guardarTelefono} />
+        <View
+          style={[
+            styles.profileCard,
+            {
+              backgroundColor: theme.cardBg,
+              borderColor: theme.cardBorder,
+              shadowColor: isDark ? "rgba(0,0,0,0.28)" : "rgba(138, 187, 227, 0.18)",
+            },
+          ]}
+        >
+          <View style={styles.profileTop}>
+            <View style={[styles.avatarShell, { backgroundColor: theme.accentSoft, borderColor: theme.cardBorder }]}>
+              <LinearGradient
+                colors={mode === "dark" ? ["rgba(79,201,255,0.18)", "rgba(79,201,255,0.04)"] : ["rgba(255,255,255,0.72)", "rgba(14,165,233,0.02)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <Ionicons name="person-outline" size={34} color={theme.accentStrong} />
+            </View>
 
-          <InputField
-            label="Nuevo correo"
-            value={newEmail}
-            onChangeText={setNewEmail}
-            placeholder="correo@dominio.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-          <ModernButton
-            label={saving ? "Enviando..." : "Enviar OTP correo"}
-            tone="light"
-            disabled={saving || !newEmail.trim()}
-            onPress={solicitarCambioCorreo}
-          />
-
-          <InputField
-            label="OTP de correo"
-            value={emailOtp}
-            onChangeText={(v) => setEmailOtp(v.replace(/[^\d]/g, "").slice(0, 5))}
-            placeholder="12345"
-            keyboardType="numeric"
-            maxLength={5}
-          />
-          <ModernButton
-            label={saving ? "Confirmando..." : "Confirmar cambio de correo"}
-            tone="dark"
-            disabled={saving || !newEmail.trim() || emailOtp.trim().length !== 5}
-            onPress={confirmarCambioCorreo}
-          />
-        </View>
-      </FadeInCard>
-
-      <FadeInCard delay={120}>
-        <TitleBlock title="Cambiar contrasena" subtitle="Requiere contrasena actual." />
-        <View style={{ marginTop: 8, gap: 8 }}>
-          <InputField label="Contrasena actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
-          <InputField label="Nueva contrasena" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
-          <InputField label="Confirmar contrasena" value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="********" />
-
-          <View style={{ borderWidth: 1, borderColor: "#dbeafe", borderRadius: 12, padding: 12, gap: 6, backgroundColor: "#f8fafc" }}>
-            <Text style={{ fontWeight: "700", color: "#0f172a" }}>Checklist de seguridad</Text>
-            {rules.map((rule) => (
-              <Text key={rule.id} style={{ color: rule.valid ? "#15803d" : "#64748b" }}>
-                {rule.valid ? "[OK]" : "[ ]"} {rule.label}
+            <View style={styles.identityWrap}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={2}>
+                {loadingPerfil ? "Cargando..." : fullName}
               </Text>
-            ))}
+              <Text style={[styles.document, { color: theme.textMuted }]}>Documento {perfil?.documento || "-"}</Text>
+            </View>
           </View>
 
-          {msg ? <Text style={{ color: msg.toLowerCase().includes("actualizada") ? "#15803d" : "#b91c1c" }}>{msg}</Text> : null}
+          <View style={[styles.divider, { backgroundColor: theme.line }]} />
 
-          <ModernButton label={saving ? "Guardando..." : "Actualizar contrasena"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
-          {(saving || loadingPerfil) ? <ActivityIndicator style={{ marginTop: 4 }} /> : null}
+          {loadingPerfil ? (
+            <ActivityIndicator color={theme.accentStrong} style={{ marginTop: 6 }} />
+          ) : (
+            <View style={styles.metaGrid}>
+              <MetaItem icon="mail-outline" label="Correo" value={perfil?.email || "Sin correo"} theme={theme} />
+              <MetaItem icon="call-outline" label="Telefono" value={perfil?.telefono || "Sin telefono"} theme={theme} />
+              <MetaItem icon="business-outline" label="Sede" value={perfil?.sede_principal || "Sin sede"} theme={theme} full />
+            </View>
+          )}
+
+          {msg ? <Text style={[styles.errorText, { color: theme.danger }]}>{msg}</Text> : null}
         </View>
-      </FadeInCard>
-    </ModernScreen>
+
+        <Section title="Cuenta" theme={theme}>
+          <SettingRow
+            icon="time-outline"
+            title="Historial"
+            subtitle="Tus accesos"
+            theme={theme}
+            onPress={() => router.push("/aprendiz/historial" as any)}
+          />
+          <SettingRow
+            icon="help-circle-outline"
+            title="Ayuda"
+            subtitle="Soporte rapido"
+            theme={theme}
+            onPress={() => router.push("/aprendiz/ayuda" as any)}
+          />
+        </Section>
+
+        <Section title="Preferencias" theme={theme}>
+          <View style={[styles.settingRow, { backgroundColor: theme.rowBg, borderColor: theme.line }]}>
+            <View style={[styles.rowIcon, { backgroundColor: theme.accentSoft }]}>
+              <Ionicons name={mode === "dark" ? "moon-outline" : "sunny-outline"} size={17} color={theme.accentStrong} />
+            </View>
+            <View style={styles.rowCopy}>
+              <Text style={[styles.rowTitle, { color: theme.text }]}>Tema</Text>
+              <Text style={[styles.rowSubtitle, { color: theme.textSoft }]}>{mode === "dark" ? "Modo oscuro" : "Modo claro"}</Text>
+            </View>
+            <Switch
+              value={mode === "dark"}
+              onValueChange={toggleThemeMode}
+              trackColor={{ false: "rgba(148,163,184,0.35)", true: theme.accentStrong }}
+              thumbColor="#ffffff"
+            />
+          </View>
+        </Section>
+
+        <View style={styles.sessionBlock}>
+          <Text style={[styles.sectionTitle, { color: theme.textSoft }]}>Sesion</Text>
+          <ModernButton
+            icon="log-out-outline"
+            label="Cerrar sesion"
+            tone="danger"
+            onPress={async () => {
+              await signOut();
+              router.replace("/" as any);
+            }}
+          />
+        </View>
+      </ScrollView>
+
+      <AprendizBottomDock active="perfil" />
+    </View>
   );
 }
+
+function Section({
+  title,
+  theme,
+  children,
+}: {
+  title: string;
+  theme: (typeof themes)["light"];
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.sectionBlock}>
+      <Text style={[styles.sectionTitle, { color: theme.textSoft }]}>{title}</Text>
+      <View style={styles.sectionRows}>{children}</View>
+    </View>
+  );
+}
+
+function MetaItem({
+  icon,
+  label,
+  value,
+  theme,
+  full = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  theme: (typeof themes)["light"];
+  full?: boolean;
+}) {
+  return (
+    <View style={[styles.metaItem, full ? styles.metaItemFull : null, { backgroundColor: theme.rowBg, borderColor: theme.line }]}>
+      <View style={[styles.metaIcon, { backgroundColor: theme.accentSoft }]}>
+        <Ionicons name={icon} size={15} color={theme.accentStrong} />
+      </View>
+      <View style={styles.metaCopy}>
+        <Text style={[styles.metaLabel, { color: theme.textSoft }]}>{label}</Text>
+        <Text style={[styles.metaValue, { color: theme.text }]} numberOfLines={1}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function SettingRow({
+  icon,
+  title,
+  subtitle,
+  theme,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  theme: (typeof themes)["light"];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}>
+      <View style={[styles.settingRow, { backgroundColor: theme.rowBg, borderColor: theme.line }]}>
+        <View style={[styles.rowIcon, { backgroundColor: theme.accentSoft }]}>
+          <Ionicons name={icon} size={17} color={theme.accentStrong} />
+        </View>
+        <View style={styles.rowCopy}>
+          <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
+          <Text style={[styles.rowSubtitle, { color: theme.textSoft }]}>{subtitle}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.textSoft} />
+      </View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  ambientTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  ambientBeam: {
+    position: "absolute",
+    top: 130,
+    left: -34,
+    right: -34,
+    height: 260,
+    transform: [{ rotate: "-7deg" }],
+  },
+  ambientBottom: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 104,
+    height: 230,
+  },
+  content: {
+    paddingHorizontal: 22,
+    gap: 18,
+  },
+  header: {
+    paddingHorizontal: 2,
+    marginBottom: 4,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  profileCard: {
+    borderRadius: 30,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    gap: 18,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  profileTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  avatarShell: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  identityWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  name: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "900",
+    letterSpacing: -0.8,
+  },
+  document: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  divider: {
+    height: 1,
+  },
+  metaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  metaItem: {
+    width: "47%",
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  metaItemFull: {
+    width: "100%",
+  },
+  metaIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metaCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  metaLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  metaValue: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  sectionBlock: {
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    paddingHorizontal: 2,
+  },
+  sectionRows: {
+    gap: 9,
+  },
+  settingRow: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  rowTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rowSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  sessionBlock: {
+    gap: 10,
+    marginTop: 6,
+  },
+});

@@ -7,12 +7,11 @@
  * - Diseño UI de alta gama: layout ajustado sin scroll, doble picker horizontal,
  *   header flotante arriba, botón compacto para huella.
  */
-import React, { useEffect, useState, useRef } from "react";
-import { ActivityIndicator, Text, View, Pressable, StyleSheet, Animated, Dimensions, Image, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Text, View, Pressable, StyleSheet, Animated, Dimensions, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useSessionStore } from "../../src/store/session";
@@ -22,6 +21,7 @@ import { listSedes, type SedeItem } from "../../src/api/sedes";
 import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
 import { isBiometricAvailable } from "../../src/auth/biometric";
 import { hasRefreshToken, isBiometricEnabled } from "../../src/storage/tokens";
+import { usePreferencesStore, useResolvedThemeMode } from "../../src/store/preferences";
 import { InputField, ModernButton, Pill, SwirlingConstellations } from "../../src/ui/modern";
 
 const SCREEN_HEIGHT = Dimensions.get("window").height;
@@ -53,6 +53,9 @@ export default function LoginScreen() {
   const [sedeLoadHint, setSedeLoadHint] = useState<string | null>(null);
 
   const [lockRemainingSec, setLockRemainingSec] = useState(0);
+  const themeMode = useResolvedThemeMode();
+  const setThemeMode = usePreferencesStore((s) => s.setThemeMode);
+  const isDark = themeMode === "dark";
 
   // Entrance animation
   const introAnimFade = useRef(new Animated.Value(0)).current;
@@ -68,6 +71,14 @@ export default function LoginScreen() {
 
   function onPasswordChange(value: string) {
     setPassword(value.slice(0, 20));
+  }
+
+  function onBackPress() {
+    if (typeof router.canGoBack === "function" && router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace("/" as any);
   }
 
   const bloqueado = lockRemainingSec > 0;
@@ -94,7 +105,7 @@ export default function LoginScreen() {
         Animated.spring(actionAnimSlide, { toValue: 0, tension: 40, friction: 8, useNativeDriver: true })
       ]).start();
     }, 300);
-  }, []);
+  }, [actionAnimFade, actionAnimSlide, cardAnimFade, cardAnimSlide, introAnimFade, introAnimSlide]);
 
   useEffect(() => {
     if (lockRemainingSec <= 0) return;
@@ -111,15 +122,15 @@ export default function LoginScreen() {
         const items = await listSedes();
         if (!mounted) return;
         setSedes(items);
-        if (!sede && items.length > 0) {
-          setSede(items[0].code);
+        if (items.length > 0) {
+          setSede((current) => current || items[0].code);
           setSedeLoadHint(null);
         }
         if (items.length === 0) setSedeLoadHint("No hay sedes activas disponibles.");
       } catch {
         if (!mounted) return;
         setSedes([]);
-        setSedeLoadHint("No se pudieron cargar las sedes.");
+        setSedeLoadHint("No se pudieron cargar las sedes. Puedes continuar y se usara tu sede principal.");
       }
     })();
     return () => { mounted = false; };
@@ -154,7 +165,8 @@ export default function LoginScreen() {
     const documentError = validateDocument6to10(username.trim());
     if (documentError) { setError(documentError); return; }
     if (!password || password.length > 20) { setError("Contraseña inválida (máx 20 chars)."); return; }
-    if (rol === "guarda" && !sede) { setError("Selecciona una sede."); return; }
+    if (rol === "guarda" && !sede && sedes.length > 0) { setError("Selecciona una sede."); return; }
+    if (rol === "guarda" && !jornada) { setError("Selecciona un turno."); return; }
 
     setLoading(true);
     try {
@@ -181,7 +193,8 @@ export default function LoginScreen() {
   async function onBiometricSubmit() {
     setError(null);
     if (bloqueado) return;
-    if (rol === "guarda" && !sede) { setError("Selecciona sede primero."); return; }
+    if (rol === "guarda" && !sede && sedes.length > 0) { setError("Selecciona sede primero."); return; }
+    if (rol === "guarda" && !jornada) { setError("Selecciona un turno."); return; }
 
     setBiometricLoading(true);
     try {
@@ -201,15 +214,37 @@ export default function LoginScreen() {
   }
 
   const mappedTheme = rol === "guarda" ? "guard" : "aprendiz";
+  const palette = {
+    background: isDark ? ["#091220", "#0d1b32", "#123252"] : ["#fbfdff", "#f3f8ff", "#e7f0ff"],
+    header: rol === "guarda"
+      ? (isDark ? ["#163a80", "#0c1730"] : ["#3b82f6", "#1d4fd8"])
+      : (isDark ? ["#0f5d8f", "#0a2138"] : ["#23b6f6", "#0b89d1"]),
+    surface: isDark ? "rgba(12, 22, 36, 0.84)" : "rgba(255,255,255,0.88)",
+    surfaceBorder: isDark ? "rgba(93, 161, 248, 0.18)" : "rgba(135, 171, 236, 0.18)",
+    title: isDark ? "#f8fbff" : "#0f172a",
+    subtitle: isDark ? "#97accf" : "#64748b",
+    hint: isDark ? "#9bb0d2" : "#64748b",
+    accent: rol === "guarda" ? (isDark ? "#8dc8ff" : "#1e4fd8") : (isDark ? "#9be8ff" : "#0b89d1"),
+    bioBg: isDark ? "rgba(18, 46, 79, 0.96)" : rol === "aprendiz" ? "#e0f7ff" : "#ddebff",
+  };
+  const aprendizInputStyle =
+    rol === "aprendiz"
+      ? {
+          paddingVertical: 10,
+          borderRadius: 12,
+          backgroundColor: isDark ? "rgba(14,26,38,0.88)" : "#f8fafc",
+          borderColor: isDark ? "rgba(82, 195, 255, 0.22)" : "rgba(102, 194, 255, 0.18)",
+        }
+      : undefined;
 
   return (
     // Strictly NO-SCROLL View with native keyboard handling
     // FIX: Android 'adjustResize' already shrinks the window natively. Using behavior="height" causes a double-shrink that drops focus.
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: isDark ? "#091220" : "#fbfdff" }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Background with uniform pattern texture - Premium Depth Pale Blue */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <LinearGradient 
-          colors={["#e0f2fe", "#ffffff"]} 
+          colors={palette.background as any} 
           style={StyleSheet.absoluteFill} 
         />
         <SwirlingConstellations />
@@ -227,30 +262,40 @@ export default function LoginScreen() {
         <Animated.View style={{ opacity: introAnimFade, transform: [{ translateY: introAnimSlide }] }}>
           {/* Top Header Row Area (Sapphire-to-Cobalt Gradient Band) */}
         <LinearGradient 
-          colors={rol === "guarda" ? ["#1e40af", "#172554"] : ["#0ea5e9", "#0284c7"]} 
+          colors={palette.header as any} 
           start={{ x: 0, y: 0 }} 
           end={{ x: 1, y: 1 }} 
           style={styles.topHeaderBand}
         >
-          <Pressable onPress={() => router.back()} style={styles.headerIconBtn}>
+          <Pressable onPress={onBackPress} style={styles.headerIconBtn}>
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </Pressable>
-          <Pressable onPress={() => router.push("/auth/password-recovery" as any)} style={styles.headerIconBtn}>
-            <Ionicons name="help-circle-outline" size={26} color="#ffffff" />
-          </Pressable>
+          <View style={styles.headerRightActions}>
+            <Pressable onPress={() => setThemeMode(isDark ? "light" : "dark")} style={styles.headerIconBtn}>
+              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={22} color="#ffffff" />
+            </Pressable>
+            <Pressable onPress={() => router.push("/auth/support" as any)} style={styles.headerIconBtn}>
+              <Ionicons name="help-circle-outline" size={26} color="#ffffff" />
+            </Pressable>
+          </View>
         </LinearGradient>
 
         {/* Branding & Welcome */}
         <View style={styles.brandSection}>
           <Pill text={rol === "guarda" ? "SEGURIDAD" : "ESTUDIANTE"} icon={rol === "guarda" ? "shield-checkmark" : "school"} tone={mappedTheme} />
-          <Text style={styles.titleText}>Iniciar sesión</Text>
-          <Text style={styles.subtitleText}>{rol === "guarda" ? "Tu labor garantiza la seguridad de nuestra institución." : "Consulta tu estado y mi QR."}</Text>
+          <Text style={[styles.titleText, { color: palette.title }]}>Iniciar sesión</Text>
+          <Text style={[styles.subtitleText, { color: palette.subtitle }]}>{rol === "guarda" ? "Tu labor garantiza la seguridad de nuestra institución." : "Consulta tu estado y mi QR."}</Text>
         </View>
       </Animated.View>
 
         {/* Login Form Card (Glassmorphism, tightly packed) - SEQUENTIAL ANIM */}
         <Animated.View style={[
-          styles.formCard, 
+          styles.formCard,
+          {
+            backgroundColor: palette.surface,
+            borderColor: palette.surfaceBorder,
+            shadowColor: isDark ? "#000000" : "rgba(125, 160, 225, 0.20)",
+          },
           rol === "aprendiz" && { 
             paddingVertical: 24, 
             gap: 16, 
@@ -271,8 +316,9 @@ export default function LoginScreen() {
             placeholder="Ej. 1053444048"
             keyboardType="number-pad"
             maxLength={10}
+            selectionColor={palette.accent}
             iconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
-            wrapperStyle={rol === "aprendiz" ? { paddingVertical: 10, borderRadius: 12, backgroundColor: "#f8fafc" } : undefined}
+            wrapperStyle={aprendizInputStyle}
           />
 
           <View>
@@ -285,12 +331,13 @@ export default function LoginScreen() {
               secureTextEntry={!show}
               rightIcon={show ? "eye-off-outline" : "eye-outline"}
               onRightIconPress={() => setShow((v) => !v)}
+              selectionColor={palette.accent}
               iconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
               rightIconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
-              wrapperStyle={rol === "aprendiz" ? { paddingVertical: 10, borderRadius: 12, backgroundColor: "#f8fafc" } : undefined}
+              wrapperStyle={aprendizInputStyle}
             />
             <Pressable onPress={() => router.push("/auth/password-recovery" as any)} style={{ alignSelf: "center", marginTop: 12 }}>
-              <Text style={{ color: "#0ea5e9", fontSize: 13, fontWeight: "700" }}>¿Olvidaste tu contraseña?</Text>
+              <Text style={{ color: palette.accent, fontSize: 13, fontWeight: "700" }}>¿Olvidaste tu contraseña?</Text>
             </Pressable>
           </View>
 
@@ -299,8 +346,15 @@ export default function LoginScreen() {
             <View style={styles.rowSelectors}>
               <View style={styles.dropdownCol}>
                 <Text style={styles.dropdownLabel}>Sede</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker selectedValue={sede} onValueChange={setSede} style={styles.pickerNative} itemStyle={styles.pickerItem} dropdownIconColor="#1e3a8a">
+                <View style={[styles.pickerContainer, { backgroundColor: isDark ? "rgba(15,24,40,0.86)" : "#f8fbff", borderColor: palette.surfaceBorder }]}>
+                  <Picker
+                    selectedValue={sede}
+                    onValueChange={(value) => setSede(String(value) as Sede)}
+                    style={[styles.pickerNative, { color: isDark ? "#f8fbff" : "#0f172a" }]}
+                    itemStyle={[styles.pickerItem, { color: isDark ? "#f8fbff" : "#0f172a" }]}
+                    dropdownIconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
+                  >
+                    <Picker.Item label="Selecciona una sede" value="" />
                     {sedes.map((item) => (
                       <Picker.Item key={item.id} label={item.name} value={item.code} />
                     ))}
@@ -310,8 +364,15 @@ export default function LoginScreen() {
 
               <View style={styles.dropdownCol}>
                 <Text style={styles.dropdownLabel}>Turno</Text>
-                <View style={styles.pickerContainer}>
-                  <Picker selectedValue={jornada} onValueChange={setJornada} style={styles.pickerNative} itemStyle={styles.pickerItem} dropdownIconColor="#1e3a8a">
+                <View style={[styles.pickerContainer, { backgroundColor: isDark ? "rgba(15,24,40,0.86)" : "#f8fbff", borderColor: palette.surfaceBorder }]}>
+                  <Picker
+                    selectedValue={jornada}
+                    onValueChange={(value) => setJornada(String(value) as Jornada)}
+                    style={[styles.pickerNative, { color: isDark ? "#f8fbff" : "#0f172a" }]}
+                    itemStyle={[styles.pickerItem, { color: isDark ? "#f8fbff" : "#0f172a" }]}
+                    dropdownIconColor={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"}
+                  >
+                    <Picker.Item label="Selecciona un turno" value="" />
                     <Picker.Item label="MAÑANA" value="MAÑANA" />
                     <Picker.Item label="TARDE" value="TARDE" />
                     <Picker.Item label="NOCHE" value="NOCHE" />
@@ -331,7 +392,7 @@ export default function LoginScreen() {
               icon="arrow-forward-outline"
               label={loading ? "Verificando..." : "Continuar"}
               tone="guard" // Force deep sapphire for all roles
-              disabled={loading || biometricLoading || bloqueado || (rol === "guarda" && (!sede || sedes.length === 0))}
+              disabled={loading || biometricLoading || bloqueado || (rol === "guarda" && ((sedes.length > 0 && !sede) || !jornada))}
               onPress={onSubmit}
             />
 
@@ -339,11 +400,11 @@ export default function LoginScreen() {
             {showBiometricButton && (
               <View style={styles.compactBioWrapper}>
                 <Pressable
-                  disabled={loading || biometricLoading || bloqueado || !biometricReady || (rol === "guarda" && (!sede || sedes.length === 0))}
+                  disabled={loading || biometricLoading || bloqueado || !biometricReady || (rol === "guarda" && ((sedes.length > 0 && !sede) || !jornada))}
                   onPress={onBiometricSubmit}
                   style={({ pressed }) => [
                     styles.compactBioBtn,
-                    { backgroundColor: rol === "aprendiz" ? "#e0f2fe" : "#bae6fd" }, // Extremely pale blue for Aprendiz
+                    { backgroundColor: palette.bioBg },
                     pressed && { opacity: 0.7 },
                     (!biometricReady) && { opacity: 0.4 }
                   ]}
@@ -351,22 +412,22 @@ export default function LoginScreen() {
                   <Ionicons name="finger-print" size={24} color={rol === "aprendiz" ? "#0ea5e9" : "#1e3a8a"} />
                   <Text style={[styles.compactBioText, { color: "#ffffff" }]}>Entrar con huella</Text>
                 </Pressable>
-                {biometricHint && <Text style={styles.compactBioHint}>{biometricHint}</Text>}
+                {biometricHint && <Text style={[styles.compactBioHint, { color: palette.hint }]}>{biometricHint}</Text>}
               </View>
             )}
           </View>
 
           {/* Feedback Area Moved Below Buttons */}
           <View style={[styles.feedbackArea, { marginTop: 16 }]}>
-            {bloqueado && <Text style={styles.errorText}>Bloqueado temporalmente. Intenta en {lockRemainingSec}s.</Text>}
-            {error && <Text style={styles.errorText}>{error}</Text>}
-            {rol === "guarda" && sedeLoadHint && <Text style={styles.errorText}>{sedeLoadHint}</Text>}
+            {bloqueado && <Text style={[styles.errorText, { color: palette.accent }]}>Bloqueado temporalmente. Intenta en {lockRemainingSec}s.</Text>}
+            {error && <Text style={[styles.errorText, { color: palette.accent }]}>{error}</Text>}
+            {rol === "guarda" && sedeLoadHint && <Text style={[styles.errorText, { color: palette.accent }]}>{sedeLoadHint}</Text>}
             {(loading || biometricLoading) && <ActivityIndicator color={rol === "guarda" ? "#1e3a8a" : "#0ea5e9"} />}
           </View>
 
           <View style={styles.footerRow}>
-            <Ionicons name="lock-closed" size={12} color="#64748b" />
-            <Text style={styles.footerText}>© 2026 Asegurado por S.A.D.I</Text>
+            <Ionicons name="lock-closed" size={12} color={palette.hint} />
+            <Text style={[styles.footerText, { color: palette.hint }]}>© 2026 Asegurado por S.A.D.I</Text>
           </View>
 
         </Animated.View>
@@ -412,6 +473,11 @@ const styles = StyleSheet.create({
   headerIconBtn: {
     padding: 8,
     borderRadius: 999,
+  },
+  headerRightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   brandSection: {
     gap: 6,
