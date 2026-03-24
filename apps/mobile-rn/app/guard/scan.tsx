@@ -1,336 +1,438 @@
-import React, { useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+/**
+ * Scanner de guarda para QR/codigo de barras.
+ *
+ * Responsabilidad:
+ * - Leer codigo de documento.
+ * - Bloquear lecturas concurrentes mientras se procesa una validacion.
+ * - Permitir reinicio manual seguro con "Leer otro QR".
+ */
+import React, { useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
-import { isSignedScanToken, sanitizeDigits, validateScanValue } from "../../src/lib/validators";
-import { EmptyState, FadeInCard, InputField, ModernButton, ModernScreen, NoticeBanner, Pill } from "../../src/ui/modern";
+import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
+import { InputField, ModernButton } from "../../src/ui/modern";
+import { useResolvedThemeMode } from "../../src/store/preferences";
+import GuardBottomDock from "../../src/components/guard/GuardBottomDock";
+import { guardHomeThemes, GuardThemeMode } from "../../src/components/guard/GuardHomeSections";
 
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
 
 export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
+  const insets = useSafeAreaInsets();
+  const mode = useResolvedThemeMode() as GuardThemeMode;
+  const theme = guardHomeThemes[mode];
+  const isDark = mode === "dark";
+
   const [documento, setDocumento] = useState("");
   const [scanned, setScanned] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [cameraKey, setCameraKey] = useState(0);
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const inFlightRef = useRef(false);
 
-  const canScan = useMemo(() => !scanned && !loading, [scanned, loading]);
-
-  function normalizeScanInput(value: string) {
-    const clean = String(value || "").trim();
-    return isSignedScanToken(clean) ? clean : sanitizeDigits(clean).slice(0, 10);
-  }
+  const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
 
   async function validar(doc: string) {
-    if (inFlightRef.current) {
+    const clean = doc.trim();
+    if (!clean) {
+      setMsg("Ingresa o escanea un documento.");
       return;
     }
-    const clean = String(doc || "").trim();
 
-    const documentError = validateScanValue(clean);
+    const documentError = validateDocument6to10(clean);
     if (documentError) {
       setMsg(documentError);
+      setIsProcessing(false);
       return;
     }
 
-    inFlightRef.current = true;
     setLoading(true);
-    setMsg("Validando identidad...");
+    setMsg(null);
 
     try {
       const data = await Accesos.validarDocumento(clean);
       Accesos.__cache.set(clean, data);
-
-      if (data.estado === "dentro") {
-        router.replace({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean, flow: "manual-salida" } } as any);
-        return;
-      }
-
-      setMsg("Identidad validada. Registrando ingreso...");
-      const idempotencyKey = Accesos.createRegistroIdempotencyKey(clean, "ingreso");
-      const registro = await Accesos.registrarPorDocumento(
-        { documento: clean, tipo: "ingreso" },
-        { idempotencyKey }
-      );
-      Accesos.__registroCache.set(`${clean}:ingreso`, registro);
-      router.replace({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean, flow: "auto-ingreso" } } as any);
+      router.push({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean } } as any);
     } catch (e: any) {
+      setIsProcessing(false);
       const status = e?.response?.status;
+
       if (status === 404) {
-        router.replace({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
+        router.push({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
       } else {
         const motivo = toUiErrorMessage(e, "Acceso denegado.");
-        router.replace({ pathname: "/guard/confirmacion", params: { status: "denied", documento: clean, motivo } } as any);
+        router.push({ pathname: "/guard/confirmacion", params: { status: "denied", documento: clean, motivo } } as any);
       }
     } finally {
-      inFlightRef.current = false;
       setLoading(false);
     }
   }
 
-  function onBarcodeValue(raw: string) {
-    if (!canScan) return;
-    const clean = normalizeScanInput(raw);
-    setDocumento(clean);
-    setScanned(true);
-    void validar(clean);
-  }
-
   function reiniciarLectura() {
     setScanned(false);
+    setIsProcessing(false);
     setLoading(false);
     setMsg(null);
     setDocumento("");
     setCameraKey((v) => v + 1);
   }
 
+  const onBarcodeDetected = async (raw: string) => {
+    if (!canScan) return;
+    const scannedValue = sanitizeDigits((raw || "").trim()).slice(0, 10);
+    setScanned(true);
+    setIsProcessing(true);
+    setDocumento(scannedValue);
+    setMsg("Codigo detectado. Validando acceso...");
+    await validar(scannedValue);
+  };
+
   if (!permission) {
     return (
-      <ModernScreen theme="guard" contentStyle={{ justifyContent: "center" }}>
-        <ActivityIndicator color="#6FD3FF" size="large" />
-      </ModernScreen>
+      <View style={[styles.centerState, { backgroundColor: theme.background[0] }]}>
+        <LinearGradient colors={theme.background} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <ActivityIndicator color={theme.accentStrong} size="large" />
+      </View>
     );
   }
 
   if (!permission.granted) {
     return (
-      <ModernScreen theme="guard" contentStyle={{ justifyContent: "center" }}>
-        <FadeInCard intensity={85} style={styles.permissionCard}>
-          <View style={styles.permissionIcon}>
-            <Ionicons name="camera-outline" size={28} color="#FFD6DC" />
+      <View style={[styles.root, { backgroundColor: theme.background[0] }]}>
+        <LinearGradient colors={theme.background} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        <View style={[styles.permissionWrap, { paddingTop: insets.top + 24, paddingBottom: 142 + Math.max(insets.bottom, 10) }]}>
+          <View
+            style={[
+              styles.permissionCard,
+              {
+                backgroundColor: theme.sectionBg,
+                borderColor: theme.cardBorder,
+                shadowColor: isDark ? theme.accentGlow : "rgba(120, 158, 224, 0.20)",
+              },
+            ]}
+          >
+            <View style={[styles.permissionIcon, { backgroundColor: isDark ? "rgba(89,185,255,0.12)" : "rgba(45,104,216,0.08)" }]}>
+              <Ionicons name="camera-outline" size={28} color={theme.accent} />
+            </View>
+            <Text style={[styles.permissionTitle, { color: theme.text }]}>Permite el acceso a la camara</Text>
+            <Text style={[styles.permissionText, { color: theme.textSoft }]}>
+              S.A.D.I necesita la camara para escanear codigos y validar accesos de forma inmediata.
+            </Text>
+            <ModernButton label="Otorgar permiso" tone="guard" icon="camera" onPress={requestPermission} />
           </View>
-          <Text style={styles.permissionTitle}>Permiso de camara requerido</Text>
-          <Text style={styles.permissionSubtitle}>
-            Activa la camara para abrir el visor operativo y validar accesos en tiempo real.
-          </Text>
-          <ModernButton label="Permitir camara" tone="guard" icon="camera-outline" onPress={() => void requestPermission()} />
-        </FadeInCard>
-      </ModernScreen>
+        </View>
+        <GuardBottomDock active="scan" mode={mode} />
+      </View>
     );
   }
 
+  const statusTone = msg?.toLowerCase().includes("validando") ? theme.accent : theme.warning;
+
   return (
-    <ModernScreen scroll theme="guard">
-      <FadeInCard delay={0} intensity={90} style={styles.heroCard}>
-        <View style={styles.heroHeader}>
-          <View style={{ flex: 1, gap: 10 }}>
-            <Pill text="Scanner operativo" icon="scan-outline" tone="guard" />
-            <View style={{ gap: 6 }}>
-              <Text style={styles.heroTitle}>Verificacion inmediata</Text>
-              <Text style={styles.heroSubtitle}>
-                Alinea el QR o ingresa el documento manualmente. Los ingresos validados se registran al instante.
-              </Text>
+    <View style={[styles.root, { backgroundColor: theme.background[0] }]}>
+      <LinearGradient colors={theme.background} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={isDark ? ["rgba(92,161,255,0.14)", "rgba(92,161,255,0.03)", "transparent"] : ["rgba(129,176,255,0.14)", "rgba(129,176,255,0.03)", "rgba(255,255,255,0.02)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.ambientTop}
+      />
+      <LinearGradient
+        colors={isDark ? ["transparent", "rgba(29,107,201,0.08)", "transparent"] : ["transparent", "rgba(191,220,255,0.14)", "rgba(255,255,255,0.04)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.ambientBeam}
+      />
+      <LinearGradient
+        colors={isDark ? ["transparent", "rgba(74,146,239,0.06)", "rgba(74,146,239,0.01)"] : ["rgba(255,255,255,0.02)", "rgba(207,230,255,0.16)", "rgba(239,246,255,0.20)"]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={styles.ambientBottom}
+      />
+      <View style={[styles.content, { paddingTop: insets.top + 14, paddingBottom: 130 + Math.max(insets.bottom, 10) }]}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: theme.text }]}>Escanear codigo</Text>
+          <Text style={[styles.subtitle, { color: theme.textSoft }]}>Escanea el QR o ingresa el documento</Text>
+        </View>
+
+        <View style={styles.scanSection}>
+          <View
+            style={[
+              styles.scannerShell,
+              {
+                backgroundColor: isDark ? "rgba(8,18,33,0.44)" : "rgba(255,255,255,0.44)",
+                borderColor: theme.cardBorder,
+                shadowColor: isDark ? theme.accentGlow : "rgba(99, 135, 215, 0.16)",
+              },
+            ]}
+          >
+            <View style={styles.scannerStage}>
+              <CameraView
+                key={cameraKey}
+                style={styles.camera}
+                barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
+                onBarcodeScanned={(res) => {
+                  void onBarcodeDetected(res.data || "");
+                }}
+              />
+              <View pointerEvents="none" style={styles.scannerOverlay}>
+                <View style={[styles.scanFrame, { borderColor: theme.accentGlow }]}>
+                  <View style={[styles.corner, styles.topLeft, { borderColor: theme.accent }]} />
+                  <View style={[styles.corner, styles.topRight, { borderColor: theme.accent }]} />
+                  <View style={[styles.corner, styles.bottomLeft, { borderColor: theme.accent }]} />
+                  <View style={[styles.corner, styles.bottomRight, { borderColor: theme.accent }]} />
+                  {isProcessing ? <ActivityIndicator size="large" color={theme.accent} /> : null}
+                </View>
+              </View>
             </View>
           </View>
-          <ModernButton label="" tone="light" icon="arrow-back" onPress={() => router.back()} />
-        </View>
-      </FadeInCard>
-
-      <FadeInCard delay={70} intensity={70} style={styles.viewfinderCard}>
-        <View style={styles.viewfinderHeader}>
-          <Text style={styles.sectionTitle}>Visor</Text>
-          <Text style={styles.sectionCaption}>{loading ? "Procesando" : scanned ? "Lectura pausada" : "Listo"}</Text>
         </View>
 
-        <View style={styles.cameraFrame}>
-          <CameraView
-            key={cameraKey}
-            style={StyleSheet.absoluteFill}
-            barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
-            onBarcodeScanned={(res) => onBarcodeValue(res.data || "")}
+        <View
+          style={[
+            styles.manualSection,
+            {
+              backgroundColor: theme.sectionBg,
+              borderColor: theme.summaryBorder,
+            },
+          ]}
+        >
+          <View style={styles.manualHeader}>
+            <Text style={[styles.manualTitle, { color: theme.text }]}>Validacion manual</Text>
+            {scanned ? (
+              <Pressable onPress={reiniciarLectura} style={({ pressed }) => [{ opacity: pressed ? 0.72 : 1 }]}>
+                <Text style={[styles.resetText, { color: theme.accentStrong }]}>Leer otro codigo</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <InputField
+            icon="id-card-outline"
+            label="Documento"
+            value={documento}
+            onChangeText={(v) => setDocumento(sanitizeDigits(v).slice(0, 10))}
+            placeholder="Ingresa el numero de documento"
+            keyboardType="numeric"
+            maxLength={10}
           />
-          <View pointerEvents="none" style={styles.targetReticle}>
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-            <View style={styles.reticleCore}>
-              {loading ? <ActivityIndicator color="#6FD3FF" /> : <Ionicons name="scan-outline" size={28} color="rgba(243,247,251,0.9)" />}
+
+          {msg ? (
+            <View style={[styles.feedbackRow, { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.56)", borderColor: theme.summaryBorder }]}>
+              <Ionicons name={statusTone === theme.warning ? "alert-circle-outline" : "checkmark-circle-outline"} size={18} color={statusTone} />
+              <Text style={[styles.feedbackText, { color: statusTone }]}>{msg}</Text>
             </View>
-          </View>
-        </View>
+          ) : null}
 
-        <View style={styles.viewfinderFooter}>
-          <View style={styles.footerMeta}>
-            <Ionicons name="shield-checkmark-outline" size={14} color="#B8C3D1" />
-            <Text style={styles.footerMetaText}>Sin dobles registros por lectura</Text>
-          </View>
-          {scanned ? <ModernButton icon="refresh-outline" label="Leer otro" tone="light" onPress={reiniciarLectura} /> : null}
-        </View>
-      </FadeInCard>
-
-      <FadeInCard delay={140} intensity={72} style={styles.manualCard}>
-        <View style={styles.manualHeader}>
-          <Text style={styles.sectionTitle}>Fallback manual</Text>
-          <Pill text="Documento" icon="card-outline" tone="primary" />
-        </View>
-
-        <InputField
-          icon="id-card-outline"
-          label="Numero de documento"
-          value={documento}
-          onChangeText={(value) => setDocumento(sanitizeDigits(value).slice(0, 10))}
-          placeholder="Ej. 1053444048"
-          keyboardType="numeric"
-          maxLength={10}
-        />
-
-        {msg ? <NoticeBanner tone={msg.toLowerCase().includes("deneg") ? "danger" : "info"} text={msg} /> : null}
-
-        <View style={styles.actionColumn}>
           <ModernButton
-            icon="shield-checkmark-outline"
-            label={loading ? "Validando..." : "Validar acceso"}
+            icon="shield-checkmark"
+            label={loading ? "Validando acceso..." : "Validar acceso"}
             tone="guard"
             disabled={loading || !documento.trim()}
-            onPress={() => void validar(documento)}
+            onPress={() => validar(documento)}
           />
         </View>
-      </FadeInCard>
+      </View>
 
-      <FadeInCard delay={210} intensity={60} style={{ marginBottom: 40 }}>
-        <EmptyState
-          icon="information-circle-outline"
-          title="Lectura controlada"
-          subtitle="Si el QR falla, puedes usar el documento manual para mantener el flujo operativo sin perder claridad."
-        />
-      </FadeInCard>
-    </ModernScreen>
+      <GuardBottomDock active="scan" mode={mode} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  permissionCard: {
+  root: {
+    flex: 1,
+  },
+  centerState: {
+    flex: 1,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  permissionWrap: {
+    flex: 1,
+    paddingHorizontal: 22,
+    justifyContent: "center",
+  },
+  permissionCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 24,
     gap: 14,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
   },
   permissionIcon: {
-    width: 58,
-    height: 58,
+    width: 56,
+    height: 56,
     borderRadius: 18,
-    backgroundColor: "rgba(255,107,122,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,107,122,0.24)",
     alignItems: "center",
     justifyContent: "center",
   },
   permissionTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: "#F3F7FB",
-    textAlign: "center",
-  },
-  permissionSubtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#B8C3D1",
-    textAlign: "center",
-  },
-  heroCard: {
-    gap: 14,
-  },
-  heroHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  heroTitle: {
-    fontSize: 28,
-    lineHeight: 32,
     fontWeight: "900",
-    color: "#F3F7FB",
-    letterSpacing: -0.8,
+    letterSpacing: -0.5,
   },
-  heroSubtitle: {
+  permissionText: {
     fontSize: 14,
-    lineHeight: 21,
-    color: "#B8C3D1",
+    lineHeight: 22,
+    fontWeight: "500",
+    marginBottom: 6,
   },
-  viewfinderCard: {
-    gap: 14,
+  ambientTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
   },
-  viewfinderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 10,
+  ambientBeam: {
+    position: "absolute",
+    top: 116,
+    left: -32,
+    right: -32,
+    height: 280,
+    transform: [{ rotate: "-8deg" }],
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#F3F7FB",
-    letterSpacing: -0.4,
+  ambientBottom: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 108,
+    height: 250,
   },
-  sectionCaption: {
-    fontSize: 12,
-    color: "#7F90A3",
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  header: {
+    gap: 4,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+  },
+  subtitle: {
+    fontSize: 14,
     fontWeight: "600",
   },
-  cameraFrame: {
-    height: 410,
-    borderRadius: 24,
-    overflow: "hidden",
-    backgroundColor: "#000000",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+  scanSection: {
+    flex: 1,
+    minHeight: 0,
   },
-  targetReticle: {
+  scannerShell: {
+    flex: 1,
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 10,
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  scannerStage: {
+    flex: 1,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#020617",
+  },
+  camera: {
+    flex: 1,
+  },
+  scannerOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(3, 7, 18, 0.14)",
   },
-  reticleCore: {
-    width: 74,
-    height: 74,
-    borderRadius: 22,
-    backgroundColor: "rgba(7,11,17,0.42)",
-    borderWidth: 1,
-    borderColor: "rgba(111,211,255,0.24)",
+  scanFrame: {
+    width: "68%",
+    aspectRatio: 1,
+    maxWidth: 250,
+    maxHeight: 250,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 28,
+    backgroundColor: "rgba(7, 16, 30, 0.10)",
   },
   corner: {
     position: "absolute",
-    width: 38,
-    height: 38,
-    borderColor: "#6FD3FF",
+    width: 26,
+    height: 26,
+    borderWidth: 0,
   },
-  topLeft: { top: "24%", left: "18%", borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 18 },
-  topRight: { top: "24%", right: "18%", borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 18 },
-  bottomLeft: { bottom: "24%", left: "18%", borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 18 },
-  bottomRight: { bottom: "24%", right: "18%", borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 18 },
-  viewfinderFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 16,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 16,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 16,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 16,
+  },
+  manualSection: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 16,
     gap: 12,
-  },
-  footerMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  footerMetaText: {
-    fontSize: 12,
-    color: "#B8C3D1",
-    fontWeight: "600",
-  },
-  manualCard: {
-    gap: 14,
   },
   manualHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "space-between",
+    gap: 12,
   },
-  actionColumn: {
-    gap: 10,
+  manualTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  resetText: {
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  feedbackRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  feedbackText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
   },
 });

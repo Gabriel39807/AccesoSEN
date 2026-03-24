@@ -1,7 +1,7 @@
 import { api } from "./client";
 
 export type Sede = string;
-export type Jornada = "MANANA" | "TARDE" | "NOCHE";
+export type Jornada = "MAÑANA" | "TARDE" | "NOCHE";
 
 export type Turno = {
   id: number;

@@ -1,21 +1,27 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View, StyleSheet } from "react-native";
-import { router } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 
 import * as Notifs from "../../src/api/notificaciones";
-import { FadeInCard, ModernButton, ModernScreen } from "../../src/ui/modern";
+import GuardBottomDock from "../../src/components/guard/GuardBottomDock";
+import { guardHomeThemes, GuardThemeMode } from "../../src/components/guard/GuardHomeSections";
+import { useResolvedThemeMode } from "../../src/store/preferences";
+import { ModernButton, ModernScreen } from "../../src/ui/modern";
+
+type EstadoAlerta = "nueva" | "pendiente" | "leida";
 
 export default function GuardAlertas() {
+  const mode = useResolvedThemeMode() as GuardThemeMode;
+  const theme = guardHomeThemes[mode];
+
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Notifs.Notificacion[]>([]);
 
   async function load() {
     setLoading(true);
     try {
-      const r = await Notifs.listar();
-      setItems(r);
+      const data = await Notifs.listar();
+      setItems(Array.isArray(data) ? data : []);
     } catch {
       setItems([]);
     } finally {
@@ -27,199 +33,308 @@ export default function GuardAlertas() {
     load();
   }, []);
 
+  const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
+
+  const metrics = useMemo(() => {
+    const nuevas = safeItems.filter((item) => !item.read_at).length;
+    const pendientes = safeItems.filter((item) => item.tipo === "URGENT" || item.tipo === "WARNING").length;
+    const leidas = safeItems.filter((item) => Boolean(item.read_at)).length;
+    return { nuevas, pendientes, leidas };
+  }, [safeItems]);
+
   return (
-    <ModernScreen scroll theme="guard">
-      
-      {/* Floating Sapphire Header Card */}
-      <FadeInCard delay={0} intensity={100} style={styles.headerCard}>
-        <LinearGradient
-          colors={["rgba(30, 58, 138, 0.95)", "rgba(23, 37, 84, 0.95)"]} // Deep Navy/Cobalt
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.headerContent}>
-          <View>
-            <View style={styles.badgeRow}>
-              <Ionicons name="warning-outline" size={16} color="#38bdf8" />
-              <Text style={styles.badgeText}>CENTRO DE ALERTAS</Text>
-            </View>
-            <Text style={styles.headerTitle}>Novedades</Text>
-            <Text style={styles.headerSubtitle}>Revisa y marca como leídas las alertas operativas.</Text>
-          </View>
-          <ModernButton 
-            icon="arrow-back" 
-            label="" 
-            tone="light" 
-            onPress={() => router.back()} 
-          />
+    <View style={styles.root}>
+      <ModernScreen scroll theme="guard" contentStyle={{ paddingBottom: 154 }}>
+        <View style={styles.headerBlock}>
+          <Text style={[styles.screenTitle, { color: theme.text }]}>Alertas</Text>
+          <Text style={[styles.screenSubtitle, { color: theme.textSoft }]}>
+            Revisa novedades operativas, sincroniza avisos y marca eventos atendidos desde un mismo panel.
+          </Text>
         </View>
-      </FadeInCard>
 
-      <FadeInCard delay={70} intensity={80} style={{ padding: 20, marginTop: 12 }}>
-        <ModernButton 
-          icon="refresh" 
-          label={loading ? "Sincronizando..." : "Sincronizar Alertas"} 
-          tone="light" 
-          onPress={load} 
-          disabled={loading} 
-        />
-      </FadeInCard>
+        <View style={[styles.summaryCard, { backgroundColor: theme.sectionBg, borderColor: theme.summaryBorder }]}>
+          <MetricCard label="Nuevas" value={metrics.nuevas} icon="sparkles-outline" theme={theme} />
+          <MetricCard label="Pendientes" value={metrics.pendientes} icon="alert-circle-outline" theme={theme} />
+          <MetricCard label="Leídas" value={metrics.leidas} icon="checkmark-done-outline" theme={theme} highlight />
+        </View>
 
-      <FadeInCard delay={120} intensity={60} style={{ padding: 20, marginTop: 12, marginBottom: 40, minHeight: 300 }}>
-        {loading ? (
-          <ActivityIndicator color="#1e3a8a" size="large" style={{ marginTop: 40 }} />
-        ) : (
-          <FlatList
-            data={items}
-            scrollEnabled={false}
-            keyExtractor={(i) => String(i.id)}
-            renderItem={({ item }) => {
-              const color = item.tipo === "URGENT" ? "#b91c1c" : item.tipo === "WARNING" ? "#b45309" : "#0f766e";
-              const bgColor = item.tipo === "URGENT" ? "rgba(239, 68, 68, 0.1)" : item.tipo === "WARNING" ? "rgba(245, 158, 11, 0.1)" : "rgba(16, 185, 129, 0.1)";
-              
-              return (
-                <View
-                  style={[
-                    styles.alertCard,
-                    { borderLeftColor: color }
-                  ]}
-                >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <Text style={styles.alertTitle}>{item.titulo}</Text>
-                      <Text style={styles.alertDate}>{new Date(item.created_at).toLocaleString()}</Text>
-                    </View>
-                    <View style={[styles.typeBadge, { backgroundColor: bgColor }]}>
-                      <Text style={[styles.typeBadgeText, { color }]}>{item.tipo}</Text>
-                    </View>
-                  </View>
-                  
-                  <Text style={styles.alertMessage}>{item.mensaje}</Text>
-                  
-                  <View style={{ marginTop: 16 }}>
-                    <ModernButton
-                      icon={item.read_at ? "checkmark-done" : "checkmark-circle-outline"}
-                      label={item.read_at ? "Leida" : "Marcar como leída"}
-                      tone={item.read_at ? "light" : "dark"}
-                      onPress={async () => {
-                        if (!item.read_at) await Notifs.marcarLeida(item.id);
-                        load();
-                      }}
-                    />
-                  </View>
+        <View style={[styles.actionCard, { backgroundColor: theme.sectionBg, borderColor: theme.summaryBorder }]}>
+          <Text style={[styles.actionTitle, { color: theme.text }]}>Sincronización</Text>
+          <Text style={[styles.actionBody, { color: theme.textSoft }]}>
+            Actualiza el tablero para consultar el estado más reciente de las alertas operativas.
+          </Text>
+          <View style={{ marginTop: 16 }}>
+            <ModernButton icon="refresh-outline" label={loading ? "Sincronizando alertas..." : "Sincronizar alertas"} tone="guard" onPress={load} disabled={loading} />
+          </View>
+        </View>
+
+        <View style={[styles.listCard, { backgroundColor: theme.sectionBg, borderColor: theme.summaryBorder }]}>
+          <View style={styles.listHeader}>
+            <Text style={[styles.listTitle, { color: theme.text }]}>Listado de alertas</Text>
+            <Text style={[styles.listCount, { color: theme.textSoft }]}>{safeItems.length} elementos</Text>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator color={theme.accentStrong} size="large" style={{ marginVertical: 48 }} />
+          ) : (
+            <FlatList
+              data={safeItems}
+              scrollEnabled={false}
+              keyExtractor={(item) => String(item.id)}
+              contentContainerStyle={safeItems.length === 0 ? { paddingVertical: 24 } : { gap: 10 }}
+              renderItem={({ item }) => <AlertRow item={item} theme={theme} onRefresh={load} />}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Ionicons name="notifications-off-outline" size={44} color={theme.textSoft} />
+                  <Text style={[styles.emptyTitle, { color: theme.text }]}>No hay alertas pendientes</Text>
+                  <Text style={[styles.emptyBody, { color: theme.textSoft }]}>Todo está al día por ahora. Sincroniza más tarde para revisar nuevas novedades.</Text>
                 </View>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="checkmark-done-circle-outline" size={48} color="#10b981" />
-                <Text style={styles.emptyStateText}>Todo en orden</Text>
-                <Text style={styles.emptyStateSubtext}>No hay alertas operativas pendientes en este momento.</Text>
-              </View>
-            }
-          />
-        )}
-      </FadeInCard>
-    </ModernScreen>
+              }
+            />
+          )}
+        </View>
+      </ModernScreen>
+
+      <GuardBottomDock active="alertas" mode={mode} />
+    </View>
   );
 }
 
+function MetricCard({
+  label,
+  value,
+  icon,
+  theme,
+  highlight = false,
+}: {
+  label: string;
+  value: number;
+  icon: keyof typeof Ionicons.glyphMap;
+  theme: typeof guardHomeThemes.light;
+  highlight?: boolean;
+}) {
+  return (
+    <View style={[styles.metricBox, { backgroundColor: theme.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.46)", borderColor: theme.divider }]}>
+      <Ionicons name={icon} size={18} color={highlight ? theme.accentStrong : theme.accent} />
+      <Text style={[styles.metricValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.metricLabel, { color: theme.textSoft }]}>{label}</Text>
+    </View>
+  );
+}
+
+function AlertRow({
+  item,
+  theme,
+  onRefresh,
+}: {
+  item: Notifs.Notificacion;
+  theme: typeof guardHomeThemes.light;
+  onRefresh: () => Promise<void>;
+}) {
+  const read = Boolean(item.read_at);
+  const state: EstadoAlerta = read ? "leida" : item.tipo === "URGENT" ? "pendiente" : "nueva";
+  const tone = item.tipo === "URGENT" ? "#ef4444" : item.tipo === "WARNING" ? "#f59e0b" : "#0ea5e9";
+  const toneBg = item.tipo === "URGENT" ? "rgba(239,68,68,0.12)" : item.tipo === "WARNING" ? "rgba(245,158,11,0.12)" : "rgba(14,165,233,0.12)";
+
+  return (
+    <View style={[styles.rowCard, { backgroundColor: theme.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.58)", borderColor: theme.divider }]}>
+      <View style={styles.rowTop}>
+        <View style={[styles.rowTypeBadge, { backgroundColor: toneBg }]}>
+          <Text style={[styles.rowTypeText, { color: tone }]}>{item.tipo}</Text>
+        </View>
+        <Text style={[styles.rowDate, { color: theme.textSoft }]}>{new Date(item.created_at).toLocaleString()}</Text>
+      </View>
+
+      <Text style={[styles.rowTitle, { color: theme.text }]}>{item.titulo}</Text>
+      <Text style={[styles.rowBody, { color: theme.textMuted }]}>{item.mensaje}</Text>
+
+      <View style={styles.rowFooter}>
+        <View style={[styles.statusPill, { backgroundColor: read ? "rgba(16,185,129,0.12)" : toneBg }]}>
+          <Ionicons name={read ? "checkmark-done-outline" : "alert-circle-outline"} size={14} color={read ? "#10b981" : tone} />
+          <Text style={[styles.statusText, { color: read ? "#10b981" : tone }]}>{labelForState(state)}</Text>
+        </View>
+
+        {!read ? (
+          <View style={styles.rowAction}>
+            <ModernButton
+              icon="checkmark-circle-outline"
+              label="Marcar leída"
+              tone="light"
+              onPress={async () => {
+                await Notifs.marcarLeida(item.id);
+                await onRefresh();
+              }}
+            />
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function labelForState(state: EstadoAlerta) {
+  switch (state) {
+    case "nueva":
+      return "Nueva";
+    case "pendiente":
+      return "Pendiente";
+    case "leida":
+      return "Leída";
+    default:
+      return "Nueva";
+  }
+}
+
 const styles = StyleSheet.create({
-  headerCard: {
-    padding: 24,
-    overflow: "hidden",
-    borderWidth: 0,
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+  root: {
+    flex: 1,
   },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  headerBlock: {
+    gap: 6,
   },
-  badgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(56, 189, 248, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-  },
-  badgeText: {
-    color: "#38bdf8",
-    fontSize: 11,
-    fontWeight: "800",
-    marginLeft: 4,
-    letterSpacing: 0.5,
-  },
-  headerTitle: {
-    fontSize: 24,
+  screenTitle: {
+    fontSize: 30,
     fontWeight: "900",
-    color: "#ffffff",
-    letterSpacing: -0.5,
+    letterSpacing: -0.6,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#bae6fd",
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  alertCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
-  alertTitle: {
-    fontWeight: "900",
-    color: "#0f172a",
-    fontSize: 16,
-    letterSpacing: 0.2,
-  },
-  alertDate: {
-    color: "#64748b",
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  typeBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  typeBadgeText: {
-    fontWeight: "900",
-    fontSize: 10,
-    letterSpacing: 0.5,
-  },
-  alertMessage: {
-    color: "#334155",
+  screenSubtitle: {
     fontSize: 14,
     lineHeight: 20,
+    fontWeight: "600",
+  },
+  summaryCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: "row",
+    gap: 10,
+  },
+  metricBox: {
+    flex: 1,
+    minHeight: 96,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  metricValue: {
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  actionCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 20,
+  },
+  actionTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  actionBody: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600",
+  },
+  listCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 20,
+    gap: 16,
+    marginBottom: 24,
+  },
+  listHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  listTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  listCount: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  rowCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  rowTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  rowTypeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  rowTypeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  rowDate: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  rowTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  rowBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+  rowFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  rowAction: {
+    minWidth: 150,
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: 60,
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 36,
+    paddingHorizontal: 16,
   },
-  emptyStateText: {
-    color: "#0f172a",
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: "800",
-    marginTop: 16,
-    fontSize: 16,
+    textAlign: "center",
   },
-  emptyStateSubtext: {
-    color: "#64748b",
-    fontWeight: "500",
-    marginTop: 4,
+  emptyBody: {
     fontSize: 14,
-    textAlign: "center"
-  }
+    lineHeight: 20,
+    fontWeight: "600",
+    textAlign: "center",
+  },
 });

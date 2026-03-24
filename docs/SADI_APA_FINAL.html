@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>S.A.D.I - Documento Final APA 7</title>
+  <style>
+    @page { size: letter; margin: 2.54cm; }
+    body {
+      margin: 2.54cm;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      line-height: 2;
+      color: #111;
+    }
+    h1, h2, h3, h4 { font-weight: 700; margin: 0.9rem 0 0.4rem; }
+    h1 { font-size: 16pt; text-align: center; }
+    h2 { font-size: 14pt; }
+    h3 { font-size: 12pt; }
+    p { margin: 0.4rem 0; text-align: justify; text-indent: 1.27cm; }
+    .no-indent { text-indent: 0; }
+    .center { text-align: center; text-indent: 0; }
+    .page-break { page-break-before: always; break-before: page; }
+    ul, ol { margin: 0.4rem 0 0.6rem 2rem; }
+    li { margin: 0.15rem 0; }
+    table { border-collapse: collapse; width: 100%; margin: 0.6rem 0 1rem; }
+    th, td { border: 1px solid #333; padding: 6px; vertical-align: top; }
+    th { text-align: center; }
+    .small { font-size: 11pt; }
+    .toc li { margin: 0.05rem 0; }
+  </style>
+</head>
+<body>
+  <h1>SISTEMA DE ACCESO DIGITAL INSTITUCIONAL (S.A.D.I)</h1>
+  <p class="center no-indent"><b>Documento Final De Sustentacion En Formato APA 7</b></p>
+  <p class="center no-indent">Diseno, desarrollo e implementacion de una plataforma multi-sede para el control de accesos y gestion de equipos</p>
+  <p class="center no-indent">Autores: Juan - Gabriel</p>
+  <p class="center no-indent">Instructor: Juan Fernando</p>
+  <p class="center no-indent">Ano: 2026</p>
+
+  <div class="page-break"></div>
+  <h2 class="center">Resumen</h2>
+  <p>
+    El presente documento consolida la formulacion, desarrollo, implementacion y validacion de S.A.D.I (Sistema de Acceso Digital
+    Institucional), una solucion tecnologica orientada al control de accesos de personas y activos en entornos educativos con multiples
+    sedes. La propuesta surge como respuesta a problemas operativos y de seguridad frecuentes en procesos manuales o sistemas
+    fragmentados, como la baja trazabilidad, la duplicidad de registros, la lentitud de validacion y el riesgo de accesos no autorizados.
+  </p>
+  <p>
+    El proyecto se implemento en arquitectura cliente-servidor, organizada en monorepo, con backend en Django + Django REST Framework,
+    frontend web en Next.js y cliente movil en Expo React Native. El diseno se alineo con principios de seguridad por defecto y control
+    de permisos explicito, utilizando RBAC como modelo de autorizacion, aislamiento por sede, sesiones JWT por dispositivo y flujos OTP
+    para operaciones sensibles. Adicionalmente, se establecieron lineamientos de QR dinamico firmado y con expiracion para fortalecer la
+    validacion de identidad en los puntos de acceso.
+  </p>
+  <p>
+    La validacion funcional se realizo con enfoque en rutas criticas de negocio. Se implementaron pruebas E2E de alta prioridad para
+    demostracion: login principal, validacion de formulario, navegacion hacia vista critica y accion principal del usuario. Los resultados
+    de ejecucion evidenciaron estabilidad y cumplimiento de objetivo en el escenario de presentacion, con 4 de 4 pruebas aprobadas.
+  </p>
+  <p class="no-indent"><b>Palabras clave:</b> control de accesos, RBAC, JWT, OTP, QR dinamico, multi-sede, pruebas E2E, seguridad.</p>
+
+  <div class="page-break"></div>
+  <h2 class="center">Tabla De Contenido</h2>
+  <ol class="toc">
+    <li>Revision del juicio de evaluacion</li>
+    <li>Titulo y planteamiento del problema</li>
+    <li>Objetivos</li>
+    <li>Justificacion</li>
+    <li>Metodologia de desarrollo</li>
+    <li>Fase de analisis</li>
+    <li>Fase de diseno</li>
+    <li>Fase de construccion</li>
+    <li>Fase de pruebas</li>
+    <li>Despliegue e implementacion</li>
+    <li>Resultados</li>
+    <li>Conclusiones</li>
+    <li>Recomendaciones</li>
+    <li>Referencias APA 7</li>
+    <li>Anexos tecnicos y de sustentacion</li>
+  </ol>
+
+  <div class="page-break"></div>
+  <h2>1. Revision Del Juicio De Evaluacion</h2>
+  <p>
+    Este documento se estructura como evidencia integral para sustentacion academica y tecnica del proyecto S.A.D.I. La revision del
+    juicio de evaluacion se orienta a demostrar coherencia entre problema, objetivos, arquitectura, implementacion, pruebas y resultados.
+    Se busca evidenciar que la solucion construida no es solo funcional, sino tambien pertinente frente al contexto institucional y
+    consistente con principios de seguridad, calidad y escalabilidad.
+  </p>
+  <p>
+    El enfoque evaluativo adoptado contempla cinco dimensiones: pertinencia del problema, solidez metodologica, calidad tecnica de la
+    solucion, validacion por evidencia y viabilidad de continuidad. En cada dimension se presentan hallazgos verificables, decisiones de
+    diseno y resultados observables. Esto permite que la sustentacion no se limite a una descripcion de funcionalidades, sino que muestre
+    criterio de ingenieria de software aplicado a un problema real.
+  </p>
+
+  <h2>2. Titulo Y Planteamiento Del Problema</h2>
+  <h3>2.1 Titulo</h3>
+  <p class="no-indent"><b>S.A.D.I: Sistema Multi-Sede De Control De Acceso Institucional Con Seguridad Basada En Roles Y Trazabilidad Operativa.</b></p>
+  <h3>2.2 Descripcion del problema</h3>
+  <p>
+    En instituciones con varias sedes, la gestion de ingresos y salidas suele combinar procesos manuales, hojas de calculo y sistemas
+    parciales. Esta fragmentacion genera falta de trazabilidad, perdida de contexto entre sedes y dificultades para aplicar politicas de
+    seguridad de manera uniforme. Como resultado, se incrementa el tiempo de validacion en porteria, aparecen inconsistencias en registros
+    historicos y se reduce la capacidad de auditoria sobre eventos criticos.
+  </p>
+  <p>
+    La problematica se hace mas visible cuando intervienen actores con responsabilidades diferentes: administradores globales, administradores
+    locales, guardas y aprendices. Sin un modelo de autorizacion formal y centralizado, los permisos pueden volverse ambiguos, abriendo puertas
+    a acceso no autorizado o a operaciones fuera del alcance del rol.
+  </p>
+  <h3>2.3 Formulacion del problema</h3>
+  <p class="no-indent">
+    Como disenar e implementar una plataforma digital multi-sede que permita controlar accesos de personas y equipos con seguridad,
+    trazabilidad y aislamiento por sede, minimizando riesgos de privilegios indebidos y mejorando la eficiencia operativa?
+  </p>
+  <h3>2.4 Delimitacion</h3>
+  <ol>
+    <li>Incluye procesos de autenticacion, autorizacion, accesos y equipos.</li>
+    <li>Incluye cliente web y cliente movil conectados a API central.</li>
+    <li>No incluye integracion directa con hardware fisico de torniquetes en esta fase.</li>
+    <li>No incluye analitica predictiva avanzada ni BI institucional.</li>
+  </ol>
+
+  <h2>3. Objetivos</h2>
+  <h3>3.1 Objetivo general</h3>
+  <p class="no-indent">
+    Desarrollar e implementar S.A.D.I como plataforma de control de acceso institucional multi-sede, con seguridad por roles, trazabilidad
+    de operaciones y soporte web/movil para usuarios administrativos y operativos.
+  </p>
+  <h3>3.2 Objetivos especificos</h3>
+  <ol>
+    <li>Disenar una arquitectura cliente-servidor con API central y clientes web/movil.</li>
+    <li>Implementar autenticacion con JWT y gestion de sesion por dispositivo.</li>
+    <li>Aplicar RBAC con evaluacion de permisos explicita y aislamiento por sede.</li>
+    <li>Desarrollar gestion de equipos de aprendiz con restricciones de dominio.</li>
+    <li>Implementar historial y estado de accesos para trazabilidad operativa.</li>
+    <li>Incorporar OTP para procesos sensibles y lineamientos de QR seguro.</li>
+    <li>Validar flujos criticos mediante pruebas E2E estables para sustentacion.</li>
+  </ol>
+
+  <h2>4. Justificacion</h2>
+  <h3>4.1 Justificacion tecnica</h3>
+  <p>
+    S.A.D.I centraliza reglas de negocio y seguridad en backend para evitar dependencia de validaciones exclusivamente de interfaz. Esta
+    decision reduce fallos de consistencia y mejora la gobernanza de permisos. El diseno modular del monorepo facilita mantenimiento,
+    escalabilidad y evolucion por iteraciones sin romper contratos funcionales entre capas.
+  </p>
+  <h3>4.2 Justificacion economica</h3>
+  <p>
+    La digitalizacion del proceso de control de acceso disminuye tiempos de atencion, reprocesos manuales y errores administrativos. El
+    impacto economico se refleja en eficiencia operativa, mejor aprovechamiento del recurso humano y menor costo por incidentes derivados
+    de trazabilidad insuficiente.
+  </p>
+  <h3>4.3 Justificacion social</h3>
+  <p>
+    Un proceso de ingreso claro, rapido y confiable mejora la experiencia de aprendices y personal de control, fortaleciendo la confianza
+    institucional. La trazabilidad contribuye a transparencia, cumplimiento y cultura de responsabilidad.
+  </p>
+
+  <div class="page-break"></div>
+  <h2>5. Metodologia De Desarrollo</h2>
+  <p>
+    El proyecto se ejecuto bajo enfoque iterativo incremental. Cada iteracion cubrio analisis, diseno, construccion, pruebas y ajuste.
+    Esta metodologia permitio liberar valor progresivo, validar decisiones con evidencia y adaptar prioridades segun los hallazgos
+    tecnicos y funcionales del proceso de desarrollo.
+  </p>
+  <h3>5.1 Fases metodologicas</h3>
+  <ol>
+    <li>Analisis del problema y levantamiento de requerimientos.</li>
+    <li>Diseno de arquitectura, seguridad y modelo de datos.</li>
+    <li>Construccion de API, vistas web y pantallas moviles.</li>
+    <li>Integracion de componentes y validacion funcional.</li>
+    <li>Pruebas E2E de alto valor para exposicion.</li>
+    <li>Ajustes de estabilidad y documentacion final.</li>
+  </ol>
+
+  <h2>6. Fase De Analisis</h2>
+  <h3>6.1 Actores del sistema</h3>
+  <ul>
+    <li><b>Superadmin:</b> alcance global, gestion integral de recursos y politicas.</li>
+    <li><b>Admin_Sede:</b> administracion local en sede asignada.</li>
+    <li><b>Guarda:</b> operacion en punto de acceso con turno activo.</li>
+    <li><b>Aprendiz:</b> gestion de equipos propios, historial y QR personal.</li>
+  </ul>
+  <h3>6.2 Requerimientos funcionales prioritarios</h3>
+  <table class="small">
+    <tr><th>ID</th><th>Requerimiento</th><th>Criterio de aceptacion resumido</th></tr>
+    <tr><td>RF-01</td><td>Login por rol</td><td>Credenciales validas redirigen al modulo correcto segun rol.</td></tr>
+    <tr><td>RF-02</td><td>Gestion de equipos</td><td>Aprendiz registra y consulta equipos propios segun reglas.</td></tr>
+    <tr><td>RF-03</td><td>Control de accesos</td><td>No se registra acceso sin turno activo del guarda.</td></tr>
+    <tr><td>RF-04</td><td>Vista QR</td><td>Aprendiz visualiza QR dinamico para validacion de ingreso.</td></tr>
+    <tr><td>RF-05</td><td>Historial</td><td>Usuario consulta trazabilidad de movimientos registrados.</td></tr>
+  </table>
+  <h3>6.3 Requerimientos no funcionales</h3>
+  <ul>
+    <li>Seguridad por defecto y denegacion implicita.</li>
+    <li>Escalabilidad por sedes y actores.</li>
+    <li>Trazabilidad de operaciones criticas.</li>
+    <li>Disponibilidad operativa en contexto institucional.</li>
+    <li>Mantenibilidad por arquitectura modular.</li>
+  </ul>
+  <h3>6.4 Invariantes del dominio</h3>
+  <ol>
+    <li>Maximo 4 equipos por aprendiz (politica de negocio).</li>
+    <li>Solo un turno activo por guarda.</li>
+    <li>No acceso sin turno activo.</li>
+    <li>Acceso.sede debe corresponder a turno.sede.</li>
+    <li>Aislamiento estricto de datos por sede.</li>
+  </ol>
+
+  <div class="page-break"></div>
+  <h2>7. Fase De Diseno</h2>
+  <h3>7.1 Arquitectura de solucion</h3>
+  <p>
+    S.A.D.I adopta arquitectura cliente-servidor con tres aplicaciones coordinadas: backend API (Django + DRF), frontend web (Next.js)
+    y app movil (Expo React Native). El backend concentra autenticacion, autorizacion y logica de dominio, mientras los clientes consumen
+    endpoints normalizados para presentar y operar informacion segun perfil.
+  </p>
+  <h3>7.2 Modelo de seguridad</h3>
+  <ul>
+    <li>RBAC con fuente de verdad en membresia de usuario.</li>
+    <li>Permisos explicitos por rol y alcance.</li>
+    <li>Aislamiento de consultas por sede.</li>
+    <li>Manejo de sesion con access y refresh token.</li>
+    <li>Control OTP y lineamientos anti abuso.</li>
+  </ul>
+  <h3>7.3 Diseno de experiencia de usuario</h3>
+  <p>
+    En web se priorizo claridad operativa: panel de inicio, accesos rapidos, formularios simples y vistas de alta utilidad como equipos,
+    historial y QR. En movil se priorizo velocidad de operacion para escenarios de campo y tareas repetitivas del control de acceso.
+  </p>
+
+  <h2>8. Fase De Construccion</h2>
+  <h3>8.1 Construccion de backend</h3>
+  <p>
+    Se desarrollaron endpoints para autenticacion, perfil, accesos, equipos y funciones administrativas, con validaciones de negocio en
+    servidor y respuestas consistentes para clientes web/movil. Se incorporaron controles de session management y renovacion de tokens.
+  </p>
+  <h3>8.2 Construccion de frontend web</h3>
+  <p>
+    Se implementaron vistas de login, dashboard de aprendiz, registro de equipos, historial de accesos y visualizacion de QR. Las rutas
+    protegidas se apoyan en verificacion de sesion y redireccion segun rol.
+  </p>
+  <h3>8.3 Construccion de cliente movil</h3>
+  <p>
+    Se construyeron pantallas orientadas a tareas operativas, considerando flujo de aprendizaje y flujo de guarda. Se priorizo continuidad
+    de sesion, navegacion simple y consumo de endpoints protegidos.
+  </p>
+  <h3>8.4 Integracion</h3>
+  <p>
+    Los tres componentes se integran sobre contratos API definidos, con gestion de errores controlada y estandarizacion de comportamiento
+    para reducir inconsistencias entre plataformas.
+  </p>
+
+  <div class="page-break"></div>
+  <h2>9. Fase De Pruebas</h2>
+  <h3>9.1 Estrategia</h3>
+  <p>
+    Para sustentacion se priorizo una suite E2E breve, clara y de alto valor. El objetivo fue demostrar fiabilidad en rutas criticas sin
+    caer en cobertura exhaustiva innecesaria para demo.
+  </p>
+  <h3>9.2 Flujos seleccionados para demostracion</h3>
+  <ol>
+    <li>Login principal de aprendiz.</li>
+    <li>Validacion de formulario en registro de equipo.</li>
+    <li>Navegacion del panel a vista critica Mi QR.</li>
+    <li>Accion principal: registrar equipo y verificar listado.</li>
+  </ol>
+  <h3>9.3 Resultado de ejecucion</h3>
+  <table class="small">
+    <tr><th>Prueba</th><th>Resultado</th><th>Observacion</th></tr>
+    <tr><td>Login principal</td><td>Aprobada</td><td>Redireccion correcta a /aprendiz/inicio.</td></tr>
+    <tr><td>Validacion formulario</td><td>Aprobada</td><td>Bloqueo de envio sin campos obligatorios.</td></tr>
+    <tr><td>Navegacion a Mi QR</td><td>Aprobada</td><td>Carga de vista y render del QR.</td></tr>
+    <tr><td>Registro de equipo</td><td>Aprobada</td><td>Confirmacion de alta y presencia en listado.</td></tr>
+  </table>
+  <p class="no-indent"><b>Resumen:</b> 4 pruebas ejecutadas, 4 aprobadas, 0 fallidas.</p>
+  <h3>9.4 Criterios de estabilidad aplicados</h3>
+  <ul>
+    <li>Sin waits arbitrarios.</li>
+    <li>Selectores legibles y robustos.</li>
+    <li>Uso de mocks controlados para repetibilidad.</li>
+    <li>Aserciones por estado visible real.</li>
+  </ul>
+
+  <h2>10. Despliegue E Implementacion</h2>
+  <p>
+    La solucion se puede ejecutar por servicios de forma local o mediante Docker Compose. Se gestionan variables de entorno para API,
+    web y mobile, y se validan endpoints de salud para verificar disponibilidad.
+  </p>
+  <h3>10.1 Recomendaciones de despliegue</h3>
+  <ol>
+    <li>Separar configuraciones por ambiente (dev, test, prod).</li>
+    <li>Proteger secretos y llaves fuera del repositorio.</li>
+    <li>Monitorear disponibilidad, errores y consumo.</li>
+    <li>Definir plan de respaldo y recuperacion.</li>
+  </ol>
+
+  <div class="page-break"></div>
+  <h2>11. Resultados</h2>
+  <p>
+    El proyecto logro consolidar una plataforma funcional de control institucional de accesos con soporte web y movil. Se obtuvo
+    trazabilidad operativa en flujos clave y una base de seguridad centrada en permisos explicitos y aislamiento por sede.
+  </p>
+  <h3>11.1 Resultados tecnicos</h3>
+  <ul>
+    <li>Arquitectura integrada y modular.</li>
+    <li>Autenticacion con gestion de sesion por token.</li>
+    <li>Rutas y vistas de alto valor implementadas.</li>
+    <li>Suite E2E demostrable y estable.</li>
+  </ul>
+  <h3>11.2 Resultados operativos</h3>
+  <ul>
+    <li>Mejora de tiempos de validacion en flujo de ingreso.</li>
+    <li>Mayor control de acciones por perfil.</li>
+    <li>Mejor capacidad de seguimiento de eventos.</li>
+  </ul>
+
+  <h2>12. Conclusiones</h2>
+  <ol>
+    <li>S.A.D.I responde de forma pertinente al problema institucional de control de accesos multi-sede.</li>
+    <li>La centralizacion de reglas de seguridad en backend fortalece confiabilidad y gobernanza del sistema.</li>
+    <li>La combinacion web/movil mejora cobertura operativa para perfiles administrativos y de campo.</li>
+    <li>La validacion E2E en flujos criticos aporta evidencia de calidad util para sustentacion.</li>
+    <li>El proyecto queda con base tecnica adecuada para evolucion y ampliacion de cobertura funcional.</li>
+  </ol>
+
+  <h2>13. Recomendaciones</h2>
+  <ol>
+    <li>Ampliar pruebas E2E hacia escenarios adversariales y permisos denegados.</li>
+    <li>Incorporar observabilidad formal con metricas y alertas.</li>
+    <li>Fortalecer estrategia de despliegue continuo y endurecimiento de produccion.</li>
+    <li>Profundizar capacitacion de usuarios segun rol operativo.</li>
+    <li>Construir anexos visuales completos para auditoria y transferencia de conocimiento.</li>
+  </ol>
+
+  <div class="page-break"></div>
+  <h2>14. Referencias (Formato APA 7)</h2>
+  <p class="no-indent">Django Software Foundation. (2026). <i>Django documentation</i>. https://docs.djangoproject.com/</p>
+  <p class="no-indent">Fielding, R. T., &amp; Reschke, J. (2022). <i>HTTP semantics</i> (RFC 9110). IETF. https://www.rfc-editor.org/rfc/rfc9110</p>
+  <p class="no-indent">Jones, M., Bradley, J., &amp; Sakimura, N. (2015). <i>JSON Web Token (JWT)</i> (RFC 7519). IETF. https://www.rfc-editor.org/rfc/rfc7519</p>
+  <p class="no-indent">OWASP Foundation. (2021). <i>OWASP top 10: The ten most critical web application security risks</i>. https://owasp.org/www-project-top-ten/</p>
+  <p class="no-indent">Playwright Team. (2026). <i>Playwright documentation</i>. https://playwright.dev/</p>
+  <p class="no-indent">Vercel. (2026). <i>Next.js documentation</i>. https://nextjs.org/docs</p>
+  <p class="no-indent">Expo. (2026). <i>Expo documentation</i>. https://docs.expo.dev/</p>
+  <p class="no-indent">Microsoft. (2026). <i>TypeScript documentation</i>. https://www.typescriptlang.org/docs/</p>
+
+  <h2>15. Anexos Tecnicos Y De Sustentacion</h2>
+  <h3>Anexo A. Evidencias visuales sugeridas</h3>
+  <ol>
+    <li>Pantalla de login por rol.</li>
+    <li>Panel principal de aprendiz.</li>
+    <li>Formulario de registro de equipo con validaciones.</li>
+    <li>Vista Mi QR cargada.</li>
+    <li>Salida de ejecucion de pruebas E2E (4/4).</li>
+  </ol>
+  <h3>Anexo B. Matriz de riesgos resumida</h3>
+  <table class="small">
+    <tr><th>Riesgo</th><th>Impacto</th><th>Mitigacion</th></tr>
+    <tr><td>Acceso cruzado entre sedes</td><td>Alto</td><td>Filtros por sede y permisos explicitos en backend.</td></tr>
+    <tr><td>Sesion comprometida</td><td>Alto</td><td>Refresh por dispositivo y revocacion.</td></tr>
+    <tr><td>Envio de formularios incompletos</td><td>Medio</td><td>Validacion en frontend y backend.</td></tr>
+    <tr><td>Inestabilidad en demo</td><td>Medio</td><td>Pruebas E2E con mocks controlados.</td></tr>
+  </table>
+  <h3>Anexo C. Distribucion de tiempo para sustentacion (20 minutos)</h3>
+  <ol>
+    <li>Problema y objetivos: 4 min.</li>
+    <li>Metodologia y diseno: 5 min.</li>
+    <li>Construccion y arquitectura: 5 min.</li>
+    <li>Pruebas y resultados: 4 min.</li>
+    <li>Conclusiones y recomendaciones: 2 min.</li>
+  </ol>
+
+  <p class="center no-indent"><b>Fin del documento</b></p>
+</body>
+</html>

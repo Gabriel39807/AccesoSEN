@@ -1,52 +1,77 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as Auth from "../../src/api/auth";
 import { toUiErrorMessage } from "../../src/api/client";
-import { sanitizeDigits, validatePhone10 } from "../../src/lib/validators";
-import { FadeInCard, InputField, ModernButton, ModernScreen, Pill, TitleBlock, uiTheme } from "../../src/ui/modern";
+import AprendizBottomDock from "../../src/components/aprendiz/AprendizBottomDock";
+import { usePreferencesStore, useResolvedThemeMode } from "../../src/store/preferences";
+import { useSessionStore } from "../../src/store/session";
+import { ModernButton } from "../../src/ui/modern";
 
-type PasswordRule = {
-  id: string;
-  label: string;
-  valid: boolean;
+type Mode = "light" | "dark";
+
+const themes = {
+  light: {
+    background: ["#fbfdff", "#f3f8ff", "#e8f1ff"] as [string, string, string],
+    ambientTop: ["rgba(109,190,245,0.13)", "rgba(109,190,245,0.03)", "transparent"] as [string, string, string],
+    ambientBeam: ["transparent", "rgba(196,230,255,0.16)", "rgba(255,255,255,0.05)"] as [string, string, string],
+    ambientBottom: ["rgba(255,255,255,0.03)", "rgba(221,238,255,0.20)", "rgba(243,249,255,0.22)"] as [string, string, string],
+    meshBorder: "rgba(173, 210, 237, 0.20)",
+    cardBg: "rgba(255,255,255,0.80)",
+    cardBorder: "rgba(96, 173, 229, 0.18)",
+    sectionBg: "rgba(255,255,255,0.72)",
+    rowBg: "rgba(255,255,255,0.58)",
+    text: "#132844",
+    textMuted: "#4f6d8e",
+    textSoft: "#7b93ad",
+    accent: "#0b89d1",
+    accentStrong: "#0875b3",
+    accentSoft: "rgba(14,165,233,0.10)",
+    line: "rgba(96, 173, 229, 0.12)",
+    danger: "#c2410c",
+  },
+  dark: {
+    background: ["#07111c", "#0a1b2c", "#0f3044"] as [string, string, string],
+    ambientTop: ["rgba(82,195,255,0.13)", "rgba(82,195,255,0.03)", "transparent"] as [string, string, string],
+    ambientBeam: ["transparent", "rgba(25,144,209,0.10)", "transparent"] as [string, string, string],
+    ambientBottom: ["transparent", "rgba(37,164,229,0.08)", "rgba(37,164,229,0.02)"] as [string, string, string],
+    meshBorder: "rgba(96, 177, 230, 0.10)",
+    cardBg: "rgba(12,24,38,0.74)",
+    cardBorder: "rgba(71, 181, 245, 0.18)",
+    sectionBg: "rgba(12,24,38,0.66)",
+    rowBg: "rgba(255,255,255,0.03)",
+    text: "#f6fbff",
+    textMuted: "#d0eaf8",
+    textSoft: "#8fb0c4",
+    accent: "#4fc9ff",
+    accentStrong: "#1eb2ee",
+    accentSoft: "rgba(79,201,255,0.12)",
+    line: "rgba(79,201,255,0.12)",
+    danger: "#ff9b71",
+  },
 };
-
-function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
-  return [
-    { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
-    { id: "upper", label: "Al menos 1 mayúscula", valid: /[A-Z]/.test(password) },
-    { id: "lower", label: "Al menos 1 minúscula", valid: /[a-z]/.test(password) },
-    { id: "num", label: "Al menos 1 número", valid: /[0-9]/.test(password) },
-    { id: "special", label: "Al menos 1 carácter especial", valid: /[^A-Za-z0-9]/.test(password) },
-    { id: "match", label: "Coincide con la confirmación", valid: confirmPassword.length > 0 && password === confirmPassword },
-  ];
-}
 
 export default function AprendizPerfil() {
   const [perfil, setPerfil] = useState<Auth.AprendizPerfil | null>(null);
   const [loadingPerfil, setLoadingPerfil] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-
-  const [telefono, setTelefono] = useState("");
-  const [newEmail, setNewEmail] = useState("");
-  const [emailCode, setEmailCode] = useState("");
-
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const rules = buildPasswordRules(next, confirm);
-  const allRulesValid = rules.every((rule) => rule.valid);
+  const signOut = useSessionStore((s) => s.signOut);
+  const mode = useResolvedThemeMode() as Mode;
+  const theme = themes[mode];
+  const isDark = mode === "dark";
+  const toggleThemeMode = usePreferencesStore((s) => s.toggleThemeMode);
+  const insets = useSafeAreaInsets();
 
   async function loadPerfil() {
     setLoadingPerfil(true);
     try {
       const r = await Auth.getAprendizPerfil();
-      const p = r.perfil;
-      setPerfil(p);
-      setTelefono(p.telefono || "");
+      setPerfil(r.perfil);
+      setMsg(null);
     } catch (e: any) {
       setMsg(toUiErrorMessage(e, "No se pudo cargar el perfil."));
     } finally {
@@ -58,219 +83,372 @@ export default function AprendizPerfil() {
     void loadPerfil();
   }, []);
 
-  async function guardarTelefono() {
-    setMsg(null);
-    const phoneError = validatePhone10(telefono.trim());
-    if (phoneError) {
-      setMsg(phoneError);
-      return;
-    }
-    setSaving(true);
-    try {
-      const r = await Auth.updateAprendizPerfil({ telefono: sanitizeDigits(telefono).slice(0, 10) });
-      setPerfil(r.perfil);
-      setTelefono(r.perfil.telefono || "");
-      setMsg(r.mensaje || "Perfil actualizado.");
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo actualizar el teléfono."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function solicitarCambioCorreo() {
-    setMsg(null);
-    setSaving(true);
-    try {
-      const r = await Auth.requestAprendizEmailChange(newEmail);
-      setMsg(r.mensaje || "Enviamos un código al nuevo correo.");
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo solicitar el cambio de correo."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmarCambioCorreo() {
-    setMsg(null);
-    setSaving(true);
-    try {
-      const r = await Auth.confirmAprendizEmailChange(newEmail, emailCode);
-      setPerfil(r.perfil);
-      setNewEmail("");
-      setEmailCode("");
-      setMsg(r.mensaje || "Correo actualizado.");
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo confirmar el cambio de correo."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function actualizarClave() {
-    setMsg(null);
-    if (!allRulesValid) {
-      setMsg("La nueva contraseña no cumple todos los requisitos.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const r = await Auth.changeInitialPassword(current, next);
-      if (!r.permitido) throw new Error(r.motivo || "No se pudo actualizar.");
-      setCurrent("");
-      setNext("");
-      setConfirm("");
-      setMsg("Contraseña actualizada correctamente.");
-      await loadPerfil();
-    } catch (e: any) {
-      setMsg(toUiErrorMessage(e, "No se pudo actualizar la contraseña."));
-    } finally {
-      setSaving(false);
-    }
-  }
+  const fullName = `${perfil?.first_name || ""} ${perfil?.last_name || ""}`.trim() || "Aprendiz";
 
   return (
-    <ModernScreen scroll>
-      <FadeInCard delay={0} style={{ gap: 16 }}>
-        <Pill text="MI PERFIL" />
+    <View style={[styles.root, { backgroundColor: theme.background[0] }]}>
+      <LinearGradient colors={theme.background} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={theme.ambientTop} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ambientTop} />
+      <LinearGradient colors={theme.ambientBeam} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ambientBeam} />
+      <LinearGradient colors={theme.ambientBottom} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.ambientBottom} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + 18,
+            paddingBottom: 132 + Math.max(insets.bottom, 20),
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Perfil</Text>
+        </View>
+
         <View
-          style={{
-            borderRadius: 30,
-            backgroundColor: "rgba(15,118,110,0.1)",
-            borderWidth: 1,
-            borderColor: "rgba(15,118,110,0.16)",
-            padding: 18,
-            gap: 14,
-          }}
+          style={[
+            styles.profileCard,
+            {
+              backgroundColor: theme.cardBg,
+              borderColor: theme.cardBorder,
+              shadowColor: isDark ? "rgba(0,0,0,0.28)" : "rgba(138, 187, 227, 0.18)",
+            },
+          ]}
         >
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
-            <View style={{ flex: 1, gap: 8 }}>
-              <Text style={{ color: uiTheme.accentDeep, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
-                Identidad del aprendiz
-              </Text>
-              <Text style={{ color: uiTheme.ink, fontSize: 28, lineHeight: 32, fontWeight: "900", letterSpacing: -0.8 }}>
-                {loadingPerfil ? "Cargando perfil..." : `${perfil?.first_name || "-"} ${perfil?.last_name || ""}`.trim()}
-              </Text>
-              <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
-                Documento {perfil?.documento || "-"} | Programa {perfil?.programa_formacion || "-"}
-              </Text>
+          <View style={styles.profileTop}>
+            <View style={[styles.avatarShell, { backgroundColor: theme.accentSoft, borderColor: theme.cardBorder }]}>
+              <LinearGradient
+                colors={mode === "dark" ? ["rgba(79,201,255,0.18)", "rgba(79,201,255,0.04)"] : ["rgba(255,255,255,0.72)", "rgba(14,165,233,0.02)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <Ionicons name="person-outline" size={34} color={theme.accentStrong} />
             </View>
-            <View
-              style={{
-                width: 54,
-                height: 54,
-                borderRadius: 18,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.62)",
-                borderWidth: 1,
-                borderColor: "rgba(15,118,110,0.12)",
-              }}
-            >
-              <Ionicons name="person-circle-outline" size={24} color={uiTheme.accentDeep} />
+
+            <View style={styles.identityWrap}>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={2}>
+                {loadingPerfil ? "Cargando..." : fullName}
+              </Text>
+              <Text style={[styles.document, { color: theme.textMuted }]}>Documento {perfil?.documento || "-"}</Text>
             </View>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
-              <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Correo</Text>
-              <Text style={{ color: uiTheme.ink, fontWeight: "900", marginTop: 6 }}>{perfil?.email || "-"}</Text>
+          <View style={[styles.divider, { backgroundColor: theme.line }]} />
+
+          {loadingPerfil ? (
+            <ActivityIndicator color={theme.accentStrong} style={{ marginTop: 6 }} />
+          ) : (
+            <View style={styles.metaGrid}>
+              <MetaItem icon="mail-outline" label="Correo" value={perfil?.email || "Sin correo"} theme={theme} />
+              <MetaItem icon="call-outline" label="Telefono" value={perfil?.telefono || "Sin telefono"} theme={theme} />
+              <MetaItem icon="business-outline" label="Sede" value={perfil?.sede_principal || "Sin sede"} theme={theme} full />
             </View>
-            <View style={{ flex: 1, borderRadius: 18, padding: 12, backgroundColor: "rgba(255,255,255,0.62)" }}>
-              <Text style={{ color: uiTheme.muted, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1 }}>Sede</Text>
-              <Text style={{ color: uiTheme.ink, fontWeight: "900", marginTop: 6 }}>{perfil?.sede_principal || "-"}</Text>
+          )}
+
+          {msg ? <Text style={[styles.errorText, { color: theme.danger }]}>{msg}</Text> : null}
+        </View>
+
+        <Section title="Cuenta" theme={theme}>
+          <SettingRow
+            icon="time-outline"
+            title="Historial"
+            subtitle="Tus accesos"
+            theme={theme}
+            onPress={() => router.push("/aprendiz/historial" as any)}
+          />
+          <SettingRow
+            icon="help-circle-outline"
+            title="Ayuda"
+            subtitle="Soporte rapido"
+            theme={theme}
+            onPress={() => router.push("/aprendiz/ayuda" as any)}
+          />
+        </Section>
+
+        <Section title="Preferencias" theme={theme}>
+          <View style={[styles.settingRow, { backgroundColor: theme.rowBg, borderColor: theme.line }]}>
+            <View style={[styles.rowIcon, { backgroundColor: theme.accentSoft }]}>
+              <Ionicons name={mode === "dark" ? "moon-outline" : "sunny-outline"} size={17} color={theme.accentStrong} />
             </View>
+            <View style={styles.rowCopy}>
+              <Text style={[styles.rowTitle, { color: theme.text }]}>Tema</Text>
+              <Text style={[styles.rowSubtitle, { color: theme.textSoft }]}>{mode === "dark" ? "Modo oscuro" : "Modo claro"}</Text>
+            </View>
+            <Switch
+              value={mode === "dark"}
+              onValueChange={toggleThemeMode}
+              trackColor={{ false: "rgba(148,163,184,0.35)", true: theme.accentStrong }}
+              thumbColor="#ffffff"
+            />
           </View>
+        </Section>
 
-          {perfil?.pending_email_change ? (
-            <View style={{ borderRadius: 18, padding: 12, backgroundColor: "rgba(161,98,7,0.08)", borderWidth: 1, borderColor: "rgba(161,98,7,0.16)" }}>
-              <Text style={{ color: uiTheme.warn, fontWeight: "900" }}>Correo pendiente: {perfil.pending_email_change}</Text>
-            </View>
-          ) : null}
-        </View>
-      </FadeInCard>
-
-      <FadeInCard delay={70} style={{ gap: 14 }}>
-        <View style={{ gap: 6 }}>
-          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Contacto</Text>
-          <TitleBlock
-            title="Actualiza tus datos"
-            subtitle="Solo puedes editar teléfono y solicitar el cambio de correo mediante código de verificación."
-          />
-        </View>
-
-        <InputField
-          label="Teléfono"
-          value={telefono}
-          onChangeText={(v) => setTelefono(sanitizeDigits(v).slice(0, 10))}
-          placeholder="3001234567"
-          keyboardType="phone-pad"
-          maxLength={10}
-        />
-        <ModernButton label={saving ? "Guardando..." : "Guardar teléfono"} disabled={saving} onPress={guardarTelefono} />
-
-        <View style={{ borderRadius: 22, padding: 14, gap: 10, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
-          <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Cambio de correo con código</Text>
-          <InputField
-            label="Nuevo correo"
-            value={newEmail}
-            onChangeText={setNewEmail}
-            placeholder="correo@dominio.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
+        <View style={styles.sessionBlock}>
+          <Text style={[styles.sectionTitle, { color: theme.textSoft }]}>Sesion</Text>
           <ModernButton
-            label={saving ? "Enviando..." : "Enviar código al correo"}
-            tone="light"
-            disabled={saving || !newEmail.trim()}
-            onPress={solicitarCambioCorreo}
-          />
-
-          <InputField
-            label="Código de verificación"
-            value={emailCode}
-            onChangeText={(v) => setEmailCode(v.replace(/[^\d]/g, "").slice(0, 5))}
-            placeholder="12345"
-            keyboardType="numeric"
-            maxLength={5}
-          />
-          <ModernButton
-            label={saving ? "Confirmando..." : "Confirmar cambio de correo"}
-            tone="dark"
-            disabled={saving || !newEmail.trim() || emailCode.trim().length !== 5}
-            onPress={confirmarCambioCorreo}
+            icon="log-out-outline"
+            label="Cerrar sesion"
+            tone="danger"
+            onPress={async () => {
+              await signOut();
+              router.replace("/" as any);
+            }}
           />
         </View>
-      </FadeInCard>
+      </ScrollView>
 
-      <FadeInCard delay={120} style={{ gap: 14 }}>
-        <View style={{ gap: 6 }}>
-          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>Seguridad</Text>
-          <TitleBlock
-            title="Cambiar contraseña"
-            subtitle="Requiere tu contraseña actual y valida la nueva con las reglas de seguridad."
-          />
-        </View>
-
-        <InputField label="Contraseña actual" value={current} onChangeText={setCurrent} secureTextEntry placeholder="********" />
-        <InputField label="Nueva contraseña" value={next} onChangeText={setNext} secureTextEntry placeholder="********" />
-        <InputField label="Confirmar contraseña" value={confirm} onChangeText={setConfirm} secureTextEntry placeholder="********" />
-
-        <View style={{ borderRadius: 22, padding: 14, gap: 8, backgroundColor: "rgba(255,255,255,0.72)", borderWidth: 1, borderColor: "rgba(148,163,184,0.22)" }}>
-          <Text style={{ fontWeight: "900", color: uiTheme.ink }}>Checklist de seguridad</Text>
-          {rules.map((rule) => (
-            <View key={rule.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Ionicons name={rule.valid ? "checkmark-circle" : "ellipse-outline"} size={18} color={rule.valid ? uiTheme.success : uiTheme.muted} />
-              <Text style={{ color: rule.valid ? uiTheme.success : uiTheme.inkSoft }}>{rule.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        {msg ? <Text style={{ color: msg.toLowerCase().includes("actualizada") || msg.toLowerCase().includes("actualizado") ? uiTheme.success : uiTheme.danger, lineHeight: 20 }}>{msg}</Text> : null}
-
-        <ModernButton label={saving ? "Guardando..." : "Actualizar contraseña"} disabled={saving || !allRulesValid} onPress={actualizarClave} />
-        {saving || loadingPerfil ? <ActivityIndicator style={{ marginTop: 4 }} color={uiTheme.accent} /> : null}
-      </FadeInCard>
-    </ModernScreen>
+      <AprendizBottomDock active="perfil" />
+    </View>
   );
 }
+
+function Section({
+  title,
+  theme,
+  children,
+}: {
+  title: string;
+  theme: (typeof themes)["light"];
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.sectionBlock}>
+      <Text style={[styles.sectionTitle, { color: theme.textSoft }]}>{title}</Text>
+      <View style={styles.sectionRows}>{children}</View>
+    </View>
+  );
+}
+
+function MetaItem({
+  icon,
+  label,
+  value,
+  theme,
+  full = false,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  theme: (typeof themes)["light"];
+  full?: boolean;
+}) {
+  return (
+    <View style={[styles.metaItem, full ? styles.metaItemFull : null, { backgroundColor: theme.rowBg, borderColor: theme.line }]}>
+      <View style={[styles.metaIcon, { backgroundColor: theme.accentSoft }]}>
+        <Ionicons name={icon} size={15} color={theme.accentStrong} />
+      </View>
+      <View style={styles.metaCopy}>
+        <Text style={[styles.metaLabel, { color: theme.textSoft }]}>{label}</Text>
+        <Text style={[styles.metaValue, { color: theme.text }]} numberOfLines={1}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function SettingRow({
+  icon,
+  title,
+  subtitle,
+  theme,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  theme: (typeof themes)["light"];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}>
+      <View style={[styles.settingRow, { backgroundColor: theme.rowBg, borderColor: theme.line }]}>
+        <View style={[styles.rowIcon, { backgroundColor: theme.accentSoft }]}>
+          <Ionicons name={icon} size={17} color={theme.accentStrong} />
+        </View>
+        <View style={styles.rowCopy}>
+          <Text style={[styles.rowTitle, { color: theme.text }]}>{title}</Text>
+          <Text style={[styles.rowSubtitle, { color: theme.textSoft }]}>{subtitle}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={theme.textSoft} />
+      </View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  scroll: {
+    flex: 1,
+  },
+  ambientTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  ambientBeam: {
+    position: "absolute",
+    top: 130,
+    left: -34,
+    right: -34,
+    height: 260,
+    transform: [{ rotate: "-7deg" }],
+  },
+  ambientBottom: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 104,
+    height: 230,
+  },
+  content: {
+    paddingHorizontal: 22,
+    gap: 18,
+  },
+  header: {
+    paddingHorizontal: 2,
+    marginBottom: 4,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  profileCard: {
+    borderRadius: 30,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    gap: 18,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  profileTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  avatarShell: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  identityWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  name: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: "900",
+    letterSpacing: -0.8,
+  },
+  document: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  divider: {
+    height: 1,
+  },
+  metaGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  metaItem: {
+    width: "47%",
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  metaItemFull: {
+    width: "100%",
+  },
+  metaIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metaCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  metaLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  metaValue: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  sectionBlock: {
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    paddingHorizontal: 2,
+  },
+  sectionRows: {
+    gap: 9,
+  },
+  settingRow: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  rowTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  rowSubtitle: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  sessionBlock: {
+    gap: 10,
+    marginTop: 6,
+  },
+});

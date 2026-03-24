@@ -1,6 +1,5 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   Image,
@@ -15,196 +14,281 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useResolvedThemeMode } from "../store/preferences";
 
-type ThemeName = "default" | "aprendiz" | "guard";
-type ButtonTone = "primary" | "dark" | "danger" | "light" | "aprendiz" | "guard";
-type NoticeTone = "info" | "success" | "danger";
+type ThemeKey = "default" | "aprendiz" | "guard";
 
 type ScreenProps = {
   children: React.ReactNode;
   scroll?: boolean;
   contentStyle?: ViewStyle;
-  theme?: ThemeName;
+  theme?: ThemeKey;
 };
 
-type ButtonProps = {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  tone?: ButtonTone;
-  icon?: keyof typeof Ionicons.glyphMap;
-  imageIcon?: ImageSourcePropType;
-  glow?: boolean;
+type BrandTheme = {
+  mode: "light" | "dark";
+  background: [string, string, string];
+  ambientTop: [string, string, string];
+  ambientBeam: [string, string, string];
+  ambientBottom: [string, string, string];
+  meshBorder: string;
+  surface: string;
+  surfaceStrong: string;
+  surfaceBorder: string;
+  text: string;
+  textMuted: string;
+  textSoft: string;
+  accent: string;
+  accentStrong: string;
+  accentGlow: string;
+  inputBg: string;
+  inputBorder: string;
+  inputText: string;
+  pillBg: string;
+  pillBorder: string;
+  pillText: string;
 };
 
-export const uiTheme = {
-  bg0: "#070B11",
-  bg1: "#0B1118",
-  bg2: "#101722",
-  surface1: "rgba(18,27,38,0.92)",
-  surface2: "rgba(24,34,49,0.96)",
-  surface3: "rgba(29,42,58,0.98)",
-  border: "rgba(255,255,255,0.08)",
-  borderStrong: "rgba(255,255,255,0.14)",
-  text: "#F3F7FB",
-  textSoft: "#B8C3D1",
-  textMuted: "#7F90A3",
-  accent: "#6FD3FF",
-  accentDeep: "#4FA3FF",
-  guard: "#4FA3FF",
-  aprendiz: "#5FD1C4",
-  success: "#42C79A",
-  warning: "#F0B24D",
-  warn: "#F0B24D",
-  danger: "#FF6B7A",
-  navy: "#132133",
-  ink: "#F3F7FB",
-  inkSoft: "#B8C3D1",
-  muted: "#7F90A3",
-  page: "#070B11",
-  shadow: "#000000",
-};
+function resolveTheme(theme: ThemeKey, mode: "light" | "dark"): BrandTheme {
+  const palettes = {
+    default: {
+      light: {
+        background: ["#fbfdff", "#f3f7ff", "#e8efff"],
+        ambientTop: ["rgba(127,156,255,0.12)", "rgba(127,156,255,0.03)", "transparent"],
+        ambientBeam: ["transparent", "rgba(196,208,255,0.14)", "rgba(255,255,255,0.03)"],
+        ambientBottom: ["rgba(255,255,255,0.02)", "rgba(214,226,255,0.16)", "rgba(243,247,255,0.2)"],
+        meshBorder: "rgba(169, 188, 227, 0.18)",
+        surface: "rgba(255,255,255,0.78)",
+        surfaceStrong: "rgba(255,255,255,0.88)",
+        surfaceBorder: "rgba(116, 151, 221, 0.16)",
+        text: "#16213d",
+        textMuted: "#455b83",
+        textSoft: "#6d7d9d",
+        accent: "#4967d8",
+        accentStrong: "#2749b5",
+        accentGlow: "rgba(95, 122, 214, 0.18)",
+        inputBg: "rgba(255,255,255,0.92)",
+        inputBorder: "rgba(129, 160, 227, 0.26)",
+        inputText: "#16213d",
+        pillBg: "rgba(73, 103, 216, 0.08)",
+        pillBorder: "rgba(73, 103, 216, 0.18)",
+        pillText: "#3f5fc8",
+      },
+      dark: {
+        background: ["#091220", "#0d1a32", "#102744"],
+        ambientTop: ["rgba(95,171,255,0.12)", "rgba(95,171,255,0.03)", "transparent"],
+        ambientBeam: ["transparent", "rgba(52,113,215,0.10)", "transparent"],
+        ambientBottom: ["transparent", "rgba(68,134,230,0.08)", "rgba(68,134,230,0.02)"],
+        meshBorder: "rgba(105, 154, 233, 0.10)",
+        surface: "rgba(11,20,34,0.74)",
+        surfaceStrong: "rgba(15,24,40,0.88)",
+        surfaceBorder: "rgba(92, 150, 235, 0.18)",
+        text: "#f8fbff",
+        textMuted: "#d8e2f8",
+        textSoft: "#94a5c4",
+        accent: "#59b9ff",
+        accentStrong: "#1d97ff",
+        accentGlow: "rgba(41, 147, 255, 0.28)",
+        inputBg: "rgba(15,24,40,0.82)",
+        inputBorder: "rgba(95, 161, 255, 0.20)",
+        inputText: "#f8fbff",
+        pillBg: "rgba(89,185,255,0.12)",
+        pillBorder: "rgba(89,185,255,0.22)",
+        pillText: "#8bd2ff",
+      },
+    },
+    aprendiz: {
+      light: {
+        background: ["#fbfdff", "#f2f8ff", "#e7f1ff"],
+        ambientTop: ["rgba(102,194,255,0.12)", "rgba(102,194,255,0.03)", "transparent"],
+        ambientBeam: ["transparent", "rgba(190,232,255,0.16)", "rgba(255,255,255,0.03)"],
+        ambientBottom: ["rgba(255,255,255,0.02)", "rgba(204,233,255,0.16)", "rgba(243,250,255,0.2)"],
+        meshBorder: "rgba(168, 207, 232, 0.18)",
+        surface: "rgba(255,255,255,0.8)",
+        surfaceStrong: "rgba(255,255,255,0.9)",
+        surfaceBorder: "rgba(88, 172, 226, 0.16)",
+        text: "#14253d",
+        textMuted: "#3b6287",
+        textSoft: "#6b88a8",
+        accent: "#0ea5e9",
+        accentStrong: "#0284c7",
+        accentGlow: "rgba(14, 165, 233, 0.18)",
+        inputBg: "rgba(255,255,255,0.92)",
+        inputBorder: "rgba(102, 194, 255, 0.24)",
+        inputText: "#14253d",
+        pillBg: "rgba(14,165,233,0.08)",
+        pillBorder: "rgba(14,165,233,0.18)",
+        pillText: "#0284c7",
+      },
+      dark: {
+        background: ["#07111c", "#0a1b2c", "#0f3044"],
+        ambientTop: ["rgba(82,195,255,0.13)", "rgba(82,195,255,0.03)", "transparent"],
+        ambientBeam: ["transparent", "rgba(25,144,209,0.10)", "transparent"],
+        ambientBottom: ["transparent", "rgba(37,164,229,0.08)", "rgba(37,164,229,0.02)"],
+        meshBorder: "rgba(96, 177, 230, 0.10)",
+        surface: "rgba(9,20,31,0.76)",
+        surfaceStrong: "rgba(12,24,38,0.9)",
+        surfaceBorder: "rgba(71, 181, 245, 0.18)",
+        text: "#f6fbff",
+        textMuted: "#d0eaf8",
+        textSoft: "#8fb0c4",
+        accent: "#4fc9ff",
+        accentStrong: "#1aa5e8",
+        accentGlow: "rgba(26, 165, 232, 0.28)",
+        inputBg: "rgba(14,26,38,0.84)",
+        inputBorder: "rgba(82, 195, 255, 0.20)",
+        inputText: "#f6fbff",
+        pillBg: "rgba(79,201,255,0.12)",
+        pillBorder: "rgba(79,201,255,0.22)",
+        pillText: "#9ce0ff",
+      },
+    },
+    guard: {
+      light: {
+        background: ["#fbfdff", "#f0f5ff", "#e6eeff"],
+        ambientTop: ["rgba(129,176,255,0.14)", "rgba(129,176,255,0.03)", "rgba(255,255,255,0.02)"],
+        ambientBeam: ["transparent", "rgba(191,220,255,0.16)", "rgba(255,255,255,0.04)"],
+        ambientBottom: ["rgba(255,255,255,0.02)", "rgba(207,230,255,0.18)", "rgba(239,246,255,0.22)"],
+        meshBorder: "rgba(171, 196, 235, 0.18)",
+        surface: "rgba(255,255,255,0.8)",
+        surfaceStrong: "rgba(255,255,255,0.9)",
+        surfaceBorder: "rgba(110, 152, 222, 0.16)",
+        text: "#16315f",
+        textMuted: "#456391",
+        textSoft: "#7488ad",
+        accent: "#2d68d8",
+        accentStrong: "#1e4fb0",
+        accentGlow: "rgba(95, 137, 215, 0.18)",
+        inputBg: "rgba(255,255,255,0.92)",
+        inputBorder: "rgba(129, 160, 227, 0.24)",
+        inputText: "#16315f",
+        pillBg: "rgba(45,104,216,0.08)",
+        pillBorder: "rgba(45,104,216,0.18)",
+        pillText: "#315cc7",
+      },
+      dark: {
+        background: ["#07101e", "#0a1830", "#0f2745"],
+        ambientTop: ["rgba(92,161,255,0.14)", "rgba(92,161,255,0.03)", "transparent"],
+        ambientBeam: ["transparent", "rgba(29,107,201,0.08)", "transparent"],
+        ambientBottom: ["transparent", "rgba(74,146,239,0.06)", "rgba(74,146,239,0.01)"],
+        meshBorder: "rgba(121, 179, 255, 0.09)",
+        surface: "rgba(12,22,36,0.68)",
+        surfaceStrong: "rgba(8,18,33,0.9)",
+        surfaceBorder: "rgba(108, 169, 255, 0.18)",
+        text: "#f8fbff",
+        textMuted: "#d2def6",
+        textSoft: "#95a6c6",
+        accent: "#59b9ff",
+        accentStrong: "#1c8cff",
+        accentGlow: "rgba(37, 158, 255, 0.28)",
+        inputBg: "rgba(14,24,40,0.84)",
+        inputBorder: "rgba(108, 169, 255, 0.18)",
+        inputText: "#f8fbff",
+        pillBg: "rgba(89,185,255,0.12)",
+        pillBorder: "rgba(89,185,255,0.22)",
+        pillText: "#9ad8ff",
+      },
+    },
+  };
 
-const themePalette: Record<
-  ThemeName,
-  {
-    gradient: [string, string, string];
-    meshPrimary: string;
-    meshSecondary: string;
-    accent: string;
-    accentDeep: string;
-    pillBg: string;
-    pillBorder: string;
-  }
-> = {
-  default: {
-    gradient: ["#070B11", "#0B1118", "#101722"],
-    meshPrimary: "rgba(111,211,255,0.12)",
-    meshSecondary: "rgba(79,163,255,0.08)",
-    accent: uiTheme.accent,
-    accentDeep: uiTheme.accentDeep,
-    pillBg: "rgba(111,211,255,0.12)",
-    pillBorder: "rgba(111,211,255,0.22)",
-  },
-  aprendiz: {
-    gradient: ["#070B11", "#0C141C", "#0E1820"],
-    meshPrimary: "rgba(95,209,196,0.12)",
-    meshSecondary: "rgba(79,163,255,0.06)",
-    accent: uiTheme.aprendiz,
-    accentDeep: "#36B7A8",
-    pillBg: "rgba(95,209,196,0.12)",
-    pillBorder: "rgba(95,209,196,0.24)",
-  },
-  guard: {
-    gradient: ["#050A11", "#09111B", "#0C1520"],
-    meshPrimary: "rgba(79,163,255,0.16)",
-    meshSecondary: "rgba(111,211,255,0.08)",
-    accent: uiTheme.guard,
-    accentDeep: "#2E7FE8",
-    pillBg: "rgba(79,163,255,0.12)",
-    pillBorder: "rgba(79,163,255,0.24)",
-  },
-};
-
-function alpha(hex: string, opacity: number) {
-  const value = String(hex || "").replace("#", "").trim();
-  if (value.length !== 6) return `rgba(15,23,42,${opacity})`;
-  const bigint = Number.parseInt(value, 16);
-  const r = (bigint >> 16) & 255;
-  const g = (bigint >> 8) & 255;
-  const b = bigint & 255;
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  return { mode, ...palettes[theme][mode] };
 }
 
+function useBrandTheme(theme: ThemeKey) {
+  const mode = useResolvedThemeMode();
+  return useMemo(() => resolveTheme(theme, mode), [theme, mode]);
+}
+
+// Kept for compatibility with login, but now intentionally subtle.
 export function SwirlingConstellations() {
-  const opacity = useRef(new Animated.Value(0.45)).current;
+  const theme = useBrandTheme("guard");
+  const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loop = Animated.loop(
+    Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.72, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.45, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 9000, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 9000, useNativeDriver: true }),
       ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [opacity]);
+    ).start();
+  }, [anim]);
+
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+
+  const positions = [
+    { top: "12%", left: "10%", icon: "shield-outline" as const, size: 18, o: 0.06 },
+    { top: "19%", left: "78%", icon: "scan-outline" as const, size: 18, o: 0.06 },
+    { top: "44%", left: "18%", icon: "finger-print-outline" as const, size: 20, o: 0.05 },
+    { top: "62%", left: "70%", icon: "lock-closed-outline" as const, size: 18, o: 0.05 },
+    { top: "78%", left: "28%", icon: "document-text-outline" as const, size: 18, o: 0.04 },
+  ];
 
   return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}> 
-      <View style={styles.gridOverlay} />
-      <View style={[styles.signalLine, { top: "18%", left: "8%", width: "36%" }]} />
-      <View style={[styles.signalLine, { top: "28%", right: "10%", width: "24%" }]} />
-      <View style={[styles.signalLine, { bottom: "22%", left: "14%", width: "42%" }]} />
-      {[
-        { top: "12%", left: "18%" },
-        { top: "20%", left: "66%" },
-        { top: "34%", left: "12%" },
-        { top: "42%", left: "78%" },
-        { top: "58%", left: "25%" },
-        { top: "70%", left: "62%" },
-        { top: "82%", left: "16%" },
-      ].map((dot, index) => (
-        <View key={index} style={[styles.signalDot, dot as never]} />
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { transform: [{ translateY }] }]}>
+      {positions.map((item, idx) => (
+        <Ionicons
+          key={idx}
+          name={item.icon}
+          size={item.size}
+          color={theme.accent}
+          style={{ position: "absolute", top: item.top as any, left: item.left as any, opacity: item.o }}
+        />
       ))}
     </Animated.View>
   );
 }
 
 export function ModernScreen({ children, scroll = false, contentStyle, theme = "default" }: ScreenProps) {
-  const palette = themePalette[theme];
-  const content = (
-    <>
-      <LinearGradient colors={palette.gradient} style={StyleSheet.absoluteFill} />
-      <View style={[styles.meshOrb, styles.meshOrbPrimary, { backgroundColor: palette.meshPrimary }]} />
-      <View style={[styles.meshOrb, styles.meshOrbSecondary, { backgroundColor: palette.meshSecondary }]} />
-      <SwirlingConstellations />
-      {scroll ? (
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, contentStyle]}
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={[styles.content, contentStyle]}>{children}</View>
-      )}
-    </>
-  );
+  const brand = useBrandTheme(theme);
+  const Container: any = scroll ? ScrollView : View;
 
-  return <View style={styles.root}>{content}</View>;
+  return (
+    <View style={[styles.root, { backgroundColor: brand.background[0] }]}>
+      <LinearGradient colors={brand.background} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={brand.ambientTop} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ambientTop} />
+      <LinearGradient colors={brand.ambientBeam} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ambientBeam} />
+      <LinearGradient colors={brand.ambientBottom} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.ambientBottom} />
+      <Container
+        contentContainerStyle={scroll ? [styles.scrollContent, contentStyle] : undefined}
+        style={!scroll ? [styles.content, contentStyle] : undefined}
+        showsVerticalScrollIndicator={false}
+      >
+        {!scroll ? children : <>{children}</>}
+      </Container>
+    </View>
+  );
 }
 
 export function FadeInCard({
   children,
   delay = 0,
   style,
-  intensity = 0,
+  intensity = 60,
 }: {
   children: React.ReactNode;
   delay?: number;
   style?: ViewStyle;
   intensity?: number;
 }) {
+  const brand = useBrandTheme("default");
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(18)).current;
+  const translateY = useRef(new Animated.Value(26)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 360,
+        duration: 480,
         delay,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 420,
+        duration: 480,
         delay,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
@@ -216,95 +300,90 @@ export function FadeInCard({
     <Animated.View
       style={[
         styles.cardContainer,
-        intensity > 70 ? styles.cardContainerStrong : null,
+        {
+          opacity,
+          transform: [{ translateY }],
+          borderColor: brand.surfaceBorder,
+          backgroundColor: brand.mode === "light" ? "rgba(255,255,255,0.32)" : "rgba(8,18,30,0.32)",
+          shadowColor: brand.accentGlow,
+        },
         style,
-        { opacity, transform: [{ translateY }] },
       ]}
     >
-      {children}
+      <BlurView intensity={intensity} tint={brand.mode === "dark" ? "dark" : "light"} style={[styles.glassCard, { backgroundColor: brand.surface }]}>
+        {brand.mode === "light" ? <View style={styles.lightSheen} /> : null}
+        {children}
+      </BlurView>
     </Animated.View>
   );
 }
 
-export function SkeletonLine({ width = "100%", height = 14 }: { width?: ViewStyle["width"]; height?: number }) {
-  return <View style={[styles.skeletonLine, { width, height }]} />;
-}
-
-export function SkeletonCard({ rows = 3 }: { rows?: number }) {
-  return (
-    <View style={styles.skeletonCard}>
-      <SkeletonLine width="42%" height={12} />
-      <SkeletonLine width="68%" height={28} />
-      {Array.from({ length: rows }).map((_, index) => (
-        <SkeletonLine key={index} width={`${88 - index * 8}%`} height={12} />
-      ))}
-    </View>
-  );
-}
-
-export function SkeletonList({ items = 3 }: { items?: number }) {
-  return (
-    <View style={{ gap: 12 }}>
-      {Array.from({ length: items }).map((_, index) => (
-        <View key={index} style={styles.skeletonListItem}>
-          <View style={styles.skeletonDot} />
-          <View style={{ flex: 1, gap: 10 }}>
-            <SkeletonLine width="56%" height={12} />
-            <SkeletonLine width="82%" height={10} />
-          </View>
-        </View>
-      ))}
-    </View>
-  );
-}
-
 export function TitleBlock({ title, subtitle }: { title: string; subtitle?: string }) {
+  const brand = useBrandTheme("default");
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={styles.title}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    <View style={{ gap: 6 }}>
+      <Text style={[styles.title, { color: brand.text }]}>{title}</Text>
+      {subtitle ? <Text style={[styles.subtitle, { color: brand.textSoft }]}>{subtitle}</Text> : null}
     </View>
   );
 }
+
+type ButtonProps = {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  tone?: "primary" | "dark" | "danger" | "light" | "aprendiz" | "guard";
+  icon?: keyof typeof Ionicons.glyphMap;
+  imageIcon?: ImageSourcePropType;
+  glow?: boolean;
+};
 
 export function ModernButton({ label, onPress, disabled, tone = "primary", icon, imageIcon, glow = false }: ButtonProps) {
-  const map: Record<ButtonTone, { bg: string; fg: string; border: string; overlay: string }> = {
-    primary: { bg: uiTheme.accentDeep, fg: uiTheme.text, border: alpha(uiTheme.accent, 0.36), overlay: alpha(uiTheme.accent, 0.12) },
-    dark: { bg: uiTheme.surface2, fg: uiTheme.text, border: uiTheme.borderStrong, overlay: "rgba(255,255,255,0.03)" },
-    danger: { bg: alpha(uiTheme.danger, 0.16), fg: "#FFD6DC", border: alpha(uiTheme.danger, 0.34), overlay: alpha(uiTheme.danger, 0.08) },
-    light: { bg: alpha("#FFFFFF", 0.02), fg: uiTheme.text, border: uiTheme.border, overlay: alpha("#FFFFFF", 0.03) },
-    aprendiz: { bg: alpha(uiTheme.aprendiz, 0.16), fg: "#D9FFFA", border: alpha(uiTheme.aprendiz, 0.3), overlay: alpha(uiTheme.aprendiz, 0.1) },
-    guard: { bg: alpha(uiTheme.guard, 0.16), fg: "#E9F3FF", border: alpha(uiTheme.guard, 0.3), overlay: alpha(uiTheme.guard, 0.1) },
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const brand = useBrandTheme(tone === "aprendiz" ? "aprendiz" : tone === "guard" ? "guard" : "default");
+
+  const map = {
+    primary: { colors: ["#5f7cff", "#3c5de9"], fg: "#ffffff", border: "rgba(255,255,255,0.14)" },
+    dark: { colors: ["#18263d", "#0d1728"], fg: "#f8fafc", border: "rgba(255,255,255,0.08)" },
+    danger: { colors: ["#f24a6b", "#d7294f"], fg: "#ffffff", border: "rgba(255,255,255,0.14)" },
+    light: {
+      colors: brand.mode === "dark" ? ["rgba(23,35,55,0.95)", "rgba(16,25,40,0.95)"] : ["rgba(255,255,255,0.96)", "rgba(245,249,255,0.96)"],
+      fg: brand.mode === "dark" ? "#f8fafc" : "#16315f",
+      border: brand.mode === "dark" ? "rgba(255,255,255,0.08)" : "rgba(129,160,227,0.20)",
+    },
+    aprendiz: { colors: ["#23b6f6", "#0b89d1"], fg: "#ffffff", border: "rgba(255,255,255,0.14)" },
+    guard: { colors: ["#3b82f6", "#1e4fd8"], fg: "#ffffff", border: "rgba(255,255,255,0.14)" },
+  }[tone];
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 38, bounciness: 0 }).start();
   };
 
-  const palette = map[tone];
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const pressTo = (value: number) => {
-    Animated.timing(scale, { toValue: value, duration: 120, useNativeDriver: true }).start();
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 24, bounciness: 10 }).start();
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable disabled={disabled} onPress={onPress} onPressIn={() => pressTo(0.985)} onPressOut={() => pressTo(1)}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable disabled={disabled} onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={onPress}>
         {({ pressed }) => (
-          <View
+          <LinearGradient
+            colors={disabled ? ["#94a3b8", "#94a3b8"] : (map.colors as any)}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={[
               styles.button,
               {
-                backgroundColor: palette.bg,
-                borderColor: palette.border,
-                opacity: disabled ? 0.45 : 1,
-                shadowColor: glow ? palette.border : uiTheme.shadow,
-                shadowOpacity: glow ? 0.24 : 0.2,
+                borderColor: disabled ? "#94a3b8" : map.border,
+                opacity: pressed && !disabled ? 0.9 : 1,
+                shadowColor: glow ? brand.accentGlow : tone === "light" ? "rgba(149, 168, 214, 0.16)" : brand.accentGlow,
               },
             ]}
           >
-            <View style={[styles.buttonOverlay, { backgroundColor: pressed ? alpha("#FFFFFF", 0.04) : palette.overlay }]} />
-            {imageIcon ? <Image source={imageIcon} style={styles.leadingImageIcon} /> : null}
-            {icon ? <Ionicons name={icon} size={18} color={palette.fg} style={styles.leadingIcon} /> : null}
-            {!!label && <Text style={[styles.buttonText, { color: palette.fg }]}>{label}</Text>}
-          </View>
+            {imageIcon ? <Image source={imageIcon} style={styles.buttonImage} /> : null}
+            {!imageIcon && icon ? <Ionicons name={icon} size={20} color={disabled ? "#f8fafc" : map.fg} style={styles.buttonIcon} /> : null}
+            {label ? <Text style={[styles.buttonText, { color: disabled ? "#f8fafc" : map.fg }]}>{label}</Text> : null}
+          </LinearGradient>
         )}
       </Pressable>
     </Animated.View>
@@ -313,7 +392,6 @@ export function ModernButton({ label, onPress, disabled, tone = "primary", icon,
 
 export function InputField({
   label,
-  icon,
   rightIcon,
   onRightIconPress,
   iconColor,
@@ -333,22 +411,37 @@ export function InputField({
   rightImageIcon?: ImageSourcePropType;
   wrapperStyle?: ViewStyle;
 }) {
+  const brand = useBrandTheme("default");
+
   return (
     <View style={{ gap: 8 }}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={[styles.inputWrapper, wrapperStyle]}>
-        {imageIcon ? <Image source={imageIcon} style={styles.inputImageIcon} /> : null}
-        {icon ? <Ionicons name={icon} size={18} color={iconColor ?? uiTheme.textMuted} style={styles.inputIcon} /> : null}
+      <Text style={[styles.inputLabel, { color: brand.textSoft }]}>{label}</Text>
+      <View
+        style={[
+          styles.inputWrapper,
+          {
+            backgroundColor: brand.inputBg,
+            borderColor: brand.inputBorder,
+            shadowColor: "transparent",
+          },
+          wrapperStyle,
+        ]}
+      >
+        {imageIcon ? <Image source={imageIcon} style={styles.inputImage} /> : null}
+        {!imageIcon && props.icon ? <Ionicons name={props.icon} size={20} color={iconColor ?? brand.accent} style={styles.inputIcon} /> : null}
         <TextInput
           {...props}
-          placeholderTextColor={uiTheme.textMuted}
-          style={[styles.input, props.style as any]}
-          selectionColor={uiTheme.accent}
+          placeholderTextColor={brand.textSoft}
+          selectionColor={props.selectionColor ?? brand.accent}
+          style={[styles.input, { color: brand.inputText }, props.style as any]}
         />
         {(rightIcon || rightImageIcon) && (
-          <Pressable onPress={onRightIconPress} style={styles.trailingPressable}>
-            {rightImageIcon ? <Image source={rightImageIcon} style={styles.trailingImageIcon} /> : null}
-            {rightIcon ? <Ionicons name={rightIcon} size={20} color={rightIconColor ?? uiTheme.textMuted} /> : null}
+          <Pressable onPress={onRightIconPress} style={{ padding: 4 }}>
+            {rightImageIcon ? (
+              <Image source={rightImageIcon} style={styles.inputRightImage} />
+            ) : rightIcon ? (
+              <Ionicons name={rightIcon} size={22} color={rightIconColor ?? brand.textSoft} />
+            ) : null}
           </Pressable>
         )}
       </View>
@@ -368,56 +461,19 @@ export function Pill({
   tone?: "primary" | "warning" | "success" | "danger" | "aprendiz" | "guard";
 }) {
   const map = {
-    primary: { bg: alpha(uiTheme.accent, 0.12), text: uiTheme.text, border: alpha(uiTheme.accent, 0.22) },
-    warning: { bg: alpha(uiTheme.warning, 0.14), text: "#FFE8BF", border: alpha(uiTheme.warning, 0.24) },
-    success: { bg: alpha(uiTheme.success, 0.14), text: "#D8FFF1", border: alpha(uiTheme.success, 0.24) },
-    danger: { bg: alpha(uiTheme.danger, 0.14), text: "#FFD6DC", border: alpha(uiTheme.danger, 0.24) },
-    aprendiz: { bg: themePalette.aprendiz.pillBg, text: "#D9FFFA", border: themePalette.aprendiz.pillBorder },
-    guard: { bg: themePalette.guard.pillBg, text: "#E9F3FF", border: themePalette.guard.pillBorder },
-  };
-
-  const palette = map[tone];
-  return (
-    <View style={[styles.pill, { backgroundColor: palette.bg, borderColor: palette.border }]}>
-      {imageIcon ? <Image source={imageIcon} style={styles.pillImageIcon} /> : null}
-      {icon ? <Ionicons name={icon} size={13} color={palette.text} style={{ marginRight: 6 }} /> : null}
-      <Text style={[styles.pillText, { color: palette.text }]}>{text}</Text>
-    </View>
-  );
-}
-
-export function LoadingBlock({ label = "Cargando..." }: { label?: string }) {
-  return (
-    <View style={styles.statusBlock}>
-      <ActivityIndicator color={uiTheme.accent} />
-      <Text style={styles.statusText}>{label}</Text>
-    </View>
-  );
-}
-
-export function EmptyState({ icon, title, subtitle }: { icon: keyof typeof Ionicons.glyphMap; title: string; subtitle: string }) {
-  return (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons name={icon} size={22} color={uiTheme.accent} />
-      </View>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptySubtitle}>{subtitle}</Text>
-    </View>
-  );
-}
-
-export function NoticeBanner({ tone = "info", text }: { tone?: NoticeTone; text: string }) {
-  const palette = {
-    info: { bg: alpha(uiTheme.accent, 0.12), border: alpha(uiTheme.accent, 0.22), fg: uiTheme.text, icon: "information-circle-outline" as const },
-    success: { bg: alpha(uiTheme.success, 0.14), border: alpha(uiTheme.success, 0.22), fg: "#D8FFF1", icon: "checkmark-circle-outline" as const },
-    danger: { bg: alpha(uiTheme.danger, 0.14), border: alpha(uiTheme.danger, 0.22), fg: "#FFD6DC", icon: "alert-circle-outline" as const },
+    primary: { bg: "rgba(95,124,255,0.10)", text: "#4a61d7", border: "rgba(95,124,255,0.18)" },
+    warning: { bg: "rgba(245,158,11,0.10)", text: "#b45309", border: "rgba(245,158,11,0.18)" },
+    success: { bg: "rgba(16,185,129,0.10)", text: "#0f8b61", border: "rgba(16,185,129,0.18)" },
+    danger: { bg: "rgba(225,29,72,0.10)", text: "#be123c", border: "rgba(225,29,72,0.18)" },
+    aprendiz: { bg: "rgba(14,165,233,0.10)", text: "#0284c7", border: "rgba(14,165,233,0.18)" },
+    guard: { bg: "rgba(45,104,216,0.10)", text: "#315cc7", border: "rgba(45,104,216,0.18)" },
   }[tone];
 
   return (
-    <View style={[styles.noticeBanner, { backgroundColor: palette.bg, borderColor: palette.border }]}>
-      <Ionicons name={palette.icon} size={18} color={palette.fg} />
-      <Text style={[styles.noticeText, { color: palette.fg }]}>{text}</Text>
+    <View style={[styles.pill, { backgroundColor: map.bg, borderColor: map.border }]}>
+      {imageIcon ? <Image source={imageIcon} style={styles.pillImage} /> : null}
+      {!imageIcon && icon ? <Ionicons name={icon} size={14} color={map.text} style={{ marginRight: 4 }} /> : null}
+      <Text style={[styles.pillText, { color: map.text }]}>{text}</Text>
     </View>
   );
 }
@@ -425,268 +481,152 @@ export function NoticeBanner({ tone = "info", text }: { tone?: NoticeTone; text:
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: uiTheme.page,
   },
-  scrollView: {
-    flex: 1,
+  ambientTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  ambientBeam: {
+    position: "absolute",
+    top: 120,
+    left: -36,
+    right: -36,
+    height: 280,
+    transform: [{ rotate: "-8deg" }],
+  },
+  ambientBottom: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: -10,
+    height: 280,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "ios" ? 28 : 24,
-    paddingBottom: 20,
-    gap: 16,
+    padding: 24,
+    gap: 20,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === "ios" ? 28 : 24,
-    paddingBottom: 40,
-    gap: 16,
-  },
-  meshOrb: {
-    position: "absolute",
-    borderRadius: 999,
-  },
-  meshOrbPrimary: {
-    width: 280,
-    height: 280,
-    top: -90,
-    right: -90,
-  },
-  meshOrbSecondary: {
-    width: 300,
-    height: 300,
-    bottom: -120,
-    left: -120,
-  },
-  gridOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderColor: "rgba(255,255,255,0.03)",
-    borderWidth: 0,
-  },
-  signalLine: {
-    position: "absolute",
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  signalDot: {
-    position: "absolute",
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.22)",
+    padding: 24,
+    gap: 20,
+    paddingBottom: 56,
+    paddingTop: Platform.OS === "ios" ? 34 : 40,
   },
   cardContainer: {
-    borderRadius: 24,
-    padding: 18,
-    backgroundColor: uiTheme.surface1,
-    borderWidth: 1,
-    borderColor: uiTheme.border,
-    shadowColor: uiTheme.shadow,
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+    borderRadius: 28,
     overflow: "hidden",
-    gap: 12,
+    borderWidth: 1,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
   },
-  cardContainerStrong: {
-    backgroundColor: uiTheme.surface2,
-    borderColor: uiTheme.borderStrong,
+  glassCard: {
+    padding: 24,
+  },
+  lightSheen: {
+    position: "absolute",
+    top: 0,
+    left: 16,
+    right: 16,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.9)",
   },
   title: {
-    fontSize: 26,
-    lineHeight: 30,
-    fontWeight: "800",
-    color: uiTheme.text,
-    letterSpacing: -0.6,
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: -0.8,
   },
   subtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: uiTheme.textSoft,
-  },
-  button: {
-    minHeight: 52,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    gap: 8,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-    overflow: "hidden",
-  },
-  buttonOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  leadingIcon: {
-    zIndex: 1,
-  },
-  leadingImageIcon: {
-    width: 18,
-    height: 18,
-    resizeMode: "contain",
-    zIndex: 1,
-  },
-  buttonText: {
     fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 0.1,
-    zIndex: 1,
+    fontWeight: "500",
+    lineHeight: 22,
   },
   inputLabel: {
     fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
     textTransform: "uppercase",
-    letterSpacing: 0.7,
-    color: uiTheme.textMuted,
-    fontWeight: "700",
+    marginLeft: 4,
   },
   inputWrapper: {
-    minHeight: 54,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: uiTheme.border,
-    backgroundColor: uiTheme.surface2,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    gap: 10,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   inputIcon: {
-    opacity: 0.9,
+    marginRight: 12,
   },
   input: {
     flex: 1,
-    color: uiTheme.text,
-    fontSize: 15,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    fontSize: 16,
+    fontWeight: "600",
   },
-  inputImageIcon: {
-    width: 18,
-    height: 18,
+  inputImage: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
     resizeMode: "contain",
   },
-  trailingPressable: {
-    paddingLeft: 8,
-    paddingVertical: 4,
-  },
-  trailingImageIcon: {
-    width: 18,
-    height: 18,
+  inputRightImage: {
+    width: 22,
+    height: 22,
     resizeMode: "contain",
+  },
+  button: {
+    flexDirection: "row",
+    minHeight: 58,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  buttonImage: {
+    width: 22,
+    height: 22,
+    marginRight: 8,
+    resizeMode: "contain",
+  },
+  buttonText: {
+    fontWeight: "800",
+    fontSize: 16,
+    letterSpacing: 0.3,
   },
   pill: {
     alignSelf: "flex-start",
-    minHeight: 30,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
     flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     alignItems: "center",
-    justifyContent: "center",
+  },
+  pillImage: {
+    width: 16,
+    height: 16,
+    marginRight: 4,
+    resizeMode: "contain",
   },
   pillText: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
+    fontWeight: "900",
+    fontSize: 12,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
-  pillImageIcon: {
-    width: 14,
-    height: 14,
-    resizeMode: "contain",
-    marginRight: 6,
-  },
-  statusBlock: {
-    minHeight: 76,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: uiTheme.border,
-    backgroundColor: alpha(uiTheme.surface3, 0.9),
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 16,
-  },
-  statusText: {
-    color: uiTheme.textSoft,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 10,
-  },
-  emptyIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: alpha(uiTheme.accent, 0.1),
-    borderWidth: 1,
-    borderColor: alpha(uiTheme.accent, 0.18),
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    color: uiTheme.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  emptySubtitle: {
-    color: uiTheme.textSoft,
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 19,
-  },
-  noticeBanner: {
-    minHeight: 46,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  noticeText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 18,
-  },
-  skeletonCard: {
-    borderRadius: 18,
-    backgroundColor: alpha("#FFFFFF", 0.03),
-    borderWidth: 1,
-    borderColor: uiTheme.border,
-    padding: 16,
-    gap: 10,
-  },
-  skeletonLine: {
-    borderRadius: 999,
-    backgroundColor: alpha("#FFFFFF", 0.08),
-  },
-  skeletonListItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 18,
-    backgroundColor: alpha("#FFFFFF", 0.03),
-    borderWidth: 1,
-    borderColor: uiTheme.border,
-    padding: 14,
-  },
-  skeletonDot: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: alpha("#FFFFFF", 0.08),
-  },
 });
-

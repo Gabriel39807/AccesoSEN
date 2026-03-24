@@ -1,33 +1,24 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const isCI = Boolean(process.env.CI);
-const mockedApiBaseUrl = "http://127.0.0.1:8000";
-
 export default defineConfig({
-  testDir: "./tests/e2e",
-  testIgnore: /.*\.integration\.spec\.ts/,
+  testDir: "./e2e",
   fullyParallel: false,
-  forbidOnly: isCI,
-  retries: isCI ? 2 : 0,
+  retries: 0,
   workers: 1,
-  reporter: isCI ? [["github"], ["html", { open: "never" }]] : [["list"], ["html", { open: "never" }]],
+  timeout: 45_000,
+  expect: {
+    timeout: 8_000,
+  },
   use: {
-    baseURL: "http://127.0.0.1:3100",
-    trace: "retain-on-failure",
+    baseURL: "http://localhost:3000",
+    trace: "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
   },
   webServer: {
-    command: "cmd /c npm run start -- --hostname 127.0.0.1 --port 3100",
-    env: {
-      ...process.env,
-      NEXT_PUBLIC_API_URL: mockedApiBaseUrl,
-      NEXT_PUBLIC_AUTH_COOKIE_MODE: "false",
-      NEXT_DISABLE_EDGE_AUTH_GUARD: "true",
-    },
-    port: 3100,
-    timeout: 120_000,
-    reuseExistingServer: false,
+    command: "npm run dev",
+    url: "http://localhost:3000/login",
+    reuseExistingServer: true,
+    timeout: 180_000,
   },
   projects: [
     {
