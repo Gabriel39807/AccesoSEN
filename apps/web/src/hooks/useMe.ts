@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import type { TechnicalUserRole } from "@/lib/admin-users";
 
 export type MeUser = {
   id: number;
   username: string;
-  rol: "superadmin" | "admin_sede" | "aprendiz" | "guarda";
+  rol: TechnicalUserRole;
   first_name?: string;
   last_name?: string;
   email?: string;

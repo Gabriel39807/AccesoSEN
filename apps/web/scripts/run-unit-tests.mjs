@@ -1,17 +1,216 @@
 import assert from "node:assert/strict";
+import { read as readWorkbook, utils as xlsxUtils } from "xlsx";
 import { buildControlPanelHeaders, buildDomainRulePayload, normalizeDomainValue, validateControlPanelReason } from "../src/lib/control-center.ts";
 import { COOKIE_AUTH_MODE } from "../src/lib/api-config.ts";
+import {
+  APRENDIZ_IMPORT_FORMATS,
+  APRENDIZ_IMPORT_JORNADAS,
+  APRENDIZ_IMPORT_MAX_FILE_SIZE_BYTES,
+  buildAprendizImportTemplateCsv,
+  buildAprendizImportTemplateFilename,
+  buildAprendizImportTemplateWorkbook,
+  buildUserListParams,
+  buildUserMutationPayload,
+  canManageRole,
+  formatFileSize,
+  getAprendizImportTemplateColumns,
+  getVisibleRoleFilters,
+  getVisibleRoleOptions,
+  isAdministrativeRole,
+  validateAprendizImportFile,
+} from "../src/lib/admin-users.ts";
 import { AUTH_WEB_FLOW, clearTokens, getAccessToken, saveTokens } from "../src/lib/auth.ts";
 import { buildPasswordRecoveryUrl, PASSWORD_RECOVERY_ROUTE, PASSWORD_RECOVERY_SUCCESS_ROUTE } from "../src/lib/password-recovery-routes.ts";
 import { resolveRouteAccess } from "../src/lib/route-access.ts";
 
 const tests = [
   {
+    name: "admin user helpers allow superadmin to create admin_sede",
+    run() {
+      assert.equal(canManageRole("superadmin", "admin_sede"), true);
+      assert.deepEqual(getVisibleRoleOptions("superadmin"), ["superadmin", "admin_sede", "guarda", "aprendiz"]);
+    },
+  },
+  {
+    name: "admin user helpers block admin_sede from administrative roles",
+    run() {
+      assert.equal(canManageRole("admin_sede", "admin_sede"), false);
+      assert.equal(canManageRole("admin_sede", "superadmin"), false);
+      assert.deepEqual(getVisibleRoleOptions("admin_sede"), ["guarda", "aprendiz"]);
+    },
+  },
+  {
+    name: "admin user helpers lock admin_sede payloads to own sede",
+    run() {
+      assert.deepEqual(
+        buildUserMutationPayload({
+          actorRole: "admin_sede",
+          actorSede: "sede-norte",
+          role: "guarda",
+          estado: "activo",
+          sede_principal: "sede-sur",
+          email: "guarda@sadi.test",
+        }),
+        {
+          rol: "guarda",
+          estado: "activo",
+          email: "guarda@sadi.test",
+          sede_principal: "sede-norte",
+          programa_formacion: undefined,
+          documento: undefined,
+        },
+      );
+    },
+  },
+  {
+    name: "admin user helpers build admin_sede filter params with technical values",
+    run() {
+      assert.deepEqual(
+        buildUserListParams({
+          actorRole: "superadmin",
+          actorSede: null,
+          query: "  maria  ",
+          roleFilter: "admin_sede",
+          stateFilter: "bloqueado",
+          sedeFilter: "sede-centro",
+          page: 2,
+          pageSize: 25,
+        }),
+        {
+          page: 2,
+          page_size: 25,
+          q: "maria",
+          rol: "admin_sede",
+          estado: "bloqueado",
+          sede_principal: "sede-centro",
+        },
+      );
+    },
+  },
+  {
+    name: "admin user helpers force admin_sede filters to own sede",
+    run() {
+      assert.deepEqual(
+        buildUserListParams({
+          actorRole: "admin_sede",
+          actorSede: "sede-1",
+          query: "",
+          roleFilter: "guarda",
+          stateFilter: "activo",
+          sedeFilter: "sede-2",
+          page: 1,
+          pageSize: 10,
+        }),
+        {
+          page: 1,
+          page_size: 10,
+          rol: "guarda",
+          estado: "activo",
+          sede_principal: "sede-1",
+        },
+      );
+    },
+  },
+  {
+    name: "admin user helpers expose only valid role filters",
+    run() {
+      assert.deepEqual(getVisibleRoleFilters("superadmin"), ["superadmin", "admin_sede", "guarda", "aprendiz"]);
+      assert.deepEqual(getVisibleRoleFilters("admin_sede"), ["guarda", "aprendiz"]);
+    },
+  },
+  {
+    name: "admin stats helper excludes legacy admin aliases",
+    run() {
+      assert.equal(isAdministrativeRole("admin"), false);
+      assert.equal(isAdministrativeRole("admin_sede"), true);
+      assert.equal(isAdministrativeRole("superadmin"), true);
+    },
+  },
+  {
+    name: "aprendiz import template omits sede for admin_sede",
+    run() {
+      assert.deepEqual(getAprendizImportTemplateColumns("admin_sede"), [
+        "Nombres",
+        "Apellidos",
+        "Documento",
+        "Telefono",
+        "Correo",
+        "Jornada",
+        "Programa",
+      ]);
+      const csv = buildAprendizImportTemplateCsv({ actorRole: "admin_sede" });
+      assert.match(csv, /^\uFEFFNombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa\r?\n$/u);
+      const workbook = readWorkbook(buildAprendizImportTemplateWorkbook({ actorRole: "admin_sede" }), { type: "array" });
+      assert.equal(workbook.SheetNames[0], "Aprendices");
+      assert.deepEqual(xlsxUtils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }), [[
+        "Nombres",
+        "Apellidos",
+        "Documento",
+        "Telefono",
+        "Correo",
+        "Jornada",
+        "Programa",
+      ]]);
+      assert.equal(buildAprendizImportTemplateFilename("admin_sede", "xlsx"), "plantilla-importacion-aprendices-admin-sede.xlsx");
+    },
+  },
+  {
+    name: "aprendiz import template includes sede for superadmin with supported technical values",
+    run() {
+      assert.deepEqual(APRENDIZ_IMPORT_FORMATS, [".csv", ".xlsx", ".xlsm", ".xltx", ".xltm"]);
+      assert.deepEqual(APRENDIZ_IMPORT_JORNADAS, ["MAÑANA", "TARDE", "NOCHE"]);
+      assert.deepEqual(getAprendizImportTemplateColumns("superadmin"), [
+        "Nombres",
+        "Apellidos",
+        "Documento",
+        "Telefono",
+        "Correo",
+        "Jornada",
+        "Programa",
+        "Sede",
+      ]);
+      const csv = buildAprendizImportTemplateCsv({ actorRole: "superadmin" });
+      assert.match(csv, /^\uFEFFNombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa,Sede\r?\n$/u);
+      const workbook = readWorkbook(buildAprendizImportTemplateWorkbook({ actorRole: "superadmin" }), { type: "array" });
+      assert.deepEqual(xlsxUtils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }), [[
+        "Nombres",
+        "Apellidos",
+        "Documento",
+        "Telefono",
+        "Correo",
+        "Jornada",
+        "Programa",
+        "Sede",
+      ]]);
+      assert.equal(buildAprendizImportTemplateFilename("superadmin", "csv"), "plantilla-importacion-aprendices-superadmin.csv");
+    },
+  },
+  {
+    name: "aprendiz import file validation rejects invalid files before upload",
+    run() {
+      assert.equal(validateAprendizImportFile({ name: "aprendices.txt", size: 10 }), "Formato no soportado. Usa .CSV, .XLSX, .XLSM, .XLTX, .XLTM.");
+      assert.equal(validateAprendizImportFile({ name: "aprendices.csv", size: 0 }), "El archivo esta vacio. Descarga la plantilla y completa al menos una fila.");
+      assert.equal(
+        validateAprendizImportFile({ name: "aprendices.xlsx", size: APRENDIZ_IMPORT_MAX_FILE_SIZE_BYTES + 1 }),
+        "El archivo supera el maximo de 5.0 MB.",
+      );
+      assert.equal(validateAprendizImportFile({ name: "aprendices.xlsx", size: 1024 }), null);
+    },
+  },
+  {
+    name: "aprendiz import file helper formats byte sizes for ui copy",
+    run() {
+      assert.equal(formatFileSize(512), "512 B");
+      assert.equal(formatFileSize(2048), "2.0 KB");
+      assert.equal(formatFileSize(5 * 1024 * 1024), "5.0 MB");
+    },
+  },
+  {
     name: "route-access redirects authenticated admins away from login",
     run() {
       assert.deepEqual(resolveRouteAccess("/login", "superadmin"), {
         kind: "redirect",
-        destination: "/admin/usuarios",
+        destination: "/admin/inicio",
       });
     },
   },

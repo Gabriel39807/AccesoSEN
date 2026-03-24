@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import BadgeChip from "@/components/admin/BadgeChip";
@@ -14,16 +15,40 @@ import FormBanner from "@/components/feedback/FormBanner";
 import FieldError from "@/components/feedback/FieldError";
 import InlineNotice from "@/components/feedback/InlineNotice";
 import Pagination from "@/components/ui/Pagination";
+import { useMe } from "@/hooks/useMe";
 import { useSedes } from "@/hooks/useSedes";
 import { useFormFeedback } from "@/hooks/useFormFeedback";
 import { useInstitution } from "@/context/institution-context";
 import { parseApiError as parseSharedApiError } from "@/lib/apiError";
+import {
+  APRENDIZ_IMPORT_FORMATS,
+  APRENDIZ_IMPORT_JORNADAS,
+  APRENDIZ_IMPORT_MAX_FILE_SIZE_BYTES,
+  buildAprendizImportTemplateCsv,
+  buildAprendizImportTemplateFilename,
+  buildAprendizImportTemplateWorkbook,
+  buildUserListParams,
+  buildUserMutationPayload,
+  canManageRole,
+  getAprendizImportTemplateColumns,
+  getRoleBadgeLabel,
+  getRoleBadgeTone,
+  getScopedSede,
+  getVisibleRoleFilters,
+  getVisibleRoleOptions,
+  isAdministrativeRole,
+  formatFileSize,
+  shouldHideRoleFromAdminSede,
+  validateAprendizImportFile,
+  type UserFilterRole,
+  type UserStateFilter,
+} from "@/lib/admin-users";
 
 type Usuario = {
   id: number;
   username: string;
   email?: string | null;
-  rol?: "admin" | "aprendiz" | "guarda" | string;
+  rol?: "superadmin" | "admin_sede" | "admin" | "aprendiz" | "guarda" | string;
   estado?: string;
   first_name?: string;
   last_name?: string;
@@ -83,10 +108,25 @@ type ParsedApiError = {
   bannerMessage?: string;
 };
 
-const ROLES = ["admin", "guarda", "aprendiz"] as const;
-
 function cx(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
+}
+
+function ModalFrame({
+  children,
+  footer,
+  className,
+}: {
+  children: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx("flex max-h-[calc(100dvh-10rem)] min-h-0 flex-col overflow-hidden", className)}>
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">{children}</div>
+      {footer ? <div className="shrink-0 border-t border-[color:var(--color-border)] bg-[color:var(--surface)] pt-3">{footer}</div> : null}
+    </div>
+  );
 }
 
 function useDebounced<T>(value: T, delay = 450) {
@@ -102,11 +142,23 @@ function parseImportApiError(e: any): ParsedApiError {
   const shared = parseSharedApiError(e);
   const status = shared.status;
   const code = String(shared.code || "").toUpperCase();
+  const detail = e?.response?.data?.detail;
+  const fileMessage = typeof detail?.file?.[0] === "string" ? detail.file[0] : undefined;
+  const missingColumns = Array.isArray(detail?.missing) ? detail.missing.filter((value: unknown) => typeof value === "string") : [];
   if (status === 403) {
     return { bannerMessage: "No tienes permisos para importar aprendices.", fieldErrors: shared.fieldErrors };
   }
   if (!e?.response) {
     return { bannerMessage: "No se pudo conectar. Reintenta.", fieldErrors: shared.fieldErrors };
+  }
+  if (missingColumns.length > 0) {
+    return {
+      bannerMessage: `Faltan columnas requeridas: ${missingColumns.join(", ")}. Descarga la plantilla actualizada y vuelve a validar.`,
+      fieldErrors: shared.fieldErrors,
+    };
+  }
+  if (fileMessage) {
+    return { bannerMessage: fileMessage, fieldErrors: shared.fieldErrors };
   }
   if (status === 409 && code === "DOCUMENT_EXISTS") {
     return { bannerMessage: "Se encontraron documentos que ya existen en el sistema.", fieldErrors: shared.fieldErrors };
@@ -144,9 +196,19 @@ function buildCsv(rows: Array<Record<string, unknown>>) {
   return `${lines.join("\n")}\n`;
 }
 
-function downloadTextFile(content: string, filename: string) {
+function countDistinctImportErrorRows(errors: Array<{ row: number }>) {
+  return new Set(errors.map((item) => Number(item.row)).filter((row) => Number.isFinite(row) && row > 1)).size;
+}
+
+function downloadTextFile(content: string, filename: string, mime = "text/csv;charset=utf-8;") {
   if (typeof window === "undefined") return;
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const normalized = mime.startsWith("text/csv") && !content.startsWith("\uFEFF") ? `\uFEFF${content}` : content;
+  const blob = new Blob([normalized], { type: mime });
+  downloadBlob(blob, filename);
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  if (typeof window === "undefined") return;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -156,19 +218,19 @@ function downloadTextFile(content: string, filename: string) {
 }
 
 function StatSkeleton() {
-  return <div className="command-noir-metric h-[132px] animate-pulse" />;
+  return <div className="command-noir-metric h-[104px] animate-pulse" />;
 }
 
 function FilterSkeleton() {
   return (
-    <section className="sadi-card-strong rounded-[1.75rem] p-5">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-4" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-1" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-1" />
+    <section className="sadi-card-strong rounded-[1.35rem] p-3.5">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-4" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-1" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-1" />
       </div>
     </section>
   );
@@ -192,8 +254,8 @@ function MetricPanel({
     <>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
-          <p className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-1.5 text-[1.45rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
         </div>
         <span className="command-noir-chip" data-tone={tone}>{detail}</span>
       </div>
@@ -239,9 +301,36 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
 }
 
 export default function AdminUsuariosPage() {
+  const { me, loadingMe } = useMe();
   const { sedes } = useSedes();
   const { emailPlaceholder } = useInstitution();
-  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
+  const actorRole = me?.rol;
+  const actorSede = me?.sede_principal ?? null;
+  const importAccept = APRENDIZ_IMPORT_FORMATS.join(",");
+  const importTemplateColumns = useMemo(() => getAprendizImportTemplateColumns(actorRole), [actorRole]);
+  const importTemplateCsv = useMemo(
+    () => buildAprendizImportTemplateCsv({ actorRole }),
+    [actorRole],
+  );
+  const importTemplateWorkbook = useMemo(
+    () => buildAprendizImportTemplateWorkbook({ actorRole }),
+    [actorRole],
+  );
+  const importFormatsLabel = useMemo(() => APRENDIZ_IMPORT_FORMATS.map((item) => item.replace(".", "")).join(", ").toUpperCase(), []);
+  const importTemplateXlsxFilename = useMemo(
+    () => buildAprendizImportTemplateFilename(actorRole, "xlsx"),
+    [actorRole],
+  );
+  const importTemplateCsvFilename = useMemo(
+    () => buildAprendizImportTemplateFilename(actorRole, "csv"),
+    [actorRole],
+  );
+  const importMaxFileSizeLabel = useMemo(() => formatFileSize(APRENDIZ_IMPORT_MAX_FILE_SIZE_BYTES), []);
+  const roleOptions = useMemo(() => getVisibleRoleOptions(actorRole), [actorRole]);
+  const roleFilterOptions = useMemo(() => getVisibleRoleFilters(actorRole), [actorRole]);
+  const canManageAdministrativeRoles = actorRole === "superadmin";
+  const isScopedAdminSede = actorRole === "admin_sede";
+  const missingAdminSedeScope = isScopedAdminSede && !actorSede;
 
   // data
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -255,8 +344,8 @@ export default function AdminUsuariosPage() {
 
   // UI controls
   const [q, setQ] = useState("");
-  const [rolFilter, setRolFilter] = useState<"todos" | "admin" | "guarda" | "aprendiz">("todos");
-  const [estadoFilter, setEstadoFilter] = useState<"todos" | "activo" | "bloqueado">("todos");
+  const [rolFilter, setRolFilter] = useState<UserFilterRole>("todos");
+  const [estadoFilter, setEstadoFilter] = useState<UserStateFilter>("todos");
   const [sedeFilter, setSedeFilter] = useState<string>("todos");
 
   // debounce
@@ -351,8 +440,42 @@ export default function AdminUsuariosPage() {
   const createPasswordRef = useRef<HTMLInputElement | null>(null);
   const editRolRef = useRef<HTMLSelectElement | null>(null);
   const editEstadoRef = useRef<HTMLSelectElement | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const importStageLabel = useMemo(() => {
+    if (importStage === "parsing") return "Pendiente de validacion";
+    if (importStage === "ready") return "Listo para importar";
+    if (importStage === "importing") return "Importando";
+    return "Finalizado";
+  }, [importStage]);
+
+  const importResultSummary = useMemo(() => {
+    const created = importRowResults.filter((row) => row.status === "created").length;
+    const skippedRuntime = importRowResults.filter((row) => row.status === "skipped").length;
+    const skippedValidation = countDistinctImportErrorRows(importErrores.filter((err) => err.code === "DUPLICATE_IN_FILE"));
+    const failedRuntime = importRowResults.filter((row) => row.status === "failed").length;
+    const failedValidation = countDistinctImportErrorRows(importErrores.filter((err) => err.code !== "DUPLICATE_IN_FILE"));
+    return {
+      created,
+      skipped: skippedRuntime + skippedValidation,
+      failed: failedRuntime + failedValidation,
+    };
+  }, [importErrores, importRowResults]);
+
+  const importReportBaseName = useMemo(() => {
+    const trimmed = String(importFile?.name || "aprendices").trim();
+    const stem = trimmed.replace(/\.[^.]+$/u, "") || "aprendices";
+    return stem.replace(/[^a-z0-9-_]+/giu, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "aprendices";
+  }, [importFile]);
+
+  const importRequiredColumnsLabel = useMemo(() => {
+    const requiredColumns = importTemplateColumns.filter((column) => column !== "Telefono" && column !== "Correo");
+    return requiredColumns.join(", ");
+  }, [importTemplateColumns]);
 
   async function cargar(p = page) {
+    if (loadingMe) return;
+
     const rid = ++requestIdRef.current;
 
     setError(null);
@@ -360,13 +483,16 @@ export default function AdminUsuariosPage() {
     if (usuarios.length === 0) setLoading(true);
 
     try {
-      const params: any = { page: p, page_size: pageSize };
-
-      // filtros (si tu backend los soporta)
-      if (dq.trim()) params.q = dq.trim();
-      if (dRol !== "todos") params.rol = dRol;
-      if (dEstado !== "todos") params.estado = dEstado;
-      if (dSede !== "todos") params.sede_principal = dSede;
+      const params = buildUserListParams({
+        actorRole,
+        actorSede,
+        query: dq,
+        roleFilter: dRol,
+        stateFilter: dEstado,
+        sedeFilter: dSede,
+        page: p,
+        pageSize,
+      });
 
       const res = await api.get<Paginated<Usuario> | Usuario[]>("/api/usuarios/", { params });
       const payload: any = res.data;
@@ -395,23 +521,31 @@ export default function AdminUsuariosPage() {
   }
 
   useEffect(() => {
+    if (loadingMe) return;
     cargar(1);
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadingMe]);
+
+  useEffect(() => {
+    if (!isScopedAdminSede) return;
+    setSedeFilter(actorSede ?? "todos");
+  }, [actorSede, isScopedAdminSede]);
 
   // recargar al cambiar filtros debounced
   useEffect(() => {
+    if (loadingMe) return;
     setPage(1);
     cargar(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dq, dRol, dEstado, dSede, pageSize]);
+  }, [loadingMe, actorRole, actorSede, dq, dRol, dEstado, dSede, pageSize]);
 
   // recargar al cambiar page
   useEffect(() => {
+    if (loadingMe) return;
     cargar(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [loadingMe, page, actorRole, actorSede]);
 
   useEffect(() => {
     if (!openCrear) return;
@@ -431,12 +565,17 @@ export default function AdminUsuariosPage() {
   }, [pageBanner]);
 
   // fallback client-side filtering/pagination (solo si backend NO pagina)
+  const usuariosVisibles = useMemo(
+    () => usuarios.filter((u) => !shouldHideRoleFromAdminSede(actorRole, u.rol)),
+    [actorRole, usuarios],
+  );
+
   const filtrados = useMemo(() => {
-    if (serverPaginated) return usuarios;
+    if (serverPaginated) return usuariosVisibles;
 
     const query = dq.trim().toLowerCase();
 
-    return usuarios
+    return usuariosVisibles
       .filter((u) => {
         if (dRol !== "todos" && u.rol !== dRol) return false;
         if (dEstado !== "todos" && (u.estado ?? "").toLowerCase() !== dEstado) return false;
@@ -453,7 +592,7 @@ export default function AdminUsuariosPage() {
         );
       })
       .sort((a, b) => a.id - b.id);
-  }, [usuarios, dq, dRol, dEstado, dSede, serverPaginated]);
+  }, [usuariosVisibles, dq, dRol, dEstado, dSede, serverPaginated]);
 
   const totalCount = serverPaginated ? count : filtrados.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -464,41 +603,42 @@ export default function AdminUsuariosPage() {
     sedeFilter !== "todos";
 
   const pageItems = useMemo(() => {
-    if (serverPaginated) return usuarios;
+    if (serverPaginated) return usuariosVisibles;
     return filtrados.slice((page - 1) * pageSize, page * pageSize);
-  }, [usuarios, filtrados, page, pageSize, serverPaginated]);
+  }, [usuariosVisibles, filtrados, page, pageSize, serverPaginated]);
 
   const stats = useMemo(() => {
     // stats siempre basados en lo que tenemos cargado en pantalla (mantiene tu diseÃ±o)
-    const base = serverPaginated ? usuarios : usuarios;
+    const base = usuariosVisibles;
 
-    const total = serverPaginated ? count : base.length;
+    const total = base.length;
     const activos = base.filter((u) => (u.estado ?? "").toLowerCase() === "activo").length;
     const bloqueados = base.filter((u) => (u.estado ?? "").toLowerCase() === "bloqueado").length;
 
-    const admins = base.filter((u) => u.rol === "admin").length;
+    const admins = base.filter((u) => isAdministrativeRole(u.rol)).length;
     const guardas = base.filter((u) => u.rol === "guarda").length;
     const aprendices = base.filter((u) => u.rol === "aprendiz").length;
 
     return { total, activos, bloqueados, admins, guardas, aprendices };
-  }, [usuarios, count, serverPaginated]);
+  }, [usuariosVisibles]);
 
   function aplicarFiltrosDesdeCard(next: {
-    rol?: "todos" | "admin" | "guarda" | "aprendiz";
-    estado?: "todos" | "activo" | "bloqueado";
+    rol?: UserFilterRole;
+    estado?: UserStateFilter;
   }) {
     setQ("");
-    setSedeFilter("todos");
+    setSedeFilter(isScopedAdminSede ? actorSede ?? "todos" : "todos");
     setRolFilter(next.rol ?? "todos");
     setEstadoFilter(next.estado ?? "todos");
     setPage(1);
   }
 
   function abrirEditar(u: Usuario) {
+    if (!canManageRole(actorRole, u.rol)) return;
     setSelected(u);
     setRol(u.rol ?? "aprendiz");
     setEstado(u.estado ?? "activo");
-    setSede(u.sede_principal ?? "");
+    setSede(getScopedSede(actorRole, actorSede, u.sede_principal) ?? "");
     setPrograma(u.programa_formacion ?? "");
     setDocumento(u.documento ?? "");
     setEmail(u.email ?? "");
@@ -531,14 +671,21 @@ export default function AdminUsuariosPage() {
     clearAllEditFieldErrors();
 
     try {
-      const payload: Partial<Usuario> = {
-        rol,
+      if (!canManageRole(actorRole, rol)) {
+        setEditBanner({ type: "error", message: "No puedes asignar roles administrativos desde esta sesión." });
+        return;
+      }
+
+      const payload = buildUserMutationPayload({
+        actorRole,
+        actorSede,
+        role: rol,
         estado,
-        email: email.trim() ? email.trim() : undefined,
-        sede_principal: sede ? sede : null,
-        programa_formacion: programa.trim() ? programa.trim() : undefined,
-        documento: documento.trim() ? documento.trim() : undefined,
-      };
+        email,
+        sede_principal: sede,
+        programa_formacion: programa,
+        documento,
+      });
 
       await api.patch(`/api/usuarios/${selected.id}/`, payload);
 
@@ -565,9 +712,21 @@ export default function AdminUsuariosPage() {
   async function inlinePatch(id: number, patch: Partial<Usuario>) {
     const current = usuarios.find((u) => u.id === id);
     if (!current) return;
+    const nextRole = patch.rol ?? current.rol;
+    if (!canManageRole(actorRole, current.rol) || !canManageRole(actorRole, nextRole)) {
+      setRowError((prev) => ({ ...prev, [id]: "No puedes modificar roles administrativos desde esta sesión." }));
+      return;
+    }
+
+    const normalizedPatch: Partial<Usuario> = {
+      ...patch,
+      ...(Object.prototype.hasOwnProperty.call(patch, "sede_principal")
+        ? { sede_principal: getScopedSede(actorRole, actorSede, patch.sede_principal ?? current.sede_principal) }
+        : null),
+    };
 
     const previousValues: Partial<Usuario> = {};
-    (Object.keys(patch) as Array<keyof Usuario>).forEach((key) => {
+    (Object.keys(normalizedPatch) as Array<keyof Usuario>).forEach((key) => {
       (previousValues as any)[key] = current[key];
     });
 
@@ -578,11 +737,11 @@ export default function AdminUsuariosPage() {
       delete next[id];
       return next;
     });
-    setRowRetryPatch((prev) => ({ ...prev, [id]: patch }));
-    setUsuarios((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+    setRowRetryPatch((prev) => ({ ...prev, [id]: normalizedPatch }));
+    setUsuarios((prev) => prev.map((u) => (u.id === id ? { ...u, ...normalizedPatch } : u)));
 
     try {
-      await api.patch(`/api/usuarios/${id}/`, patch);
+      await api.patch(`/api/usuarios/${id}/`, normalizedPatch);
       setRowSaving((prev) => ({ ...prev, [id]: false }));
       setRowError((prev) => {
         if (!prev[id]) return prev;
@@ -616,7 +775,7 @@ export default function AdminUsuariosPage() {
     setCDocumento("");
     setCRol("aprendiz");
     setCEstado("activo");
-    setCSede("");
+    setCSede(getScopedSede(actorRole, actorSede, null) ?? "");
     setCPrograma("");
   }
 
@@ -643,17 +802,26 @@ export default function AdminUsuariosPage() {
     setPageBanner(null);
     setCreating(true);
     try {
-      const payload: any = {
+      if (!canManageRole(actorRole, c_rol)) {
+        setCreateBanner({ type: "error", message: "No puedes crear cuentas administrativas desde esta sesión." });
+        return;
+      }
+
+      const payload = {
         username: c_username.trim(),
         password: c_password.trim(),
         first_name: c_first.trim() || "",
         last_name: c_last.trim() || "",
-        email: c_email.trim() || "",
-        documento: c_documento.trim() || "",
-        rol: c_rol,
-        estado: c_estado,
-        sede_principal: c_sede ? c_sede : null,
-        programa_formacion: c_programa.trim() || null,
+        ...buildUserMutationPayload({
+          actorRole,
+          actorSede,
+          role: c_rol,
+          estado: c_estado,
+          email: c_email,
+          sede_principal: c_sede,
+          programa_formacion: c_programa,
+          documento: c_documento,
+        }),
       };
 
       await api.post("/api/usuarios/", payload);
@@ -680,9 +848,16 @@ export default function AdminUsuariosPage() {
 
   function abrirImportar() {
     setOpenImportar(true);
+    handleImportFileChange(null);
+    setValidandoImport(false);
+    setConfirmandoImport(false);
+  }
+
+  function handleImportFileChange(file: File | null) {
+    const validationMessage = file ? validateAprendizImportFile(file) : null;
+    setImportFile(validationMessage ? null : file);
     setImportStage("parsing");
-    setImportBanner(null);
-    setImportFile(null);
+    setImportBanner(validationMessage ? { type: "error", message: validationMessage } : null);
     setImportId("");
     setImportResumen(null);
     setImportErrores([]);
@@ -694,8 +869,22 @@ export default function AdminUsuariosPage() {
     setAllowSkipFileDuplicates(false);
     setShowConflictsModal(false);
     setHideConflictSummary(false);
-    setValidandoImport(false);
-    setConfirmandoImport(false);
+    if (!file || validationMessage) {
+      if (importFileInputRef.current) importFileInputRef.current.value = "";
+    }
+  }
+
+  function downloadImportTemplateXlsx() {
+    downloadBlob(
+      new Blob([importTemplateWorkbook], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      importTemplateXlsxFilename,
+    );
+  }
+
+  function downloadImportTemplateCsv() {
+    downloadTextFile(importTemplateCsv, importTemplateCsvFilename);
   }
 
   function mergeImportRowResults(existing: ImportRowResult[], incoming: ImportRowResult[]) {
@@ -726,7 +915,7 @@ export default function AdminUsuariosPage() {
       }));
     const csv = buildCsv([...validationRows, ...resultRows]);
     if (!csv.trim()) return;
-    downloadTextFile(csv, "importacion-aprendices-errores.csv");
+    downloadTextFile(csv, `${importReportBaseName}-importacion-aprendices-errores.csv`);
   }
 
   function downloadDuplicateConflictsCsv() {
@@ -741,12 +930,18 @@ export default function AdminUsuariosPage() {
       }));
     const csv = buildCsv(duplicateRows);
     if (!csv.trim()) return;
-    downloadTextFile(csv, "importacion-aprendices-duplicados.csv");
+    downloadTextFile(csv, `${importReportBaseName}-importacion-aprendices-duplicados.csv`);
   }
 
   async function validarImportacion() {
-    if (!importFile) {
-      setImportBanner({ type: "error", message: "Selecciona un archivo Excel o CSV antes de validar." });
+    const validationMessage = validateAprendizImportFile(importFile);
+    if (validationMessage) {
+      setImportBanner({ type: "error", message: validationMessage });
+      return;
+    }
+    const fileToUpload = importFile;
+    if (!fileToUpload) {
+      setImportBanner({ type: "error", message: `Selecciona un archivo compatible (${importFormatsLabel}) antes de validar.` });
       return;
     }
 
@@ -755,7 +950,7 @@ export default function AdminUsuariosPage() {
     setValidandoImport(true);
     try {
       const form = new FormData();
-      form.append("file", importFile);
+      form.append("file", fileToUpload);
 
       const res = await api.post("/api/usuarios/importar-aprendices/validar/", form, {
         headers: { "Content-Type": "multipart/form-data" },
@@ -837,9 +1032,9 @@ export default function AdminUsuariosPage() {
       setImportRowResults(merged);
       const created = merged.filter((row) => row.status === "created").length;
       const skippedByRuntime = merged.filter((row) => row.status === "skipped").length;
-      const skippedByValidation = importErrores.filter((err) => err.code === "DUPLICATE_IN_FILE").length;
+      const skippedByValidation = countDistinctImportErrorRows(importErrores.filter((err) => err.code === "DUPLICATE_IN_FILE"));
       const failedByRuntime = merged.filter((row) => row.status === "failed").length;
-      const failedByValidation = importErrores.length - skippedByValidation;
+      const failedByValidation = countDistinctImportErrorRows(importErrores.filter((err) => err.code !== "DUPLICATE_IN_FILE"));
       const skipped = skippedByRuntime + skippedByValidation;
       const failed = failedByRuntime + failedByValidation;
       const summaryMessage = `Importacion finalizada: ${created} creados, ${skipped} omitidos, ${failed} fallidos.`;
@@ -893,18 +1088,18 @@ export default function AdminUsuariosPage() {
   }
 
   return (
-    <div className="space-y-7 pb-2">
+    <div className="space-y-4 pb-2">
       <PageHeader
         breadcrumb="ADMIN > USUARIOS"
         title="Usuarios"
-      description="GestiÃ³n de cuentas, roles, estado y carga de aprendices."
+        description="Gestión de cuentas, roles, estado y carga de aprendices."
         actions={
           <>
-            <Button onClick={abrirCrear} variant="primary">
+            <Button onClick={abrirCrear} variant="primary" disabled={loadingMe || roleOptions.length === 0 || missingAdminSedeScope}>
               Crear usuario
             </Button>
-            <Button onClick={abrirImportar} variant="primary">
-              Cargar aprendices (Excel/CSV)
+            <Button onClick={abrirImportar} variant="primary" disabled={loadingMe || missingAdminSedeScope}>
+              Cargar aprendices
             </Button>
             <Button onClick={() => cargar(page)} variant="secondary">
               Recargar
@@ -917,7 +1112,15 @@ export default function AdminUsuariosPage() {
         <FormBanner type={pageBanner.type} message={pageBanner.message} className="rounded-2xl px-4 py-3" />
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {missingAdminSedeScope ? (
+        <FormBanner
+          type="error"
+          message="Tu sesión admin_sede no tiene una sede activa asignada. El frontend bloquea creación y edición para evitar operaciones fuera de alcance."
+          className="rounded-2xl px-4 py-3"
+        />
+      ) : null}
+
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {loading ? (
           <>
             <StatSkeleton />
@@ -932,7 +1135,9 @@ export default function AdminUsuariosPage() {
             <MetricPanel label="Total" value={stats.total} detail="universo" onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
             <MetricPanel label="Activos" value={stats.activos} detail="operativos" tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
             <MetricPanel label="Bloqueados" value={stats.bloqueados} detail="atencion" tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
-            <MetricPanel label="Admins" value={stats.admins} detail="control" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin", estado: "todos" })} />
+            {canManageAdministrativeRoles ? (
+              <MetricPanel label="Admins" value={stats.admins} detail="control" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin_sede", estado: "todos" })} />
+            ) : null}
             <MetricPanel label="Guardas" value={stats.guardas} detail="cobertura" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
             <MetricPanel label="Aprendices" value={stats.aprendices} detail="poblacion" tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
           </>
@@ -949,9 +1154,9 @@ export default function AdminUsuariosPage() {
             ) : null
           }
         >
-          <div className="relative w-full md:col-span-12 lg:col-span-4">
-            <input
-              className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition"
+            <div className="relative w-full md:col-span-12 lg:col-span-4">
+              <input
+                className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
               placeholder="Buscar: username, email, documento, nombre..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -959,20 +1164,22 @@ export default function AdminUsuariosPage() {
           </div>
 
           <select
-            className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
+            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
             value={rolFilter}
-            onChange={(e) => setRolFilter(e.target.value as "todos" | "admin" | "guarda" | "aprendiz")}
+            onChange={(e) => setRolFilter(e.target.value as UserFilterRole)}
           >
             <option value="todos">Rol: Todos</option>
-            <option value="admin">Rol: admin</option>
-            <option value="guarda">Rol: guarda</option>
-            <option value="aprendiz">Rol: aprendiz</option>
+            {roleFilterOptions.map((role) => (
+              <option key={role} value={role}>
+                {`Rol: ${role}`}
+              </option>
+            ))}
           </select>
 
           <select
-            className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
+            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
             value={estadoFilter}
-            onChange={(e) => setEstadoFilter(e.target.value as "todos" | "activo" | "bloqueado")}
+            onChange={(e) => setEstadoFilter(e.target.value as UserStateFilter)}
           >
             <option value="todos">Estado: Todos</option>
             <option value="activo">Estado: activo</option>
@@ -980,14 +1187,15 @@ export default function AdminUsuariosPage() {
           </select>
 
           <select
-            className="command-noir-control h-11 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
+            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
             value={sedeFilter}
             onChange={(e) => setSedeFilter(e.target.value)}
+            disabled={isScopedAdminSede}
           >
-            <option value="todos">Sede: Todas</option>
+            <option value="todos">{isScopedAdminSede ? "Sede: fija por sesión" : "Sede: Todas"}</option>
             {sedes.map((item) => (
               <option key={item.id} value={item.code}>
-                {item.name}
+                {item.code}
               </option>
             ))}
           </select>
@@ -997,17 +1205,17 @@ export default function AdminUsuariosPage() {
               setQ("");
               setRolFilter("todos");
               setEstadoFilter("todos");
-              setSedeFilter("todos");
+              setSedeFilter(isScopedAdminSede ? actorSede ?? "todos" : "todos");
               setPage(1);
             }}
-            className="h-11 md:col-span-6 lg:col-span-1"
+            className="h-10 md:col-span-6 lg:col-span-1"
             variant="secondary"
             disabled={!hasFilters}
           >
             Limpiar
           </Button>
 
-          <div className="flex h-11 items-center justify-end md:col-span-6 lg:col-span-1">
+          <div className="flex h-10 items-center justify-end md:col-span-6 lg:col-span-1">
             <span className="command-noir-chip whitespace-nowrap">
               {totalCount} usuarios
             </span>
@@ -1016,24 +1224,24 @@ export default function AdminUsuariosPage() {
       )}
 
       <div className="space-y-4">
-        <DataTable
-          loading={loadingTable}
-          skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
-          hasRows={pageItems.length > 0}
-          tableClassName="min-w-[900px] xl:min-w-full table-auto"
-          headers={
-            <tr className="text-left">
-              <th className="w-14 p-3">ID</th>
-              <th className="w-64 p-3">Usuario</th>
-              <th className="w-52 p-3">Nombre</th>
-              <th className="w-44 p-3">Rol</th>
-              <th className="w-44 p-3">Estado</th>
-              <th className="w-40 p-3">Documento</th>
-              <th className="w-36 p-3">Sede</th>
-              <th className="w-44 p-3">Programa</th>
-              <th className="w-32 p-3 text-right">Acciones</th>
-            </tr>
-          }
+          <DataTable
+            loading={loadingTable}
+            skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
+            hasRows={pageItems.length > 0}
+            tableClassName="min-w-[760px] xl:min-w-full table-fixed"
+            headers={
+              <tr className="text-left">
+                <th className="w-14 px-2.5 py-2">ID</th>
+                <th className="w-[22%] px-2.5 py-2">Usuario</th>
+                <th className="hidden w-[18%] px-2.5 py-2 lg:table-cell">Nombre</th>
+                <th className="w-[16%] px-2.5 py-2">Rol</th>
+                <th className="w-[16%] px-2.5 py-2">Estado</th>
+                <th className="hidden w-[14%] px-2.5 py-2 xl:table-cell">Documento</th>
+                <th className="hidden w-[12%] px-2.5 py-2 2xl:table-cell">Sede</th>
+                <th className="hidden px-2.5 py-2 2xl:table-cell 2xl:w-[16%]">Programa</th>
+                <th className="w-24 px-2.5 py-2 text-right">Acciones</th>
+              </tr>
+            }
           emptyState={
             <tr>
               <td className="p-10 text-center" colSpan={9}>
@@ -1048,29 +1256,37 @@ export default function AdminUsuariosPage() {
           }
         >
           {pageItems.map((u, idx) => (
+            (() => {
+              const editableRow = canManageRole(actorRole, u.rol) && !missingAdminSedeScope;
+              const rowRoleOptions = editableRow ? roleOptions : [];
+
+              return (
             <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(255,255,255,0.015)]")}>
-              <td className="command-noir-table-cell p-3">{u.id}</td>
+              <td className="command-noir-table-cell px-2.5 py-2">{u.id}</td>
 
-              <td className="command-noir-table-cell p-3">
-                <div className="max-w-[280px] truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
-                {u.email ? <div className="max-w-[280px] truncate text-[color:var(--color-text-muted)]">{u.email}</div> : null}
+              <td className="command-noir-table-cell px-2.5 py-2">
+                <div className="truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
+                {u.email ? <div className="truncate text-[12px] text-[color:var(--color-text-muted)]">{u.email}</div> : null}
               </td>
 
-              <td className="command-noir-table-cell p-3">
-                <div className="max-w-[240px] truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
+              <td className="command-noir-table-cell hidden px-2.5 py-2 lg:table-cell">
+                <div className="truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
               </td>
 
-              <td className="p-3">
-                <div className="flex flex-col gap-2">
-                  <BadgeChip tone={u.rol === "admin" ? "purple" : u.rol === "guarda" ? "info" : "success"}>{u.rol ?? "-"}</BadgeChip>
+              <td className="px-2.5 py-2 align-middle">
+                <div className="flex flex-col gap-1.5">
+                  <BadgeChip tone={getRoleBadgeTone(u.rol)}>{getRoleBadgeLabel(u.rol)}</BadgeChip>
                   <select
-                    className="command-noir-control w-full rounded-xl p-2 outline-none transition"
+                    className="command-noir-control h-8 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
                     value={u.rol ?? "aprendiz"}
                     onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
                     title="Cambiar rol (rapido)"
-                    disabled={Boolean(rowSaving[u.id])}
+                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
                   >
-                    {ROLES.map((r) => (
+                    {!editableRow ? (
+                      <option value={u.rol ?? ""}>{getRoleBadgeLabel(u.rol)}</option>
+                    ) : null}
+                    {rowRoleOptions.map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -1079,15 +1295,15 @@ export default function AdminUsuariosPage() {
                 </div>
               </td>
 
-              <td className="p-3">
-                <div className="flex flex-col gap-2">
+              <td className="px-2.5 py-2 align-middle">
+                <div className="flex flex-col gap-1.5">
                   <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
                   <select
-                    className="command-noir-control w-full rounded-xl p-2 outline-none transition"
+                    className="command-noir-control h-8 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
                     value={(u.estado ?? "activo").toLowerCase()}
                     onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
                     title="Cambiar estado (rapido)"
-                    disabled={Boolean(rowSaving[u.id])}
+                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
                   >
                     <option value="activo">activo</option>
                     <option value="bloqueado">bloqueado</option>
@@ -1095,21 +1311,19 @@ export default function AdminUsuariosPage() {
                 </div>
               </td>
 
-              <td className="command-noir-table-cell p-3"><div className="max-w-[180px] truncate">{u.documento ?? "-"}</div></td>
-              <td className="p-3">
-                <div className="max-w-[150px] truncate">
-                  {u.sede_principal ? sedesByCode.get(u.sede_principal) || u.sede_principal : "-"}
-                </div>
+              <td className="command-noir-table-cell hidden px-2.5 py-2 xl:table-cell"><div className="truncate">{u.documento ?? "-"}</div></td>
+              <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell">
+                <div className="truncate">{u.sede_principal ?? "-"}</div>
               </td>
-              <td className="command-noir-table-cell p-3"><div className="max-w-[240px] truncate">{u.programa_formacion ?? "-"}</div></td>
+              <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell"><div className="truncate">{u.programa_formacion ?? "-"}</div></td>
 
-              <td className="p-3 text-right">
+              <td className="px-2.5 py-2 text-right">
                 <div className="flex flex-col items-end gap-1">
                   <Button
                     onClick={() => abrirEditar(u)}
                     variant="secondary"
-                    className="px-2.5 py-1.5 text-xs"
-                    disabled={Boolean(rowSaving[u.id])}
+                    className="min-h-8 px-2.5 py-1 text-xs"
+                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
                   >
                     Editar
                   </Button>
@@ -1131,6 +1345,8 @@ export default function AdminUsuariosPage() {
                 </div>
               </td>
             </tr>
+              );
+            })()
           ))}
         </DataTable>
 
@@ -1159,161 +1375,166 @@ export default function AdminUsuariosPage() {
           maxWidthClassName="max-w-lg"
           closeDisabled={editSaving}
         >
-          {editBanner ? (
-            <FormBanner type={editBanner.type} message={editBanner.message} className="mb-3" />
-          ) : null}
+          <ModalFrame
+            footer={
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setOpen(false)}
+                  disabled={editSaving}
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Rol</div>
-              <select
-                ref={editRolRef}
-                className={cx(
-                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                  editFieldErrors.rol && "border-[color:rgba(255,107,122,0.45)]",
-                )}
-                value={rol}
-                aria-invalid={Boolean(editFieldErrors.rol)}
-                onChange={(e) => {
-                  setRol(e.target.value);
-                  clearEditFieldError("rol");
-                  clearEditBanner();
-                }}
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-              <FieldError text={editFieldErrors.rol} />
-            </label>
+                <button
+                  disabled={editSaving}
+                  onClick={guardarModal}
+                  className="rounded-xl border border-[color:rgba(111,211,255,0.28)] bg-[linear-gradient(135deg,rgba(111,211,255,0.2),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] shadow-sm transition hover:border-[color:rgba(111,211,255,0.4)] disabled:opacity-50"
+                >
+                  {editSaving ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            }
+          >
+            {editBanner ? <FormBanner type={editBanner.type} message={editBanner.message} className="mb-3" /> : null}
 
-            <label className="space-y-1">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Estado</div>
-              <select
-                ref={editEstadoRef}
-                className={cx(
-                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                  editFieldErrors.estado && "border-[color:rgba(255,107,122,0.45)]",
-                )}
-                value={estado.toLowerCase()}
-                aria-invalid={Boolean(editFieldErrors.estado)}
-                onChange={(e) => {
-                  setEstado(e.target.value);
-                  clearEditFieldError("estado");
-                  clearEditBanner();
-                }}
-              >
-                <option value="activo">activo</option>
-                <option value="bloqueado">bloqueado</option>
-              </select>
-              <FieldError text={editFieldErrors.estado} />
-            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Rol</div>
+                <select
+                  ref={editRolRef}
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    editFieldErrors.rol && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  value={rol}
+                  aria-invalid={Boolean(editFieldErrors.rol)}
+                  onChange={(e) => {
+                    setRol(e.target.value);
+                    clearEditFieldError("rol");
+                    clearEditBanner();
+                  }}
+                >
+                  {roleOptions.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <FieldError text={editFieldErrors.rol} />
+              </label>
 
-            <label className="space-y-1 sm:col-span-2">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Correo (email)</div>
-              <input
-                className={cx(
-                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                  editFieldErrors.email && "border-[color:rgba(255,107,122,0.45)]",
-                )}
-                value={email}
-                aria-invalid={Boolean(editFieldErrors.email)}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  clearEditFieldError("email");
-                  clearEditBanner();
-                }}
-                placeholder={emailPlaceholder}
-              />
-              <FieldError text={editFieldErrors.email} />
-            </label>
+              <label className="space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Estado</div>
+                <select
+                  ref={editEstadoRef}
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    editFieldErrors.estado && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  value={estado.toLowerCase()}
+                  aria-invalid={Boolean(editFieldErrors.estado)}
+                  onChange={(e) => {
+                    setEstado(e.target.value);
+                    clearEditFieldError("estado");
+                    clearEditBanner();
+                  }}
+                >
+                  <option value="activo">activo</option>
+                  <option value="bloqueado">bloqueado</option>
+                </select>
+                <FieldError text={editFieldErrors.estado} />
+              </label>
 
-            <label className="space-y-1 sm:col-span-2">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Documento</div>
-              <input
-                className={cx(
-                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                  editFieldErrors.documento && "border-[color:rgba(255,107,122,0.45)]",
-                )}
-                value={documento}
-                aria-invalid={Boolean(editFieldErrors.documento)}
-                onChange={(e) => {
-                  setDocumento(e.target.value);
-                  clearEditFieldError("documento");
-                  clearEditBanner();
-                }}
-                placeholder="QR / documento"
-              />
-              <FieldError text={editFieldErrors.documento} />
-            </label>
+              <label className="space-y-1 sm:col-span-2">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Correo (email)</div>
+                <input
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    editFieldErrors.email && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  value={email}
+                  aria-invalid={Boolean(editFieldErrors.email)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearEditFieldError("email");
+                    clearEditBanner();
+                  }}
+                  placeholder={emailPlaceholder}
+                />
+                <FieldError text={editFieldErrors.email} />
+              </label>
 
-            <label className="space-y-1">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Sede principal</div>
-              <select
-                className={cx(
-                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                  editFieldErrors.sede_principal && "border-[color:rgba(255,107,122,0.45)]",
-                )}
-                value={sede}
-                aria-invalid={Boolean(editFieldErrors.sede_principal)}
-                onChange={(e) => {
-                  setSede(e.target.value);
-                  clearEditFieldError("sede_principal");
-                  clearEditBanner();
-                }}
-              >
-                <option value="">(sin sede)</option>
-                {sede && !sedesByCode.has(sede) ? (
-                  <option value={sede}>{`Sede eliminada/inactiva (${sede})`}</option>
-                ) : null}
-                {sedes.map((item) => (
-                  <option key={item.id} value={item.code}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <FieldError text={editFieldErrors.sede_principal} />
-            </label>
+              <label className="space-y-1 sm:col-span-2">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Documento</div>
+                <input
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    editFieldErrors.documento && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  value={documento}
+                  aria-invalid={Boolean(editFieldErrors.documento)}
+                  onChange={(e) => {
+                    setDocumento(e.target.value);
+                    clearEditFieldError("documento");
+                    clearEditBanner();
+                  }}
+                  placeholder="QR / documento"
+                />
+                <FieldError text={editFieldErrors.documento} />
+              </label>
 
-            <label className="space-y-1">
-              <div className="text-xs text-[color:var(--color-text-muted)]">Programa formacion</div>
-              <input
-                className={cx(
-                  "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                  editFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
-                )}
-                value={programa}
-                aria-invalid={Boolean(editFieldErrors.programa_formacion)}
-                onChange={(e) => {
-                  setPrograma(e.target.value);
-                  clearEditFieldError("programa_formacion");
-                  clearEditBanner();
-                }}
-                placeholder="ADSO..."
-              />
-              <FieldError text={editFieldErrors.programa_formacion} />
-            </label>
-          </div>
+              <label className="space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Sede principal</div>
+                <select
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    editFieldErrors.sede_principal && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  value={sede}
+                  aria-invalid={Boolean(editFieldErrors.sede_principal)}
+                  disabled={isScopedAdminSede || missingAdminSedeScope}
+                  onChange={(e) => {
+                    setSede(e.target.value);
+                    clearEditFieldError("sede_principal");
+                    clearEditBanner();
+                  }}
+                >
+                  {!isScopedAdminSede ? <option value="">(sin sede)</option> : null}
+                  {sede && !sedes.some((item) => item.code === sede) ? (
+                    <option value={sede}>{`Sede eliminada/inactiva (${sede})`}</option>
+                  ) : null}
+                  {sedes
+                    .filter((item) => !isScopedAdminSede || item.code === actorSede)
+                    .map((item) => (
+                    <option key={item.id} value={item.code}>
+                      {item.code}
+                    </option>
+                    ))}
+                </select>
+                <FieldError text={editFieldErrors.sede_principal} />
+              </label>
 
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setOpen(false)}
-              disabled={editSaving}
-              className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-
-            <button
-              disabled={editSaving}
-              onClick={guardarModal}
-              className="rounded-xl border border-[color:rgba(111,211,255,0.28)] bg-[linear-gradient(135deg,rgba(111,211,255,0.2),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] shadow-sm transition hover:border-[color:rgba(111,211,255,0.4)] disabled:opacity-50"
-            >
-              {editSaving ? "Guardando..." : "Guardar cambios"}
-            </button>
-          </div>
+              <label className="space-y-1">
+                <div className="text-xs text-[color:var(--color-text-muted)]">Programa formacion</div>
+                <input
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    editFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  value={programa}
+                  aria-invalid={Boolean(editFieldErrors.programa_formacion)}
+                  onChange={(e) => {
+                    setPrograma(e.target.value);
+                    clearEditFieldError("programa_formacion");
+                    clearEditBanner();
+                  }}
+                  placeholder="ADSO..."
+                />
+                <FieldError text={editFieldErrors.programa_formacion} />
+              </label>
+            </div>
+          </ModalFrame>
         </Modal>
       )}
 
@@ -1321,16 +1542,35 @@ export default function AdminUsuariosPage() {
         {openCrear && (
           <Modal
             open={openCrear}
-            title="Crear usuario"
-            onClose={() => (!creating ? setOpenCrear(false) : null)}
-            maxWidthClassName="max-w-xl"
-            closeDisabled={creating}
-          >
-              {createBanner ? (
-                <FormBanner type={createBanner.type} message={createBanner.message} className="mb-3" />
-              ) : null}
+          title="Crear usuario"
+          onClose={() => (!creating ? setOpenCrear(false) : null)}
+          maxWidthClassName="max-w-2xl"
+          closeDisabled={creating}
+        >
+            <ModalFrame
+              footer={
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    onClick={() => setOpenCrear(false)}
+                    disabled={creating}
+                    className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={crearUsuario}
+                    disabled={creating}
+                    className="rounded-xl border border-[color:rgba(111,211,255,0.28)] bg-[linear-gradient(135deg,rgba(111,211,255,0.2),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] shadow-sm transition hover:border-[color:rgba(111,211,255,0.4)] disabled:opacity-50"
+                  >
+                    {creating ? "Creando..." : "Crear usuario"}
+                  </button>
+                </div>
+              }
+            >
+              {createBanner ? <FormBanner type={createBanner.type} message={createBanner.message} className="mb-3" /> : null}
+
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                 <label className="space-y-1">
                   <div className="text-xs text-[color:var(--color-text-muted)]">Username *</div>
                   <input
@@ -1406,7 +1646,7 @@ export default function AdminUsuariosPage() {
                   <FieldError text={createFieldErrors.last_name} />
                 </label>
 
-                <label className="space-y-1 sm:col-span-2">
+                <label className="space-y-1 sm:col-span-2 xl:col-span-3">
                   <div className="text-xs text-[color:var(--color-text-muted)]">Email</div>
                   <input
                     className={cx(
@@ -1425,7 +1665,7 @@ export default function AdminUsuariosPage() {
                   <FieldError text={createFieldErrors.email} />
                 </label>
 
-                <label className="space-y-1 sm:col-span-2">
+                <label className="space-y-1 sm:col-span-2 xl:col-span-3">
                   <div className="text-xs text-[color:var(--color-text-muted)]">Documento (QR)</div>
                   <input
                     className={cx(
@@ -1459,7 +1699,7 @@ export default function AdminUsuariosPage() {
                       clearCreateBanner();
                     }}
                   >
-                    {ROLES.map((r) => (
+                    {roleOptions.map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -1498,21 +1738,24 @@ export default function AdminUsuariosPage() {
                     )}
                     value={c_sede}
                     aria-invalid={Boolean(createFieldErrors.sede_principal)}
+                    disabled={isScopedAdminSede || missingAdminSedeScope}
                     onChange={(e) => {
                       setCSede(e.target.value);
                       clearCreateFieldError("sede_principal");
                       clearCreateBanner();
                     }}
                   >
-                    <option value="">(sin sede)</option>
-                    {c_sede && !sedesByCode.has(c_sede) ? (
+                    {!isScopedAdminSede ? <option value="">(sin sede)</option> : null}
+                    {c_sede && !sedes.some((item) => item.code === c_sede) ? (
                       <option value={c_sede}>{`Sede eliminada/inactiva (${c_sede})`}</option>
                     ) : null}
-                    {sedes.map((item) => (
+                    {sedes
+                      .filter((item) => !isScopedAdminSede || item.code === actorSede)
+                      .map((item) => (
                       <option key={item.id} value={item.code}>
-                        {item.name}
+                        {item.code}
                       </option>
-                    ))}
+                      ))}
                   </select>
                   <FieldError text={createFieldErrors.sede_principal} />
                 </label>
@@ -1536,56 +1779,79 @@ export default function AdminUsuariosPage() {
                   <FieldError text={createFieldErrors.programa_formacion} />
                 </label>
               </div>
-
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setOpenCrear(false)}
-                  disabled={creating}
-                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  onClick={crearUsuario}
-                  disabled={creating}
-                  className="rounded-xl border border-[color:rgba(111,211,255,0.28)] bg-[linear-gradient(135deg,rgba(111,211,255,0.2),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] shadow-sm transition hover:border-[color:rgba(111,211,255,0.4)] disabled:opacity-50"
-                >
-                  {creating ? "Creando..." : "Crear usuario"}
-                </button>
-              </div>
-          </Modal>
+            </ModalFrame>
+            </Modal>
         )}
 
         <Modal
           open={openImportar}
-          title="Importar aprendices desde Excel/CSV"
+          title="Importar aprendices desde archivo"
           onClose={() => (!validandoImport && !confirmandoImport ? setOpenImportar(false) : null)}
           maxWidthClassName="max-w-5xl"
           closeDisabled={validandoImport || confirmandoImport}
         >
-          <div className="space-y-4">
+          <ModalFrame className="space-y-4">
             <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3 text-sm text-[color:var(--color-text-soft)]">
-              Flujo: 1) Selecciona el archivo. 2) Valida. 3) Importa. Los duplicados por documento siempre se omiten por seguridad.
+              <div className="font-medium text-[color:var(--color-text)]">Solo importa aprendices.</div>
+              <div className="mt-1">Formatos soportados: {importFormatsLabel}. Flujo: 1) descarga la plantilla, 2) completa el archivo, 3) valida, 4) importa.</div>
+              <div className="mt-1">Campos obligatorios: {importRequiredColumnsLabel}. Telefono y Correo son opcionales.</div>
+              <div className="mt-1">Columnas visibles en plantilla: {importTemplateColumns.join(", ")}.</div>
+              <div className="mt-1">Jornada usa valores tecnicos exactos: {APRENDIZ_IMPORT_JORNADAS.join(", ")}.</div>
+              <div className="mt-1">
+                {isScopedAdminSede
+                  ? `No incluyas columna Sede; la importacion queda fijada a tu sede activa (${actorSede ?? "sin sede"}).`
+                  : "Si cargas Sede, usa el codigo tecnico exacto de una sede activa."}
+              </div>
+              <div className="mt-1">Tamano maximo recomendado por archivo: {importMaxFileSizeLabel}.</div>
+              <div className="mt-1">Programa debe usar el nombre exacto del catalogo existente cuando el sistema ya tenga programas cargados.</div>
             </div>
 
             {importBanner ? (
               <FormBanner type={importBanner.type} message={importBanner.message} />
             ) : null}
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto] xl:items-end">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] xl:items-end">
               <input
+                ref={importFileInputRef}
                 type="file"
-                accept=".xlsx,.xlsm,.xltx,.xltm,.csv"
-                onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                accept={importAccept}
+                onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
                 className="command-noir-control min-w-0 w-full rounded-xl px-3 py-2 text-sm"
+                aria-describedby="import-file-help"
               />
+              <div id="import-file-help" className="text-xs text-[color:var(--color-text-muted)] xl:col-span-2">
+                Si reemplazas el archivo, la validacion anterior se limpia para evitar importar datos obsoletos.
+              </div>
+              <button
+                type="button"
+                onClick={downloadImportTemplateXlsx}
+                disabled={loadingMe}
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Descargar plantilla (.xlsx)
+              </button>
+              <button
+                type="button"
+                onClick={downloadImportTemplateCsv}
+                disabled={loadingMe}
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Descargar CSV alternativo
+              </button>
               <button
                 onClick={validarImportacion}
                 disabled={!importFile || validandoImport || confirmandoImport}
                 className="rounded-xl border border-[color:rgba(111,211,255,0.24)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {validandoImport ? "Validando..." : "Validar archivo"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleImportFileChange(null)}
+                disabled={!importFile || validandoImport || confirmandoImport}
+                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Limpiar archivo
               </button>
               <button
                 onClick={confirmarImportacion}
@@ -1602,6 +1868,13 @@ export default function AdminUsuariosPage() {
                 Reintentar fallidos
               </button>
             </div>
+
+            {importFile ? (
+              <InlineNotice
+                type="info"
+                message={`Archivo listo para validar: ${importFile.name} - ${formatFileSize(importFile.size)}. Si descargas una nueva plantilla, vuelve a adjuntarla antes de validar.`}
+              />
+            ) : null}
 
             {importResumen ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1626,7 +1899,7 @@ export default function AdminUsuariosPage() {
 
             <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
               <div className="mb-2 flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
-                <span>Estado: {importStage}</span>
+                <span>Estado: {importStageLabel}</span>
                 <span>Progreso: {importProgress.processed}/{importProgress.total}</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-[color:rgba(255,255,255,0.06)]">
@@ -1636,6 +1909,23 @@ export default function AdminUsuariosPage() {
                 />
               </div>
             </div>
+
+            {(importStage === "done" || importRowResults.length > 0) && importProgress.total > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[rgba(66,199,154,0.08)] p-3">
+                  <div className="text-xs text-[color:var(--success)]">Creados</div>
+                  <div className="text-xl font-semibold text-[color:var(--success)]">{importResultSummary.created}</div>
+                </div>
+                <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] p-3">
+                  <div className="text-xs text-[color:var(--warning)]">Omitidos</div>
+                  <div className="text-xl font-semibold text-[color:var(--warning)]">{importResultSummary.skipped}</div>
+                </div>
+                <div className="rounded-xl border border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] p-3">
+                  <div className="text-xs text-[color:var(--danger)]">Fallidos</div>
+                  <div className="text-xl font-semibold text-[color:var(--danger)]">{importResultSummary.failed}</div>
+                </div>
+              </div>
+            ) : null}
 
             {duplicatesInFile.length > 0 ? (
               <div className="overflow-hidden rounded-2xl border border-[color:rgba(240,178,77,0.28)]">
@@ -1678,10 +1968,10 @@ export default function AdminUsuariosPage() {
                     }}
                     className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[color:var(--surface-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--warning)] hover:bg-[rgba(240,178,77,0.12)]"
                   >
-                    Cancelar y corregir Excel
+                    Cancelar y corregir archivo
                   </button>
                   <span className="text-xs text-[color:var(--warning)]">
-                    Estado: {allowSkipFileDuplicates ? "OmisiÃ³n de duplicados confirmada" : "DecisiÃ³n pendiente"}
+                    Estado: {allowSkipFileDuplicates ? "Omision de duplicados confirmada" : "Decision pendiente"}
                   </span>
                 </div>
               </div>
@@ -1690,7 +1980,7 @@ export default function AdminUsuariosPage() {
             {importPreviewRows.length > 0 ? (
               <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
                 <div className="border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)]">
-                  Vista previa de filas vÃ¡lidas ({importPreviewRows.length} de {importProgress.total})
+                  Vista previa de filas validas ({importPreviewRows.length} de {importProgress.total})
                 </div>
                 <div className="max-h-56 overflow-auto bg-[color:var(--surface-subtle)]">
                   <table className="min-w-full text-sm">
@@ -1700,6 +1990,9 @@ export default function AdminUsuariosPage() {
                         <th className="px-3 py-2">Documento</th>
                         <th className="px-3 py-2">Nombres</th>
                         <th className="px-3 py-2">Apellidos</th>
+                        <th className="px-3 py-2">Jornada</th>
+                        <th className="px-3 py-2">Programa</th>
+                        <th className="px-3 py-2">Sede</th>
                         <th className="px-3 py-2">Username sugerido</th>
                       </tr>
                     </thead>
@@ -1710,6 +2003,9 @@ export default function AdminUsuariosPage() {
                           <td className="px-3 py-2">{row.documento}</td>
                           <td className="px-3 py-2">{row.first_name}</td>
                           <td className="px-3 py-2">{row.last_name}</td>
+                          <td className="px-3 py-2">{row.jornada}</td>
+                          <td className="px-3 py-2">{row.programa_formacion}</td>
+                          <td className="px-3 py-2">{row.sede_principal ?? (isScopedAdminSede ? actorSede ?? "-" : "-")}</td>
                           <td className="px-3 py-2">{row.username_sugerido}</td>
                         </tr>
                       ))}
@@ -1805,7 +2101,7 @@ export default function AdminUsuariosPage() {
                 </div>
               </div>
             ) : null}
-          </div>
+          </ModalFrame>
         </Modal>
 
         <Modal
@@ -1814,7 +2110,7 @@ export default function AdminUsuariosPage() {
           onClose={() => setShowConflictsModal(false)}
           maxWidthClassName="max-w-3xl"
         >
-          <div className="space-y-4">
+          <ModalFrame className="space-y-4">
             <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-3 text-sm text-[color:var(--warning)]">
               Estos aprendices ya existen. Por seguridad, no se crean duplicados.
             </div>
@@ -1849,7 +2145,7 @@ export default function AdminUsuariosPage() {
                 onChange={(e) => setHideConflictSummary(e.target.checked)}
                 className="h-4 w-4 rounded border-[color:var(--color-border)] bg-transparent"
               />
-              No volver a mostrar este resumen en esta importaciÃ³n
+              No volver a mostrar este resumen en esta importacion
             </label>
             <div className="flex flex-wrap justify-end gap-2">
               <button
@@ -1864,7 +2160,7 @@ export default function AdminUsuariosPage() {
                 onClick={() => setShowConflictsModal(false)}
                 className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] hover:bg-[color:var(--surface-muted)]"
               >
-                Cancelar para corregir Excel
+                Cancelar para corregir archivo
               </button>
               <button
                 type="button"
@@ -1874,7 +2170,7 @@ export default function AdminUsuariosPage() {
                 Omitir y continuar
               </button>
             </div>
-          </div>
+          </ModalFrame>
         </Modal>
     </div>
   );

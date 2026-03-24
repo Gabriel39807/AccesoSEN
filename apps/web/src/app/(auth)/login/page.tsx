@@ -291,12 +291,12 @@ export default function LoginPage() {
 
   return (
     <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge}>
-      <AuthCard className="p-5 md:p-6 xl:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <AuthCard className="p-4 md:p-5 xl:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">Portal de acceso</p>
-            <h2 className="text-[2rem] font-bold leading-none tracking-tight text-[color:var(--foreground)]">Iniciar sesión</h2>
-            <p className="max-w-md text-sm leading-relaxed text-[color:var(--text-muted)]">
+            <h2 className="text-[1.75rem] font-bold leading-none tracking-tight text-[color:var(--foreground)]">Iniciar sesión</h2>
+            <p className="max-w-md text-sm leading-snug text-[color:var(--text-muted)]">
               Elige tu perfil, valida tu identidad y entra al módulo correcto con una interfaz clara, ordenada y lista para trabajar.
             </p>
           </div>
@@ -309,7 +309,7 @@ export default function LoginPage() {
           </span>
         </div>
 
-        <div className="mt-6 rounded-[1.4rem] border border-[color:var(--surface-border)] bg-[color:var(--surface-muted)]/55 p-4">
+        <div className="mt-4 rounded-[1.2rem] border border-[color:var(--surface-border)] bg-[color:var(--surface-muted)]/55 p-3.5">
           <RoleSwitch
             value={role}
             onChange={(nextRole) => {
@@ -318,14 +318,14 @@ export default function LoginPage() {
               setUsername("");
             }}
           />
-          <p className="mt-3 text-sm leading-relaxed text-[color:var(--text-soft)]">
+          <p className="mt-2.5 text-sm leading-snug text-[color:var(--text-soft)]">
             {role === "admin"
               ? "Vista de gestión con foco en seguridad, trazabilidad y operación por sede."
               : "Vista personal para validar identidad, revisar accesos y gestionar equipos."}
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="mt-6 space-y-5">
+        <form onSubmit={onSubmit} className="mt-4 space-y-4">
           <AuthInput
             id="auth-username"
             label={roleCopy.field}
@@ -341,7 +341,7 @@ export default function LoginPage() {
             hint={roleCopy.hint}
           />
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label htmlFor="auth-password" className="block text-sm font-semibold text-[color:var(--foreground)]">
               Contraseña
             </label>
@@ -371,7 +371,7 @@ export default function LoginPage() {
           {bloqueado ? <p className={`${styles.status} ${styles.statusError}`}>Cuenta bloqueada. Intenta en {lockRemainingSec}s.</p> : null}
           {error ? <p className={`${styles.status} ${styles.statusError}`}>{error}</p> : null}
 
-          <div className="space-y-3 pt-1">
+           <div className="space-y-2.5 pt-1">
             <AuthButton type="submit" loading={loading} loadingLabel="Ingresando..." className="w-full" disabled={bloqueado || passkeyLoading}>
               Entrar al sistema
             </AuthButton>

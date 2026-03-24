@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+import io
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -17,7 +18,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from accesos.domain.services.qr_service import QRParseError, QRService
 from accesos.api.viewsets import TurnoViewSet
 from .exceptions import ui_exception_handler
-from .import_services import ImportServiceError, execute_aprendices_import
+from .import_services import ImportServiceError, count_distinct_error_rows, execute_aprendices_import, validate_excel
 from .models import (
     Acceso,
     AprendizImportAudit,
@@ -114,6 +115,7 @@ class AuthEndpointPermissionTests(BaseApiTest):
     def test_me_requires_authentication(self):
         response = self.client.get("/api/me/")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, response.data)
+
 
 class PasswordResetOtpTests(BaseApiTest):
     def setUp(self):
@@ -1703,6 +1705,86 @@ class ImportAtomicityTests(BaseApiTest):
         self.assertFalse(self.User.objects.filter(documento="6666666666").exists())
         self.assertFalse(self.User.objects.filter(documento="7777777777").exists())
         self.assertEqual(AprendizImportAudit.objects.count(), 0)
+
+
+class ImportValidationServiceTests(BaseApiTest):
+    def make_csv(self, content: str):
+        file_obj = io.BytesIO(content.encode("utf-8"))
+        file_obj.name = "aprendices.csv"
+        return file_obj
+
+    def test_validate_excel_skips_blank_rows_and_counts_error_rows_once(self):
+        csv_file = self.make_csv(
+            "Nombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa,Sede\n"
+            "Ana,Importa,1234567890,3001234567,,TARDE,ADSO,sede-1\n"
+            ",,,,,,,\n"
+            ",,abc,300,correo-invalido,INVALIDA,,sede-1\n"
+        )
+
+        result = validate_excel(csv_file, require_sede=True)
+
+        self.assertEqual(result.total_rows, 2)
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(count_distinct_error_rows(result.errors), 1)
+        self.assertEqual({err["row"] for err in result.errors}, {4})
+
+    def test_validate_excel_for_admin_sede_does_not_require_sede_column(self):
+        csv_file = self.make_csv(
+            "Nombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa\n"
+            "Ana,Importa,1234567890,3001234567,,TARDE,ADSO\n"
+        )
+
+        result = validate_excel(csv_file, require_sede=False, default_sede_code="sede-1")
+
+        self.assertEqual(result.total_rows, 1)
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.rows[0]["sede_principal"], "sede-1")
+
+
+class ImportValidationApiTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="import_api_superadmin",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="import.api.superadmin@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+        )
+
+    def _auth_superadmin(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+
+    def test_validate_import_rejects_unsupported_extension(self):
+        self._auth_superadmin()
+        upload = io.BytesIO(b"hola")
+        upload.name = "aprendices.txt"
+
+        response = self.client.post(
+            "/api/usuarios/importar-aprendices/validar/",
+            {"file": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertEqual(response.data.get("code"), "VALIDATION_ERROR")
+        self.assertIn("Formato no soportado", str(response.data.get("detail", {}).get("file", [""])[0]))
+
+    def test_validate_import_rejects_oversized_file(self):
+        self._auth_superadmin()
+        upload = io.BytesIO(b"0" * (5 * 1024 * 1024 + 1))
+        upload.name = "aprendices.csv"
+
+        response = self.client.post(
+            "/api/usuarios/importar-aprendices/validar/",
+            {"file": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertEqual(response.data.get("code"), "VALIDATION_ERROR")
+        self.assertIn("5 MB", str(response.data.get("detail", {}).get("file", [""])[0]))
 
 
 class TurnoExpirationRulesTests(BaseApiTest):

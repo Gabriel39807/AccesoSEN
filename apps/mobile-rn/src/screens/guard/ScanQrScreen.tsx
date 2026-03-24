@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -6,7 +6,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Accesos from "../../api/accesos";
 import { toUiErrorMessage } from "../../api/client";
 import { GuardStackParamList } from "../../navigation/GuardStack";
-import { sanitizeDigits, validateDocument6to10 } from "../../lib/validators";
+import { isSignedScanToken, sanitizeDigits, validateScanValue } from "../../lib/validators";
 import { FadeInCard, ModernButton, ModernScreen, NoticeBanner, Pill, TitleBlock } from "../../ui/modern";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ScanQr">;
@@ -21,27 +21,40 @@ export function ScanQrScreen({ navigation }: Props) {
   const [cameraKey, setCameraKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
 
-  async function validar() {
-    const doc = documento.trim();
-    if (!doc) {
-      setMsg("Ingresa o escanea un documento.");
-      return;
-    }
-    const documentError = validateDocument6to10(doc);
+  function normalizeScanInput(value: string) {
+    const clean = String(value || "").trim();
+    return isSignedScanToken(clean) ? clean : sanitizeDigits(clean).slice(0, 10);
+  }
+
+  async function validar(rawValue?: string) {
+    if (inFlightRef.current) return;
+    const doc = String(rawValue ?? documento).trim();
+    const documentError = validateScanValue(doc);
     if (documentError) {
       setMsg(documentError);
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
-    setMsg(null);
+    setMsg("Validando identidad...");
 
     try {
       const data = await Accesos.validarDocumento(doc);
-      navigation.navigate("Confirmacion", { status: "ok", documento: doc, data });
+      if (data.estado === "dentro") {
+        navigation.navigate("Confirmacion", { status: "ok", documento: doc, data, flow: "manual-salida" });
+        return;
+      }
+      setMsg("Identidad validada. Registrando ingreso...");
+      await Accesos.registrarPorDocumento(
+        { documento: doc, tipo: "ingreso" },
+        { idempotencyKey: Accesos.createRegistroIdempotencyKey(doc, "ingreso") }
+      );
+      navigation.navigate("Confirmacion", { status: "ok", documento: doc, data, flow: "auto-ingreso" });
     } catch (error: any) {
       setIsProcessing(false);
       const status = error?.response?.status;
@@ -53,6 +66,7 @@ export function ScanQrScreen({ navigation }: Props) {
         navigation.navigate("Confirmacion", { status: "denied", documento: doc, motivo });
       }
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }
@@ -105,13 +119,14 @@ export function ScanQrScreen({ navigation }: Props) {
             style={{ flex: 1 }}
             barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
             onBarcodeScanned={(result) => {
-              if (!canScan) return;
-              setScanned(true);
-              setIsProcessing(true);
-              setDocumento((result.data || "").trim());
-              setMsg("Código detectado. Valida el documento o reinicia la lectura.");
-            }}
-          />
+                if (!canScan) return;
+                const normalized = normalizeScanInput(result.data || "");
+                setScanned(true);
+                setIsProcessing(true);
+                setDocumento(normalized);
+                void validar(normalized);
+              }}
+            />
           <View
             style={{
               position: "absolute",
@@ -147,7 +162,7 @@ export function ScanQrScreen({ navigation }: Props) {
         {msg ? <NoticeBanner tone="info" text={msg} /> : null}
         <ModernButton
           disabled={loading}
-          onPress={validar}
+          onPress={() => void validar()}
           label={loading ? "Validando..." : "Validar documento"}
           tone="primary"
           icon="checkmark-circle-outline"

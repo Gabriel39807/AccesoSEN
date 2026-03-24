@@ -18,6 +18,7 @@ from uuid import uuid4
 import qrcode
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.http import HttpResponse
@@ -55,6 +56,7 @@ from .error_codes import ErrorCode
 from .import_services import (
     ImportServiceError,
     cache_import_payload,
+    count_distinct_error_rows,
     execute_aprendices_import,
     get_cached_import_payload,
     validate_excel,
@@ -163,6 +165,7 @@ GEMINI_RATE_LIMIT_ATTEMPTS = max(1, int(getattr(settings, "GEMINI_RATE_LIMIT_ATT
 GEMINI_RATE_LIMIT_WINDOW_SEC = max(10, int(getattr(settings, "GEMINI_RATE_LIMIT_WINDOW_SEC", 60) or 60))
 GEMINI_RATE_LIMIT_LOCK_SEC = max(10, int(getattr(settings, "GEMINI_RATE_LIMIT_LOCK_SEC", 60) or 60))
 logger = logging.getLogger(__name__)
+
 
 def _apply_branding_preset_to_config(*, preset: BrandingPreset, config: ConfiguracionSistema):
     tokens = dict(getattr(preset, "tokens_json", {}) or {})
@@ -886,8 +889,17 @@ class ControlPanelSessionRequestOtpView(APIView):
         )
         try:
             send_control_panel_otp_email(user.email, code)
+        except ImproperlyConfigured:
+            cache.delete(control_panel_otp_cache_key(user.id, request_id))
+            logger.exception("control_panel_otp_email_misconfigured user_id=%s", user.id)
+            return error_response(
+                code=ErrorCode.NETWORK_ERROR,
+                message="El servicio de correo OTP del panel no esta disponible.",
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         except Exception:
             cache.delete(control_panel_otp_cache_key(user.id, request_id))
+            logger.exception("control_panel_otp_email_failed user_id=%s", user.id)
             return error_response(
                 code=ErrorCode.NETWORK_ERROR,
                 message="No se pudo enviar el codigo OTP del panel.",
@@ -1741,11 +1753,7 @@ class SedeViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
         scoped = qs.filter(id__in=allowed_sede_ids)
         if active_filter is False or include_inactive:
             raise ValidationError(
-                {
-                    "active": (
-                        "Solo superadmin puede consultar sedes inactivas o usar include_inactive."
-                    )
-                }
+                {"active": ("Solo superadmin puede consultar sedes inactivas o usar include_inactive.")}
             )
         return scoped.filter(is_active=True)
 
@@ -1957,9 +1965,7 @@ class AllowedEmailDomainViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet
             elif scope == AllowedEmailDomain.Scope.ROLE_SEDE:
                 qs = qs.filter(role__isnull=False, sede__isnull=False)
             else:
-                raise ValidationError(
-                    {"scope": ("Scope invalido. Valores permitidos: " "GLOBAL, SEDE, ROLE, ROLE_SEDE.")}
-                )
+                raise ValidationError({"scope": ("Scope invalido. Valores permitidos: GLOBAL, SEDE, ROLE, ROLE_SEDE.")})
 
         return qs
 
@@ -1985,9 +1991,7 @@ class AuditEventsView(APIView):
         events: list[dict] = []
 
         for event in (
-            ControlPanelAuditEvent.objects.select_related("actor", "session")
-            .all()
-            .order_by("-created_at")[:50]
+            ControlPanelAuditEvent.objects.select_related("actor", "session").all().order_by("-created_at")[:50]
         ):
             events.append(
                 {
@@ -1995,9 +1999,7 @@ class AuditEventsView(APIView):
                     "type": f"control_panel.{event.category}.{event.action}",
                     "timestamp": event.created_at,
                     "actor": getattr(getattr(event, "actor", None), "username", None),
-                    "detail": (
-                        f"{event.target_type}#{event.target_id or '-'} | motivo: {event.reason}"
-                    ),
+                    "detail": (f"{event.target_type}#{event.target_id or '-'} | motivo: {event.reason}"),
                     "sede": None,
                     "category": event.category,
                     "reason": event.reason,
@@ -2368,8 +2370,8 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 "import_id": import_id,
                 "resumen": {
                     "validos": len(result.rows),
-                    "errores": len(result.errors),
-                    "total": len(result.rows) + len(result.errors),
+                    "errores": count_distinct_error_rows(result.errors),
+                    "total": result.total_rows,
                     "duplicados_archivo": len(duplicates_in_file),
                 },
                 "errores": result.errors,
@@ -3974,9 +3976,19 @@ class PasswordResetRequestView(APIView):
             otp_obj, code = create_otp_for_user(user)
             try:
                 send_password_reset_email(user.email, code)
+            except ImproperlyConfigured:
+                otp_obj.delete()
+                _uniform_response_delay(started)
+                logger.exception("password_reset_email_misconfigured user_id=%s", user.id)
+                return error_response(
+                    code=ErrorCode.NETWORK_ERROR,
+                    message="El servicio de correo OTP no esta disponible.",
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             except Exception:
                 otp_obj.delete()
                 _uniform_response_delay(started)
+                logger.exception("password_reset_email_failed user_id=%s", user.id)
                 return error_response(
                     code=ErrorCode.NETWORK_ERROR,
                     message="No se pudo enviar el codigo OTP. Verifica la configuracion de correo.",

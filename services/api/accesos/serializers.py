@@ -1,5 +1,6 @@
 import re
 import secrets
+from pathlib import Path
 
 from django.conf import settings
 from rest_framework import serializers
@@ -43,6 +44,8 @@ def password_policy_errors(password: str) -> list[str]:
 PHONE_10_RE = re.compile(r"^\d{10}$")
 DOCUMENT_6_TO_10_RE = re.compile(r"^\d{6,10}$")
 SCANNED_DOCUMENT_MAX_LEN = 512
+IMPORT_ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xlsm", ".xltx", ".xltm"}
+IMPORT_MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 
 def validatePhone10(value, *, required: bool = False) -> str:
@@ -718,6 +721,22 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
 class ImportAprendicesValidateSerializer(serializers.Serializer):
     file = serializers.FileField()
+
+    def validate_file(self, value):
+        name = str(getattr(value, "name", "") or "").strip()
+        extension = Path(name).suffix.lower()
+        if extension not in IMPORT_ALLOWED_EXTENSIONS:
+            raise serializers.ValidationError("Formato no soportado. Usa CSV o Excel (.xlsx, .xlsm, .xltx, .xltm).")
+
+        size = int(getattr(value, "size", 0) or 0)
+        if size <= 0:
+            raise serializers.ValidationError(
+                "El archivo esta vacio. Descarga la plantilla y completa al menos una fila."
+            )
+        if size > IMPORT_MAX_FILE_SIZE_BYTES:
+            raise serializers.ValidationError("El archivo supera el maximo permitido de 5 MB.")
+
+        return value
 
 
 class ImportAprendicesConfirmSerializer(serializers.Serializer):

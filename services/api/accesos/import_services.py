@@ -51,6 +51,7 @@ USERNAME_ALLOWED_RE = re.compile(r"[^a-z0-9._@+-]+")
 class ImportValidationResult:
     rows: list[dict]
     errors: list[dict]
+    total_rows: int = 0
     duplicates_in_file: list[dict] = field(default_factory=list)
 
 
@@ -117,6 +118,15 @@ def _normalize_username_piece(value: str) -> str:
     first_token = next((piece for piece in re.split(r"\s+", raw) if piece), "")
     cleaned = USERNAME_ALLOWED_RE.sub("", first_token)
     return cleaned[:60]
+
+
+def _is_effectively_empty_row(values: list[str]) -> bool:
+    return not any(_normalize_cell(value) for value in values)
+
+
+def count_distinct_error_rows(errors: list[dict] | None) -> int:
+    row_numbers = {int(item.get("row") or 0) for item in (errors or []) if int(item.get("row") or 0) > 1}
+    return len(row_numbers)
 
 
 def _build_username(first_name: str, last_name: str, documento: str) -> str:
@@ -273,6 +283,7 @@ def validate_excel(
                     "message": "No se pudo leer el archivo. Verifica que sea Excel o CSV valido.",
                 }
             ],
+            total_rows=0,
         )
     if not table_rows:
         return ImportValidationResult(
@@ -284,6 +295,7 @@ def validate_excel(
                     "message": "El archivo esta vacio.",
                 }
             ],
+            total_rows=0,
         )
 
     headers = table_rows[0]
@@ -303,6 +315,7 @@ def validate_excel(
                     "received": headers,
                 }
             ],
+            total_rows=max(len(table_rows) - 1, 0),
         )
 
     sedes_lookup = _build_sede_lookup()
@@ -318,6 +331,7 @@ def validate_excel(
                     "field": "Sede",
                 }
             ],
+            total_rows=max(len(table_rows) - 1, 0),
         )
     if not require_sede:
         if not default_sede_code:
@@ -331,6 +345,7 @@ def validate_excel(
                         "field": "Sede",
                     }
                 ],
+                total_rows=max(len(table_rows) - 1, 0),
             )
         if default_sede_code not in sedes_by_code:
             return ImportValidationResult(
@@ -343,6 +358,7 @@ def validate_excel(
                         "field": "Sede",
                     }
                 ],
+                total_rows=max(len(table_rows) - 1, 0),
             )
 
     program_lookup = _build_program_lookup()
@@ -353,6 +369,7 @@ def validate_excel(
     errors: list[dict] = []
     doc_occurrences: dict[str, list[int]] = {}
     row_doc_map: dict[int, str] = {}
+    total_rows = 0
 
     def _get_value(values: list[str], key: str) -> str:
         idx = header_map[key]
@@ -361,6 +378,9 @@ def validate_excel(
         return _normalize_cell(values[idx])
 
     for row_num, raw_values in enumerate(table_rows[1:], start=2):
+        if _is_effectively_empty_row(raw_values):
+            continue
+        total_rows += 1
         nombres = _get_value(raw_values, "Nombres")
         apellidos = _get_value(raw_values, "Apellidos")
         documento = "".join(ch for ch in _get_value(raw_values, "Documento") if ch.isdigit())
@@ -556,6 +576,7 @@ def validate_excel(
     return ImportValidationResult(
         rows=rows,
         errors=errors,
+        total_rows=total_rows,
         duplicates_in_file=duplicates_in_file,
     )
 
@@ -579,6 +600,7 @@ def execute_aprendices_import(
     skipped_count = 0
     failed_count = 0
     pre_validation_errors = errors or []
+    pre_validation_error_count = count_distinct_error_rows(pre_validation_errors)
     row_results: list[dict] = []
     reserved_usernames: set[str] = set()
 
@@ -712,17 +734,17 @@ def execute_aprendices_import(
 
             AprendizImportAudit.objects.create(
                 imported_by=imported_by,
-                total_rows=len(rows) + len(pre_validation_errors),
+                total_rows=len(rows) + pre_validation_error_count,
                 created_count=created_count,
                 updated_count=updated_count,
-                errors_count=len(pre_validation_errors) + skipped_count + failed_count,
+                errors_count=pre_validation_error_count + skipped_count + failed_count,
             )
 
         return ImportExecutionResult(
             created_count=created_count,
             updated_count=updated_count,
-            errors_count=len(pre_validation_errors) + skipped_count + failed_count,
-            total_rows=len(rows) + len(pre_validation_errors),
+            errors_count=pre_validation_error_count + skipped_count + failed_count,
+            total_rows=len(rows) + pre_validation_error_count,
             skipped_count=skipped_count,
             failed_count=failed_count,
             row_results=row_results,

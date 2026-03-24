@@ -13,6 +13,7 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
   const params = route.params;
   const [selected, setSelected] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+  const flow = params.status === "ok" ? params.flow ?? "manual" : "manual";
 
   const equipos = useMemo(() => {
     if (params.status !== "ok") return [];
@@ -26,11 +27,14 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
   async function registrar(tipo: "ingreso" | "salida") {
     try {
       setLoading(true);
-      await Accesos.registrarPorDocumento({
-        documento: params.documento,
-        tipo,
-        equipos: selected,
-      });
+      await Accesos.registrarPorDocumento(
+        {
+          documento: params.documento,
+          tipo,
+          equipos: selected,
+        },
+        { idempotencyKey: Accesos.createRegistroIdempotencyKey(params.documento, tipo) }
+      );
       Alert.alert("Listo", `Se registro ${tipo} correctamente.`);
       navigation.popToTop();
     } catch (error: any) {
@@ -69,6 +73,35 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
   }
 
   const aprendiz = params.data.aprendiz;
+  const autoIngreso = flow === "auto-ingreso";
+  const salidaPendiente = flow === "manual-salida" || params.data.estado === "dentro";
+
+  if (autoIngreso) {
+    return (
+      <ModernScreen scroll contentStyle={{ gap: 14 }}>
+        <FadeInCard style={{ gap: 16 }}>
+          <Pill text="INGRESO REGISTRADO" />
+          <TitleBlock
+            title={`${aprendiz.first_name} ${aprendiz.last_name}`.trim()}
+            subtitle={`Documento ${aprendiz.documento}. El ingreso se confirmó automáticamente.`}
+          />
+          <NoticeBanner
+            tone="info"
+            text={
+              equipos.length > 0
+                ? "El registro automático no abrió selección manual de equipos; revisa ese flujo si necesitas asociarlos."
+                : "La validación registró el ingreso al instante y puedes continuar con el siguiente escaneo."
+            }
+          />
+        </FadeInCard>
+
+        <FadeInCard style={{ gap: 10 }}>
+          <ModernButton label="Escanear siguiente" onPress={() => navigation.replace("ScanQr")} />
+          <ModernButton label="Volver al inicio" tone="light" onPress={() => navigation.popToTop()} />
+        </FadeInCard>
+      </ModernScreen>
+    );
+  }
 
   return (
     <ModernScreen scroll contentStyle={{ gap: 14 }}>
@@ -83,7 +116,7 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
       <FadeInCard style={{ gap: 14 }}>
         <TitleBlock
           title="Checklist de equipos"
-          subtitle="Marca los equipos que acompañarán este movimiento antes de confirmar ingreso o salida."
+          subtitle="Marca los equipos que acompañarán este movimiento antes de confirmar la salida."
         />
         <FlatList
           data={equipos}
@@ -126,12 +159,16 @@ export function ConfirmacionScreen({ navigation, route }: Props) {
         <NoticeBanner
           tone="info"
           text={
-            selected.length > 0
-              ? `${selected.length} equipo(s) asociado(s) para este registro.`
-              : "Puedes registrar el acceso sin equipos o asociarlos antes de confirmar."
+            salidaPendiente
+              ? selected.length > 0
+                ? `${selected.length} equipo(s) asociado(s) para la salida.`
+                : "El último movimiento registrado es un ingreso. Confirma la salida si corresponde."
+              : selected.length > 0
+                ? `${selected.length} equipo(s) asociado(s) para este registro.`
+                : "Puedes registrar el acceso sin equipos o asociarlos antes de confirmar."
           }
         />
-        <ModernButton label="Registrar ingreso" onPress={() => registrar("ingreso")} disabled={loading} />
+        {salidaPendiente ? null : <ModernButton label="Registrar ingreso" onPress={() => registrar("ingreso")} disabled={loading} />}
         <ModernButton label="Registrar salida" tone="danger" onPress={() => registrar("salida")} disabled={loading} />
       </FadeInCard>
     </ModernScreen>

@@ -74,10 +74,12 @@ export default function ConfirmacionScreen() {
     status: "ok" | "notfound" | "denied";
     documento: string;
     motivo?: string;
+    flow?: "auto-ingreso" | "manual-salida";
   }>();
 
   const documento = params.documento ?? "";
   const status = params.status;
+  const flow = params.flow === "auto-ingreso" ? "auto-ingreso" : params.flow === "manual-salida" ? "manual-salida" : "manual";
   const data = status === "ok" ? Accesos.__cache.get(documento) : null;
 
   const [selected, setSelected] = useState<number[]>([]);
@@ -92,7 +94,10 @@ export default function ConfirmacionScreen() {
   async function registrar(tipo: "ingreso" | "salida") {
     try {
       setLoading(true);
-      await Accesos.registrarPorDocumento({ documento, tipo, equipos: selected });
+      await Accesos.registrarPorDocumento(
+        { documento, tipo, equipos: selected },
+        { idempotencyKey: Accesos.createRegistroIdempotencyKey(documento, tipo) }
+      );
       Alert.alert("Listo", `Se registró ${tipo} correctamente.`);
       router.replace("/guard/home");
     } catch (e: any) {
@@ -152,6 +157,41 @@ export default function ConfirmacionScreen() {
   }
 
   const a = data.aprendiz;
+  const autoIngreso = flow === "auto-ingreso";
+  const salidaPendiente = flow === "manual-salida" || data.estado === "dentro";
+
+  if (autoIngreso) {
+    return (
+      <ModernScreen scroll>
+        <ResultHero
+          title="Ingreso registrado"
+          subtitle={`${a.first_name} ${a.last_name} ya quedó registrado en ${data.turno?.sede ?? "la sede activa"}.`}
+          tone="success"
+          icon="checkmark-done-outline"
+        />
+
+        <FadeInCard delay={70} style={{ gap: 12 }}>
+          <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
+            Registro automático
+          </Text>
+          <NoticeBanner
+            tone="info"
+            text={
+              equipos.length > 0
+                ? "El ingreso quedó confirmado sin selección manual de equipos. Si necesitas trazarlos, registra esa asociación en el flujo correspondiente."
+                : "La validación registró el ingreso de inmediato y el puesto quedó listo para el siguiente escaneo."
+            }
+          />
+          <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>Documento {a.documento}</Text>
+        </FadeInCard>
+
+        <FadeInCard delay={120} style={{ gap: 10 }}>
+          <ModernButton label="Escanear siguiente" onPress={() => router.replace("/guard/scan")} />
+          <ModernButton label="Volver al panel" tone="light" onPress={() => router.replace("/guard/home")} />
+        </FadeInCard>
+      </ModernScreen>
+    );
+  }
 
   return (
     <ModernScreen scroll>
@@ -167,7 +207,7 @@ export default function ConfirmacionScreen() {
           Equipos asociados
         </Text>
         <Text style={{ color: uiTheme.inkSoft, lineHeight: 20 }}>
-          Marca los equipos que acompañarán este movimiento antes de registrar el ingreso o la salida.
+          Marca los equipos que acompañarán este movimiento antes de registrar la salida.
         </Text>
 
         <FlatList
@@ -208,8 +248,19 @@ export default function ConfirmacionScreen() {
         <Text style={{ color: uiTheme.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" }}>
           Registrar movimiento
         </Text>
-        <NoticeBanner tone="info" text={selected.length > 0 ? `${selected.length} equipo(s) asociado(s) para este registro.` : "Puedes registrar el acceso sin equipos o seleccionar los aprobados antes de confirmar."} />
-        <ModernButton label="Registrar ingreso" onPress={() => registrar("ingreso")} disabled={loading} />
+        <NoticeBanner
+          tone="info"
+          text={
+            salidaPendiente
+              ? selected.length > 0
+                ? `${selected.length} equipo(s) asociado(s) para la salida.`
+                : "El último movimiento es un ingreso. Si corresponde, confirma ahora la salida."
+              : selected.length > 0
+                ? `${selected.length} equipo(s) asociado(s) para este registro.`
+                : "Puedes registrar el acceso sin equipos o seleccionar los aprobados antes de continuar."
+          }
+        />
+        {salidaPendiente ? null : <ModernButton label="Registrar ingreso" onPress={() => registrar("ingreso")} disabled={loading} />}
         <ModernButton label="Registrar salida" tone="danger" onPress={() => registrar("salida")} disabled={loading} />
         {loading ? <LoadingBlock label="Registrando movimiento de acceso" /> : null}
       </FadeInCard>

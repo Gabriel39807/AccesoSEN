@@ -16,9 +16,10 @@ describe("mobile access and turno smoke", () => {
     getMock.mockReset();
   });
 
-  it("normalizes approved equipment payload when backend returns legacy equipos field", async () => {
+  it("normalizes approved equipment payload and exposes current state", async () => {
     postMock.mockResolvedValueOnce({
       data: {
+        estado: "dentro",
         aprendiz: { id: 1, username: "aprendiz.demo", first_name: "Ana", last_name: "Lopez", documento: "12345678" },
         equipos: [{ id: 10, serial: "ABC", marca: "Dell", modelo: "Latitude" }],
         turno: { id: 99, sede: "norte", jornada: "MANANA" },
@@ -31,23 +32,27 @@ describe("mobile access and turno smoke", () => {
     expect(postMock).toHaveBeenCalledWith("/api/accesos/validar_documento/", {
       documento: "SADI1B64:qr-firmado",
     });
+    expect(result.estado).toBe("dentro");
     expect(result.equipos_aprobados).toEqual([{ id: 10, serial: "ABC", marca: "Dell", modelo: "Latitude" }]);
   });
 
-  it("sends document access registration payload with tipo and equipos", async () => {
+  it("sends document access registration payload with tipo, equipos and idempotency key", async () => {
     postMock.mockResolvedValueOnce({ data: { permitido: true } });
 
-    const { registrarPorDocumento } = await import("./accesos");
+    const { createRegistroIdempotencyKey, registrarPorDocumento } = await import("./accesos");
+    const idempotencyKey = createRegistroIdempotencyKey("12345678", "ingreso");
     await registrarPorDocumento({
       documento: "12345678",
       tipo: "ingreso",
       equipos: [10, 11],
-    });
+    }, { idempotencyKey });
 
     expect(postMock).toHaveBeenCalledWith("/api/accesos/registrar_por_documento/", {
       documento: "12345678",
       tipo: "ingreso",
       equipos: [10, 11],
+    }, {
+      headers: { "X-Idempotency-Key": idempotencyKey },
     });
   });
 

@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+import { Monitor, MoonStar, SunMedium } from "lucide-react";
 
 import SidebarItem from "@/components/aprendiz/dashboard/SidebarItem";
 import {
@@ -20,6 +22,57 @@ import { logoutCurrentSession } from "@/lib/logout";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+const THEME_OPTIONS = [
+  { value: "light", label: "Claro", icon: SunMedium },
+  { value: "dark", label: "Oscuro", icon: MoonStar },
+  { value: "system", label: "Sistema", icon: Monitor },
+] as const;
+
+function ThemeSwitcher({ dense = false }: { dense?: boolean }) {
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const currentTheme = theme ?? "system";
+  const currentLabel =
+    currentTheme === "system"
+      ? `Sistema (${resolvedTheme === "dark" ? "oscuro" : "claro"})`
+      : currentTheme === "dark"
+        ? "Modo oscuro"
+        : "Modo claro";
+
+  return (
+    <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-1">
+      <div className="flex items-center justify-between gap-2 px-1 pb-1">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Tema</div>
+        {!dense ? <div className="truncate text-[11px] font-medium text-[color:var(--color-text-muted)]">{currentLabel}</div> : null}
+      </div>
+      <div className="grid grid-cols-3 gap-1">
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+          const active = currentTheme === value;
+
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTheme(value)}
+              className={cx(
+                "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-[0.8rem] px-2 py-1.5 text-[11px] font-semibold transition focus-visible:outline-none",
+                active
+                  ? "bg-[color:var(--primary)] text-[color:var(--primary-contrast)]"
+                  : "text-[color:var(--color-text-soft)] hover:bg-[color:var(--surface-elevated)] hover:text-[color:var(--color-text)]",
+              )}
+              aria-pressed={active}
+              aria-label={`Activar tema ${label.toLowerCase()}`}
+              title={`Cambiar a ${label.toLowerCase()}`}
+            >
+              <Icon className="h-3.5 w-3.5" strokeWidth={2.1} />
+              {!dense ? <span className="hidden xl:inline">{label}</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
@@ -60,10 +113,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   }
 
   const desktopExpanded = !collapsed || hovered;
-  const shellOffset = desktopExpanded ? "lg:pl-[19rem]" : "lg:pl-[7rem]";
+  const shellOffset = desktopExpanded ? "lg:pl-[14rem]" : "lg:pl-[4.75rem]";
 
   return (
-    <div className="sadi-shell relative min-h-screen overflow-x-hidden">
+    <div className="sadi-shell relative min-h-dvh overflow-x-hidden">
       {mobileOpen ? (
         <button
           aria-label="Cerrar navegación"
@@ -78,15 +131,15 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-4 py-4">
+        <div className="flex items-center justify-between border-b border-[color:var(--color-border)] px-2.5 py-2.5">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[color:var(--panel-bg)] text-[color:var(--color-primary)] shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+              <div className="grid h-9 w-9 place-items-center rounded-[0.95rem] border border-[color:var(--color-border-strong)] bg-[color:var(--panel-bg)] text-[color:var(--color-primary)] shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
               <span className="text-sm font-black tracking-[0.18em]">SA</span>
             </div>
             {desktopExpanded ? (
               <div className="min-w-0">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">SADI</div>
-                <div className="truncate text-lg font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">Command Centre</div>
+                <div className="truncate text-[0.88rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">Command Centre</div>
               </div>
             ) : null}
           </div>
@@ -94,17 +147,21 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
-            className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)] lg:inline-flex"
+            className="hidden h-9 w-9 items-center justify-center rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)] lg:inline-flex"
             aria-label={collapsed ? "Expandir barra lateral" : "Colapsar barra lateral"}
           >
             <IconRefresh className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col px-3 py-4">
-          <div className="sadi-card min-w-0 rounded-[1.6rem] px-4 py-4">
+        <div className="flex min-h-0 flex-1 flex-col px-2.5 py-2.5">
+          <div className="pb-2.5">
+            <ThemeSwitcher dense={!desktopExpanded} />
+          </div>
+
+          <div className="sadi-card min-w-0 rounded-[1.15rem] px-2.5 py-2.5">
             <div className="flex items-center justify-between gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-primary)]">
+              <div className="grid h-8 w-8 place-items-center rounded-[0.85rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-primary)]">
                 <IconBell className="h-4 w-4" />
               </div>
               <span className="command-noir-chip" data-tone="info">
@@ -113,15 +170,15 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </div>
             {desktopExpanded ? (
               <>
-                <div className="mt-4 text-sm font-semibold text-[color:var(--color-text)]">Control premium de accesos y operación.</div>
-                <div className="mt-1 text-xs leading-relaxed text-[color:var(--color-text-muted)]">
+                <div className="mt-3 text-sm font-semibold text-[color:var(--color-text)]">Control premium de accesos y operación.</div>
+                <div className="mt-1 text-xs leading-snug text-[color:var(--color-text-muted)]">
                   Navega por usuarios, trazabilidad y turnos con una vista clara, ordenada y sin ruido visual.
                 </div>
               </>
             ) : null}
           </div>
 
-          <nav className="mt-4 space-y-1.5">
+          <nav className="mt-2.5 space-y-1">
             {nav.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
@@ -137,24 +194,24 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             })}
           </nav>
 
-          <div className="mt-auto space-y-3 border-t border-[color:var(--color-border)] pt-3">
-            <div className="sadi-card rounded-[1.4rem] px-4 py-4">
+          <div className="mt-auto space-y-2.5 border-t border-[color:var(--color-border)] pt-2.5">
+            <div className="sadi-card rounded-[1.15rem] px-2.5 py-2.5">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Mi perfil</div>
-              <div className="mt-2 truncate text-sm font-semibold text-[color:var(--color-text)]">{loadingMe ? "Cargando..." : displayName}</div>
+              <div className="mt-1.5 truncate text-sm font-semibold text-[color:var(--color-text)]">{loadingMe ? "Cargando..." : displayName}</div>
               <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{loadingMe ? "" : `Rol: ${me?.rol ?? "admin"}`}</div>
               {desktopExpanded ? (
-                <div className="mt-4 flex gap-2">
+                <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     onClick={() => router.push("/admin/perfil")}
-                    className="flex-1 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)]"
+                      className="flex-1 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-2.5 py-2 text-xs font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:text-[color:var(--color-text)]"
                   >
                     Ver perfil
                   </button>
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-3 py-2 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-105"
+                      className="flex items-center justify-center gap-2 rounded-xl border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-2.5 py-2 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-105"
                   >
                     <IconLogout className="h-3.5 w-3.5" />
                     Salir
@@ -167,7 +224,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
               <button
                 type="button"
                 onClick={handleLogout}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-4 py-3 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-105"
+                 className="flex w-full items-center justify-center gap-2 rounded-[1rem] border border-[color:color-mix(in_srgb,var(--danger)_28%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] px-3 py-2.5 text-xs font-semibold text-[color:var(--danger)] transition hover:brightness-105"
               >
                 <IconLogout className="h-3.5 w-3.5" />
               </button>
@@ -200,7 +257,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
-            <div className="mb-3 sadi-card rounded-[1.4rem] p-4">
+            <div className="mb-3">
+              <ThemeSwitcher />
+            </div>
+            <div className="mb-3 sadi-card rounded-[1.35rem] p-3">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sesión actual</div>
               <div className="mt-2 text-sm font-semibold text-[color:var(--color-text)]">{loadingMe ? "Cargando..." : displayName || "Administrador"}</div>
               <div className="mt-1 text-xs text-[color:var(--color-text-muted)]">{loadingMe ? "" : `Rol: ${me?.rol ?? "admin"}`}</div>
@@ -242,18 +302,18 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
         </div>
       </aside>
 
-      <div className={cx("sadi-shell-content min-h-screen transition-[padding-left] duration-300", shellOffset)}>
-        <div className="mx-auto flex w-full min-w-0 max-w-[1720px] flex-col px-4 py-4 sm:px-6 lg:px-6 lg:py-5 xl:px-8">
-          <div className="mb-4 flex items-center justify-between gap-3 lg:hidden">
+        <div className={cx("sadi-shell-content min-h-dvh transition-[padding-left] duration-300", shellOffset)}>
+         <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col px-2.5 py-2.5 sm:px-3.5 lg:px-4 lg:py-3 xl:px-5">
+           <div className="mb-2.5 flex items-center justify-between gap-3 lg:hidden">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">SADI</div>
-              <h1 className="truncate text-lg font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">Panel administrativo</h1>
+               <h1 className="truncate text-base font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">Panel administrativo</h1>
               <p className="truncate text-xs text-[color:var(--color-text-muted)]">{loadingMe ? "Cargando..." : displayName || "Administrador"}</p>
             </div>
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)] shadow-[0_16px_32px_rgba(0,0,0,0.12)]"
+               className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3.5 py-2.5 text-sm font-semibold text-[color:var(--color-text-soft)] shadow-[0_16px_32px_rgba(0,0,0,0.12)]"
             >
               Menú
             </button>

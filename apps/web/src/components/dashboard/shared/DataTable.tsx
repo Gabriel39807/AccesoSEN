@@ -1,7 +1,3 @@
-﻿function cx(...c: Array<string | false | null | undefined>) {
-  return c.filter(Boolean).join(" ");
-}
-
 export default function DataTable({
   headers,
   children,
@@ -23,14 +19,11 @@ export default function DataTable({
 }) {
   if (loading && skeleton) return <>{skeleton}</>;
   return (
-    <section className="sadi-card-strong min-w-0 overflow-hidden rounded-[1.85rem] border">
-      <div className="w-full overflow-x-auto">
-        <table className={cx("min-w-full text-sm text-[color:var(--text-soft)]", tableClassName)}>
+    <section className="sadi-card-strong min-w-0 overflow-hidden rounded-[1.35rem] border">
+      <div className="w-full overflow-x-auto overscroll-x-contain">
+        <table className={`min-w-full table-auto text-sm text-[color:var(--text-soft)]${tableClassName ? ` ${tableClassName}` : ""}`}>
           <thead
-            className={cx(
-              "bg-[color:var(--table-head-bg)] text-[color:var(--text-soft)]",
-              stickyHeader && "sticky top-0 z-10 backdrop-blur-md",
-            )}
+            className={`bg-[color:var(--table-head-bg)] text-[color:var(--text-soft)]${stickyHeader ? " sticky top-0 z-10 backdrop-blur-md" : ""}`}
           >
             {headers}
           </thead>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
-import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
+import { isSignedScanToken, sanitizeDigits, validateScanValue } from "../../src/lib/validators";
 import { EmptyState, FadeInCard, InputField, ModernButton, ModernScreen, NoticeBanner, Pill } from "../../src/ui/modern";
 
 const BARCODE_TYPES: any[] = ["qr", "code128", "code39", "code93", "ean13", "ean8", "upc_a", "upc_e", "pdf417", "itf14"];
@@ -18,45 +18,65 @@ export default function ScanScreen() {
   const [cameraKey, setCameraKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const canScan = useMemo(() => !scanned && !loading, [scanned, loading]);
 
+  function normalizeScanInput(value: string) {
+    const clean = String(value || "").trim();
+    return isSignedScanToken(clean) ? clean : sanitizeDigits(clean).slice(0, 10);
+  }
+
   async function validar(doc: string) {
-    const clean = doc.trim();
-    if (!clean) {
-      setMsg("Ingresa o escanea un documento.");
+    if (inFlightRef.current) {
       return;
     }
+    const clean = String(doc || "").trim();
 
-    const documentError = validateDocument6to10(clean);
+    const documentError = validateScanValue(clean);
     if (documentError) {
       setMsg(documentError);
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
     setMsg("Validando identidad...");
 
     try {
       const data = await Accesos.validarDocumento(clean);
       Accesos.__cache.set(clean, data);
-      router.push({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean } } as any);
+
+      if (data.estado === "dentro") {
+        router.replace({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean, flow: "manual-salida" } } as any);
+        return;
+      }
+
+      setMsg("Identidad validada. Registrando ingreso...");
+      const idempotencyKey = Accesos.createRegistroIdempotencyKey(clean, "ingreso");
+      const registro = await Accesos.registrarPorDocumento(
+        { documento: clean, tipo: "ingreso" },
+        { idempotencyKey }
+      );
+      Accesos.__registroCache.set(`${clean}:ingreso`, registro);
+      router.replace({ pathname: "/guard/confirmacion", params: { status: "ok", documento: clean, flow: "auto-ingreso" } } as any);
     } catch (e: any) {
       const status = e?.response?.status;
       if (status === 404) {
-        router.push({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
+        router.replace({ pathname: "/guard/confirmacion", params: { status: "notfound", documento: clean } } as any);
       } else {
         const motivo = toUiErrorMessage(e, "Acceso denegado.");
-        router.push({ pathname: "/guard/confirmacion", params: { status: "denied", documento: clean, motivo } } as any);
+        router.replace({ pathname: "/guard/confirmacion", params: { status: "denied", documento: clean, motivo } } as any);
       }
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   }
 
   function onBarcodeValue(raw: string) {
     if (!canScan) return;
-    const clean = sanitizeDigits((raw || "").trim()).slice(0, 10);
+    const clean = normalizeScanInput(raw);
     setDocumento(clean);
     setScanned(true);
     void validar(clean);
@@ -104,7 +124,7 @@ export default function ScanScreen() {
             <View style={{ gap: 6 }}>
               <Text style={styles.heroTitle}>Verificacion inmediata</Text>
               <Text style={styles.heroSubtitle}>
-                Alinea el QR o ingresa el documento manualmente. El resultado debe sentirse instantaneo y confiable.
+                Alinea el QR o ingresa el documento manualmente. Los ingresos validados se registran al instante.
               </Text>
             </View>
           </View>
@@ -139,7 +159,7 @@ export default function ScanScreen() {
         <View style={styles.viewfinderFooter}>
           <View style={styles.footerMeta}>
             <Ionicons name="shield-checkmark-outline" size={14} color="#B8C3D1" />
-            <Text style={styles.footerMetaText}>Solo una lectura a la vez</Text>
+            <Text style={styles.footerMetaText}>Sin dobles registros por lectura</Text>
           </View>
           {scanned ? <ModernButton icon="refresh-outline" label="Leer otro" tone="light" onPress={reiniciarLectura} /> : null}
         </View>

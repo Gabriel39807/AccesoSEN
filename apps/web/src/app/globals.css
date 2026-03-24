@@ -55,8 +55,8 @@
   --sidebar-bg: linear-gradient(180deg, rgba(6, 10, 16, 0.96), rgba(10, 16, 24, 0.92));
   --font-body-fallback: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-display-fallback: "Space Grotesk", "Sora", "Inter", sans-serif;
-  --admin-shell-collapsed: 7rem;
-  --admin-shell-expanded: 19rem;
+  --admin-shell-collapsed: 4.75rem;
+  --admin-shell-expanded: 14rem;
 
   /* compatibility aliases */
   --color-border: var(--surface-border);
@@ -139,7 +139,7 @@ html {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at 10% 12%, var(--app-glow-a), transparent 26%),
     radial-gradient(circle at 92% 0%, var(--app-glow-b), transparent 24%),
@@ -170,7 +170,7 @@ h6 {
 }
 
 .sadi-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at 0% 12%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 24%),
     radial-gradient(circle at 100% 0%, var(--app-glow-b), transparent 20%),
@@ -279,13 +279,13 @@ h6 {
 }
 
 .command-noir-control {
-  height: 3rem;
+  height: 2.5rem;
   width: 100%;
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   border: 1px solid var(--surface-border);
   background: var(--control-bg);
-  padding: 0.75rem 0.9rem;
-  font-size: 0.925rem;
+  padding: 0.52rem 0.75rem;
+  font-size: 0.875rem;
   color: var(--foreground);
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
@@ -311,10 +311,10 @@ h6 {
   gap: 0.45rem;
   border-radius: 999px;
   border: 1px solid var(--surface-border);
-  padding: 0.4rem 0.8rem;
-  font-size: 0.75rem;
+  padding: 0.24rem 0.58rem;
+  font-size: 0.67rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   background: var(--chip-bg);
   color: var(--text-soft);
@@ -354,20 +354,20 @@ h6 {
   position: relative;
   overflow: hidden;
   min-width: 0;
-  border-radius: 1.5rem;
+  border-radius: 1.1rem;
   border: 1px solid var(--surface-border);
   background: var(--metric-bg);
-  padding: 1.15rem;
+  padding: 0.78rem 0.82rem;
   box-shadow: var(--shadow-soft);
 }
 
 .command-noir-metric::before {
   content: "";
   position: absolute;
-  left: 1rem;
+  left: 0.9rem;
   top: 0;
   height: 3px;
-  width: 3.5rem;
+  width: 3rem;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 35%, white));
 }
@@ -390,10 +390,10 @@ h6 {
 
 .command-noir-detail-card {
   min-width: 0;
-  border-radius: 1.25rem;
+  border-radius: 1rem;
   border: 1px solid var(--surface-border);
   background: var(--detail-card-bg);
-  padding: 1rem;
+  padding: 0.72rem;
 }
 
 .command-noir-table-row {
@@ -407,6 +407,13 @@ h6 {
 .command-noir-table-cell {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 1366px) {
+  .sadi-shell::before {
+    background-size: 54px 54px;
+    opacity: 0.32;
+  }
 }
 
 @keyframes sadi-shimmer {

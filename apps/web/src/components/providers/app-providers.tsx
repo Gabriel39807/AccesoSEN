@@ -2,7 +2,6 @@
 
 import { ThemeProvider } from "next-themes";
 
-import GlobalThemeToggle from "@/components/GlobalThemeToggle";
 import { DocumentViewerProvider } from "@/components/document/DocumentViewerProvider";
 import RoleThemeProvider from "@/components/providers/RoleThemeProvider";
 import { InstitutionProvider } from "@/context/institution-context";
@@ -20,7 +19,6 @@ export default function AppProviders({ children }: { children: React.ReactNode }
         <InstitutionProvider>
           <RoleThemeProvider>
             <DocumentViewerProvider>
-              <GlobalThemeToggle />
               {children}
             </DocumentViewerProvider>
           </RoleThemeProvider>

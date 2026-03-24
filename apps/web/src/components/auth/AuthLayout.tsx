@@ -40,12 +40,12 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
   }
 
   return (
-    <main className={`${styles.layout} ${classByRole} px-4 py-8 md:px-8 md:py-10`}>
+    <main className={`${styles.layout} ${classByRole} px-4 py-5 md:px-6 md:py-6`}>
       <div
         ref={wrapperRef}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
-        className="mx-auto grid w-full max-w-7xl items-start gap-7 xl:grid-cols-[1.14fr_0.86fr]"
+        className="mx-auto grid w-full max-w-7xl items-start gap-5 xl:grid-cols-[1.08fr_0.92fr]"
       >
         <motion.section
           className="order-2 xl:order-1"
@@ -57,17 +57,17 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
         </motion.section>
 
         <motion.section
-          className="order-1 xl:order-2 xl:pt-3"
+          className="order-1 xl:order-2 xl:pt-1"
           initial={{ opacity: 0, x: 40 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.7, ease: "easeOut", delay: 0.15 }}
         >
-          <div className="w-full max-w-[34rem] xl:ml-auto">
+            <div className="w-full max-w-[32rem] xl:ml-auto">
             <motion.p
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="mb-3 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--auth-accent)] shadow-sm backdrop-blur-md"
+               className="mb-2.5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--auth-accent)] shadow-sm backdrop-blur-md"
             >
               {badge}
             </motion.p>
@@ -76,7 +76,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className={`max-w-xl text-4xl font-extrabold leading-[1.02] tracking-tight md:text-5xl ${styles.textStrong}`}
+               className={`max-w-xl text-3xl font-extrabold leading-[1.02] tracking-tight md:text-[2.75rem] ${styles.textStrong}`}
             >
               {title}
             </motion.h1>
@@ -85,7 +85,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 }}
-              className={`mt-3 max-w-xl text-sm leading-relaxed md:text-base ${styles.textSoft}`}
+               className={`mt-2.5 max-w-xl text-sm leading-snug md:text-[0.96rem] ${styles.textSoft}`}
             >
               {subtitle}
             </motion.p>
@@ -94,7 +94,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.58 }}
-              className="mt-5 flex flex-wrap gap-2"
+               className="mt-4 flex flex-wrap gap-2"
             >
               {trustPoints.map((point) => (
                 <span key={point} className={styles.metaChip}>
@@ -107,7 +107,7 @@ export default function AuthLayout({ role, title, subtitle, badge, children }: P
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.6 }}
-              className="mt-6"
+               className="mt-4"
             >
               {children}
             </motion.div>

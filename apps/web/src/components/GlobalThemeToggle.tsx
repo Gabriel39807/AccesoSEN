@@ -38,9 +38,9 @@ export default function GlobalThemeToggle() {
   }, [effectiveTheme, mounted, resolvedTheme]);
 
   return (
-    <div className="pointer-events-none fixed bottom-3 left-1/2 z-[80] w-[calc(100%-1.25rem)] max-w-max -translate-x-1/2 sm:bottom-auto sm:left-auto sm:right-4 sm:top-4 sm:w-auto sm:translate-x-0">
+    <div className="w-full max-w-max">
       <div
-        className="pointer-events-auto flex items-center justify-center gap-2 rounded-[1.35rem] border border-surface-border bg-surface-elevated/92 p-1.5 backdrop-blur-xl"
+        className="flex items-center justify-center gap-2 rounded-[1.1rem] border border-surface-border bg-surface-elevated/92 p-1 backdrop-blur-xl"
         style={{ boxShadow: "var(--shadow-soft)" }}
       >
         <div className="hidden pl-2 sm:block">

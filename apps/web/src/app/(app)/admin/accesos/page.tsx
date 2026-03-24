@@ -119,12 +119,12 @@ function useDebounced<T>(value: T, delay = 450) {
 }
 
 function StatSkeleton() {
-  return <div className="command-noir-metric h-[124px] animate-pulse" />;
+  return <div className="command-noir-metric h-[110px] animate-pulse" />;
 }
 
 function FilterSkeleton() {
   return (
-    <section className="sadi-card-strong rounded-[1.75rem] p-5">
+    <section className="sadi-card-strong rounded-[1.55rem] p-4">
       <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-12 lg:col-span-5" />
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
@@ -157,11 +157,11 @@ function MetricPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
-          <p className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+          <p className="mt-2.5 text-[1.65rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
         </div>
         <span className="command-noir-chip" data-tone={tone}>{detail}</span>
       </div>
-      <p className="mt-4 text-sm text-[color:var(--color-text-soft)]">
+      <p className="mt-3 text-sm text-[color:var(--color-text-soft)]">
         {label === "Total"
           ? "Ledger operativo del rango filtrado."
           : label === "Ingresos"
@@ -363,7 +363,7 @@ export default function AdminAccesosPage() {
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   return (
-    <div className="space-y-7 pb-2">
+    <div className="space-y-4 pb-2">
       <PageHeader
         breadcrumb="ADMIN > ACCESOS"
         title="Accesos"
@@ -377,7 +377,7 @@ export default function AdminAccesosPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
         {loading ? (
           <>
             <StatSkeleton />
@@ -404,14 +404,14 @@ export default function AdminAccesosPage() {
           }
         >
           <input
-            className="command-noir-control h-11 w-full md:col-span-12 lg:col-span-5"
+            className="command-noir-control h-10 w-full md:col-span-12 lg:col-span-4"
             placeholder="Buscar por documento o username..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
 
           <select
-            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-2"
+            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
             value={tipo}
             onChange={(e) => setTipo(e.target.value as any)}
           >
@@ -421,7 +421,7 @@ export default function AdminAccesosPage() {
           </select>
 
           <select
-            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-2"
+            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
             value={sede}
             onChange={(e) => setSede(e.target.value as any)}
           >
@@ -434,7 +434,7 @@ export default function AdminAccesosPage() {
           </select>
 
           <select
-            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-3"
+            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
             value={aprendizId}
             onChange={(e) => setAprendizId(e.target.value ? Number(e.target.value) : "")}
           >
@@ -447,7 +447,7 @@ export default function AdminAccesosPage() {
           </select>
 
           <select
-            className="command-noir-control h-11 w-full md:col-span-6 lg:col-span-3"
+            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
             value={guardaId}
             onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
           >
@@ -460,9 +460,9 @@ export default function AdminAccesosPage() {
           </select>
 
           <div className="md:col-span-6 lg:col-span-2">
-            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Desde</label>
-            <input
-              className="command-noir-control h-11 w-full"
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Desde</label>
+              <input
+                className="command-noir-control h-10 w-full"
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
@@ -470,9 +470,9 @@ export default function AdminAccesosPage() {
           </div>
 
           <div className="md:col-span-6 lg:col-span-2">
-            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hasta</label>
-            <input
-              className="command-noir-control h-11 w-full"
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hasta</label>
+              <input
+                className="command-noir-control h-10 w-full"
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
@@ -485,7 +485,7 @@ export default function AdminAccesosPage() {
             </Button>
           </div>
 
-          <div className="flex h-11 items-center justify-end md:col-span-12 lg:col-span-2">
+          <div className="flex h-10 items-center justify-end md:col-span-12 lg:col-span-2">
             <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
               {count} accesos
             </span>
@@ -498,16 +498,16 @@ export default function AdminAccesosPage() {
           loading={loadingTable}
           skeleton={<TableSkeleton />}
           hasRows={accesos.length > 0}
-          tableClassName="min-w-[840px] xl:min-w-full"
+          tableClassName="min-w-[680px] xl:min-w-full table-fixed"
           headers={
             <tr className="text-left">
-              <th className="px-4 py-3 font-semibold">Fecha</th>
-              <th className="px-4 py-3 font-semibold">Tipo</th>
-              <th className="px-4 py-3 font-semibold">Sede</th>
-              <th className="px-4 py-3 font-semibold">Aprendiz</th>
-              <th className="px-4 py-3 font-semibold">Registrado por</th>
-              <th className="px-4 py-3 font-semibold">Equipos</th>
-              <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+              <th className="px-2.5 py-2 font-semibold">Fecha</th>
+              <th className="px-2.5 py-2 font-semibold">Tipo</th>
+              <th className="hidden px-2.5 py-2 font-semibold xl:table-cell">Sede</th>
+              <th className="px-2.5 py-2 font-semibold">Aprendiz</th>
+              <th className="hidden px-2.5 py-2 font-semibold lg:table-cell">Registrado por</th>
+              <th className="hidden px-2.5 py-2 font-semibold md:table-cell">Equipos</th>
+              <th className="px-2.5 py-2 text-right font-semibold">Acciones</th>
             </tr>
           }
           emptyState={
@@ -531,27 +531,27 @@ export default function AdminAccesosPage() {
 
             return (
               <tr key={a.id} className="command-noir-table-row">
-                <td className="command-noir-table-cell px-4 py-4 text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
-                <td className="command-noir-table-cell px-4 py-3">
+                <td className="command-noir-table-cell px-2.5 py-2 text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
+                <td className="command-noir-table-cell px-2.5 py-2">
                   {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </td>
-                <td className="command-noir-table-cell px-4 py-3">
+                <td className="command-noir-table-cell hidden px-2.5 py-2 xl:table-cell">
                   {a.sede ? (
                     <Badge variant="blue" label={sedesByCode.get(a.sede) || a.sede} />
                   ) : (
                     <Badge variant="gray" label="(sin sede)" />
                   )}
                 </td>
-                <td className="command-noir-table-cell px-4 py-3">
+                <td className="command-noir-table-cell px-2.5 py-2">
                   <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(aprendiz)}</div>
                   <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "â€”"}</div>
                 </td>
-                <td className="command-noir-table-cell px-4 py-3 text-[color:var(--color-text-soft)]">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
-                <td className="command-noir-table-cell px-4 py-3">
+                <td className="command-noir-table-cell hidden px-2.5 py-2 text-[color:var(--color-text-soft)] lg:table-cell">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
+                <td className="command-noir-table-cell hidden px-2.5 py-2 md:table-cell">
                   {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "â€”"}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <Button onClick={() => abrirDetalle(a)} variant="secondary" className="px-3 py-1.5 text-xs">
+                <td className="px-2.5 py-2 text-right">
+                  <Button onClick={() => abrirDetalle(a)} variant="secondary" className="min-h-8 px-3 py-1 text-xs">
                     Ver
                   </Button>
                 </td>

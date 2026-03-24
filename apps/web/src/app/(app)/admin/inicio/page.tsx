@@ -296,12 +296,12 @@ function SectionCard({
   className?: string;
 }) {
   return (
-    <section className={cx("sadi-card-strong rounded-[1.8rem] p-5", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className={cx("sadi-card-strong rounded-[1.3rem] p-3.5 md:p-4", className)}>
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">{eyebrow}</p>
-          <h2 className="mt-2 text-2xl font-bold tracking-tight text-[color:var(--color-text)]">{title}</h2>
-          {description ? <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[color:var(--color-text-soft)]">{description}</p> : null}
+          <h2 className="mt-1 text-[1.18rem] font-bold tracking-tight text-[color:var(--color-text)] sm:text-[1.3rem]">{title}</h2>
+          {description ? <p className="mt-1.5 max-w-2xl text-sm leading-snug text-[color:var(--color-text-soft)]">{description}</p> : null}
         </div>
       </div>
       {children}
@@ -529,13 +529,13 @@ export default function AdminInicioPage() {
   ];
 
   return (
-    <div className="min-w-0 space-y-7 2xl:space-y-8">
-      <section className="sadi-card-strong rounded-[2rem] p-6 xl:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-3xl space-y-3">
+    <div className="min-w-0 space-y-4 2xl:space-y-5">
+      <section className="sadi-card-strong rounded-[1.75rem] p-5 xl:p-6">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl space-y-2.5">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">Panel de control</p>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-[color:var(--color-text)] xl:text-[2.4rem]">Estado operativo {isSuperadmin ? "institucional" : "de tu sede"}</h1>
+              <h1 className="text-[1.95rem] font-bold tracking-tight text-[color:var(--color-text)] xl:text-[2.25rem]">Estado operativo {isSuperadmin ? "institucional" : "de tu sede"}</h1>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[color:var(--color-text-soft)]">
                 Prioriza lo que requiere atencion, entra al modulo correcto y resuelve sin perder tiempo entre widgets decorativos.
               </p>
@@ -553,13 +553,13 @@ export default function AdminInicioPage() {
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-[360px]">
-            <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-4 py-3">
+          <div className="grid w-full gap-2.5 sm:grid-cols-2 xl:max-w-[300px]">
+            <div className="rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-3.5 py-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Periodo activo</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{formatRangeLabel(periodRange.start, periodRange.end)}</p>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{activePeriodLabel}</p>
             </div>
-            <div className="rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-4 py-3">
+            <div className="rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-3.5 py-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hoy</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{currentDateLabel()}</p>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Vista pensada para supervision y respuesta.</p>
@@ -567,7 +567,7 @@ export default function AdminInicioPage() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div className="mt-4 flex flex-col gap-2.5 xl:flex-row xl:items-end xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             {periodFilters.map((period) => (
               <button
@@ -575,7 +575,7 @@ export default function AdminInicioPage() {
                 type="button"
                 onClick={() => setSelectedPeriod(period)}
                 className={cx(
-                  "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                  "rounded-full border px-3 py-1.5 text-sm font-semibold transition",
                   period === selectedPeriod
                     ? "border-[color:var(--color-primary)] bg-[color:var(--primary-soft)] text-[color:var(--color-text)] shadow-[0_0_0_1px_rgba(111,211,255,0.18)_inset]"
                     : "border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] text-[color:var(--color-text-soft)] hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)]",
@@ -586,14 +586,14 @@ export default function AdminInicioPage() {
             ))}
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-[minmax(220px,1fr),auto,auto] xl:max-w-[560px]">
+          <div className="grid w-full gap-2.5 sm:grid-cols-[minmax(220px,1fr),auto,auto] xl:max-w-[500px]">
             <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Sede</span>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Sede</span>
               <select
                 value={canChooseSede ? selectedSede : me?.sede_principal ?? ""}
                 onChange={(event) => setSelectedSede(event.target.value)}
                 disabled={!canChooseSede}
-                className="command-noir-control w-full rounded-2xl px-4 py-3 text-sm font-medium text-[color:var(--color-text)] outline-none transition disabled:cursor-not-allowed disabled:opacity-80"
+                className="command-noir-control w-full rounded-2xl px-3 py-2 text-sm font-medium text-[color:var(--color-text)] outline-none transition disabled:cursor-not-allowed disabled:opacity-80"
               >
                 {canChooseSede ? <option value="" className="text-zinc-900">Todas las sedes</option> : null}
                 {sedes.map((item) => (
@@ -607,7 +607,7 @@ export default function AdminInicioPage() {
             <button
               type="button"
               onClick={() => setRefreshKey((value) => value + 1)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.02)] px-3 py-2.5 text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
             >
               <IconRefresh className={cx("h-4 w-4", dashboardLoading && "animate-spin")} />
               {dashboardLoading ? "Actualizando..." : "Refrescar"}
@@ -620,7 +620,7 @@ export default function AdminInicioPage() {
                 setSelectedSede(isSuperadmin ? "" : me?.sede_principal ?? "");
                 setRefreshKey((value) => value + 1);
               }}
-              className="inline-flex items-center justify-center rounded-[1.4rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-4 py-3 text-sm font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+              className="inline-flex items-center justify-center rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-3 py-2.5 text-sm font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
             >
               Restablecer
             </button>
@@ -636,7 +636,7 @@ export default function AdminInicioPage() {
 
       <OverviewCardsContent cards={overviewCards} loading={dashboardLoading} />
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.1fr),minmax(0,0.9fr)]">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr),minmax(0,0.9fr)]">
         <SectionCard
           eyebrow="Prioridades"
           title="Que requiere atencion ahora"
@@ -644,12 +644,12 @@ export default function AdminInicioPage() {
             ? "Empieza por las excepciones y luego baja al modulo correspondiente."
             : "Estas son las decisiones que mas impacto tienen hoy en tu sede."}
         >
-          <div className="mt-5 grid gap-3">
+          <div className="mt-3 grid gap-2.5">
             {priorityItems.map((item) => (
               <Link
                 key={item.title}
                 href={item.href}
-                className="flex flex-col gap-3 rounded-[1.4rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+                className="flex flex-col gap-2.5 rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3.5 py-3 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -674,15 +674,15 @@ export default function AdminInicioPage() {
           title="Eventos recientes"
           description="Ultimos movimientos visibles en el rango activo para validar trazabilidad y detectar desviaciones."
         >
-          <div className="mt-5 overflow-hidden rounded-[1.6rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)]">
-            <div className="hidden grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-3 text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] md:grid">
+          <div className="mt-3 overflow-hidden rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)]">
+            <div className="hidden grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-3.5 py-2.5 text-xs font-bold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)] md:grid">
               <span>Evento</span>
               <span>Contexto</span>
               <span>Estado</span>
             </div>
             <div className="divide-y divide-[color:var(--color-border)]">
               {visibleActivity.map((item) => (
-                <div key={`${item.id}-${item.title}`} className="grid grid-cols-1 items-start gap-3 px-4 py-4 md:grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] md:items-center">
+                <div key={`${item.id}-${item.title}`} className="grid grid-cols-1 items-start gap-2.5 px-3 py-3 md:grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] md:items-center">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-[color:var(--color-text)]">{item.title}</p>
                     <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">{item.meta}</p>
@@ -698,14 +698,14 @@ export default function AdminInicioPage() {
         </SectionCard>
       </section>
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.15fr),minmax(0,0.85fr)]">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr),minmax(0,0.85fr)]">
         <SectionCard
           eyebrow="Monitoreo"
           title="Tendencia del periodo"
           description="Una sola visual util: volumen de accesos para entender carga operativa sin distraer la lectura principal."
         >
-          <div className="mt-5 rounded-[1.6rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-3 rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
               <div>
                 <p className="text-sm font-semibold text-[color:var(--color-text)]">Actividad por {selectedPeriod.toLowerCase()}</p>
                 <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">{activePeriodLabel}</p>
@@ -718,8 +718,8 @@ export default function AdminInicioPage() {
             {trend.length ? (
               <div className={cx("grid items-end gap-3", trend.length <= 5 ? "grid-cols-5" : "grid-cols-6")}>
                 {trend.map((item) => (
-                  <div key={item.label} className="flex flex-col items-center gap-2">
-                    <div className="flex h-44 w-full items-end justify-center rounded-3xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-3">
+                  <div key={item.label} className="flex flex-col items-center gap-1.5">
+                    <div className="flex h-28 w-full items-end justify-center rounded-[1.1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-2.5 py-2.5">
                       <div className="w-10 rounded-full bg-[linear-gradient(180deg,rgba(111,211,255,0.96),rgba(79,163,255,0.58))] shadow-[0_0_18px_rgba(111,211,255,0.22)]" style={{ height: `${Math.max(28, item.height)}px` }} />
                     </div>
                     <span className="text-xs font-semibold text-[color:var(--color-text-muted)]">{item.label}</span>
@@ -738,20 +738,20 @@ export default function AdminInicioPage() {
           </div>
         </SectionCard>
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           <SectionCard
             eyebrow="Acciones"
             title="Entradas rapidas"
             description="Atajos directos para resolver pendientes sin navegar de mas."
           >
-            <div className="mt-5 space-y-3">
+            <div className="mt-3 space-y-2.5">
               {quickActions.map((action) => (
                 <Link
                   key={action.title}
                   href={action.href}
-                  className="flex items-start gap-3 rounded-[1.4rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
+                  className="flex items-start gap-3 rounded-[1.15rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2.5 transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.04)]"
                 >
-                  <span className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] text-[color:var(--color-text)] shadow-sm">
+                    <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.9rem] border border-[color:var(--color-border)] bg-[color:rgba(255,255,255,0.03)] text-[color:var(--color-text)] shadow-sm">
                     {action.icon}
                   </span>
                   <div className="min-w-0">
@@ -771,15 +771,15 @@ export default function AdminInicioPage() {
             title="Resumen del enfoque actual"
             description="Informacion minima para orientarte sin llenar la pantalla de widgets redundantes."
           >
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4">
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+              <div className="rounded-[1.1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2.5">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Usuarios visibles</p>
-                <p className="mt-2 text-2xl font-bold text-[color:var(--color-text)]">{stats.usersTotal}</p>
+                <p className="mt-1.5 text-[1.35rem] font-bold text-[color:var(--color-text)]">{stats.usersTotal}</p>
                 <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">{stats.usersActive} activos dentro del alcance actual.</p>
               </div>
-              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-4">
+              <div className="rounded-[1.1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2.5">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Trazabilidad</p>
-                <p className="mt-2 text-2xl font-bold text-[color:var(--color-text)]">{stats.accesosConEquipos}</p>
+                <p className="mt-1.5 text-[1.35rem] font-bold text-[color:var(--color-text)]">{stats.accesosConEquipos}</p>
                 <p className="mt-1 text-sm text-[color:var(--color-text-muted)]">Accesos con equipo asociado en el periodo activo.</p>
               </div>
             </div>

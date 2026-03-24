@@ -1,11 +1,13 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.core import mail
 from django.utils import timezone
+from django.test import override_settings
 from rest_framework import status
 
 from .models import EmailChangeOTP, PasswordResetOTP
-from .otp_services import OTP_TTL_MINUTES, create_otp_for_user, hash_code
+from .otp_services import OTP_TTL_MINUTES, create_otp_for_user, hash_code, send_password_reset_email
 from .rate_limit import build_rate_limit_key
 from .tests_support import BaseApiTest
 
@@ -66,6 +68,69 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
             self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
             self.assertTrue(send_mock.called)
             return send_mock.call_args.args[1]
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="no-reply@sadi.test",
+    )
+    def test_password_reset_request_delivers_email_and_persists_hashed_otp(self):
+        mail.outbox = []
+
+        response = self.client.post(
+            "/api/auth/password-reset/request/",
+            {"email": self.user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        otp_obj = PasswordResetOTP.objects.get(user=self.user, used_at__isnull=True)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertIn("Codigo de recuperacion", mail.outbox[0].subject)
+        self.assertIn(str(OTP_TTL_MINUTES), mail.outbox[0].body)
+        self.assertTrue(otp_obj.code_hash)
+        self.assertNotIn(otp_obj.code_hash, mail.outbox[0].body)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.gmail.com",
+        EMAIL_PORT=587,
+        EMAIL_USE_TLS=True,
+        EMAIL_USE_SSL=False,
+        EMAIL_HOST_USER="otp@sadi.test",
+        EMAIL_HOST_PASSWORD="abcd efgh ijkl mnop",
+        DEFAULT_FROM_EMAIL="otp@sadi.test",
+    )
+    def test_password_reset_email_normalizes_gmail_app_password_spacing(self):
+        with patch("accesos.otp_services.get_connection") as get_connection_mock:
+            fake_connection = get_connection_mock.return_value
+            fake_connection.send_messages.return_value = 1
+
+            send_password_reset_email(self.user.email, "12345")
+
+        self.assertEqual(get_connection_mock.call_args.kwargs["password"], "abcdefghijklmnop")
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.gmail.com",
+        EMAIL_PORT=587,
+        EMAIL_USE_TLS=True,
+        EMAIL_USE_SSL=False,
+        EMAIL_HOST_USER="",
+        EMAIL_HOST_PASSWORD="",
+        DEFAULT_FROM_EMAIL="",
+    )
+    def test_password_reset_request_fails_clearly_when_email_backend_is_not_configured(self):
+        response = self.client.post(
+            "/api/auth/password-reset/request/",
+            {"email": self.user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE, response.data)
+        self.assertEqual(response.data.get("code"), "NETWORK_ERROR")
+        self.assertEqual(response.data.get("message"), "El servicio de correo OTP no esta disponible.")
+        self.assertFalse(PasswordResetOTP.objects.filter(user=self.user, used_at__isnull=True).exists())
 
     def test_password_reset_request_keeps_only_latest_otp_active(self):
         first_code = self._request_password_reset_code()

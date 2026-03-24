@@ -10,7 +10,7 @@ export type GuardStackParamList = {
   GuardHome: undefined;
   ScanQr: undefined;
   Confirmacion:
-    | { status: "ok"; documento: string; data: ValidarDocumentoOK }
+    | { status: "ok"; documento: string; data: ValidarDocumentoOK; flow?: "auto-ingreso" | "manual-salida" }
     | { status: "notfound"; documento: string }
     | { status: "denied"; documento: string; motivo: string };
   TurnoFinalizado: undefined;
