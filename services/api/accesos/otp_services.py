@@ -82,6 +82,8 @@ def _normalize_smtp_password(password: str) -> str:
 def _build_email_connection() -> tuple[object | None, str]:
     from_email = str(getattr(settings, "DEFAULT_FROM_EMAIL", "") or "").strip()
     if not from_email:
+        from_email = str(getattr(settings, "EMAIL_HOST_USER", "") or "").strip()
+    if not from_email:
         raise ImproperlyConfigured("DEFAULT_FROM_EMAIL is required for OTP email delivery.")
 
     if not _smtp_backend_enabled():

@@ -6,6 +6,7 @@ import {
   APRENDIZ_IMPORT_FORMATS,
   APRENDIZ_IMPORT_JORNADAS,
   APRENDIZ_IMPORT_MAX_FILE_SIZE_BYTES,
+  buildAprendizImportFormData,
   buildAprendizImportTemplateCsv,
   buildAprendizImportTemplateFilename,
   buildAprendizImportTemplateWorkbook,
@@ -195,6 +196,17 @@ const tests = [
         "El archivo supera el maximo de 5.0 MB.",
       );
       assert.equal(validateAprendizImportFile({ name: "aprendices.xlsx", size: 1024 }), null);
+    },
+  },
+  {
+    name: "aprendiz import upload builds form-data payload with browser-managed content type",
+    run() {
+      const file = new Blob(["Nombres,Apellidos\nAna,Importa\n"], { type: "text/csv" });
+      const form = buildAprendizImportFormData(file, "aprendices.csv");
+      const uploaded = form.get("file");
+      assert.ok(uploaded instanceof File);
+      assert.equal(uploaded.name, "aprendices.csv");
+      assert.equal(uploaded.type, "text/csv");
     },
   },
   {

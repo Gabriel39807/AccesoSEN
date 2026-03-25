@@ -116,6 +116,49 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
         EMAIL_PORT=587,
         EMAIL_USE_TLS=True,
         EMAIL_USE_SSL=False,
+        EMAIL_HOST_USER="otp@sadi.test",
+        EMAIL_HOST_PASSWORD="abcdefghijklmnop",
+        DEFAULT_FROM_EMAIL="",
+    )
+    def test_password_reset_email_falls_back_to_smtp_user_when_default_sender_is_blank(self):
+        with patch("accesos.otp_services.get_connection") as get_connection_mock:
+            fake_connection = get_connection_mock.return_value
+            fake_connection.send_messages.return_value = 1
+
+            send_password_reset_email(self.user.email, "12345")
+
+        self.assertEqual(get_connection_mock.call_args.kwargs["username"], "otp@sadi.test")
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.gmail.com",
+        EMAIL_PORT=587,
+        EMAIL_USE_TLS=True,
+        EMAIL_USE_SSL=False,
+        EMAIL_HOST_USER="otp@sadi.test",
+        EMAIL_HOST_PASSWORD="abcdefghijklmnop",
+        DEFAULT_FROM_EMAIL="",
+    )
+    def test_password_reset_request_accepts_blank_default_sender_when_smtp_user_exists(self):
+        with patch("accesos.otp_services.get_connection") as get_connection_mock:
+            fake_connection = get_connection_mock.return_value
+            fake_connection.send_messages.return_value = 1
+
+            response = self.client.post(
+                "/api/auth/password-reset/request/",
+                {"email": self.user.email},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(PasswordResetOTP.objects.filter(user=self.user, used_at__isnull=True).exists())
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+        EMAIL_HOST="smtp.gmail.com",
+        EMAIL_PORT=587,
+        EMAIL_USE_TLS=True,
+        EMAIL_USE_SSL=False,
         EMAIL_HOST_USER="",
         EMAIL_HOST_PASSWORD="",
         DEFAULT_FROM_EMAIL="",

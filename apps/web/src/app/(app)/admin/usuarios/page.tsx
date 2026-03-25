@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import BadgeChip from "@/components/admin/BadgeChip";
 import FilterBar from "@/components/admin/FilterBar";
@@ -24,11 +24,13 @@ import {
   APRENDIZ_IMPORT_FORMATS,
   APRENDIZ_IMPORT_JORNADAS,
   APRENDIZ_IMPORT_MAX_FILE_SIZE_BYTES,
+  buildAprendizImportFormData,
   buildAprendizImportTemplateCsv,
   buildAprendizImportTemplateFilename,
   buildAprendizImportTemplateWorkbook,
   buildUserListParams,
   buildUserMutationPayload,
+  canDeleteByRole,
   canManageRole,
   getAprendizImportTemplateColumns,
   getRoleBadgeLabel,
@@ -286,6 +288,7 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
     <AdminTableSkeleton
       rows={rows}
       columns={[
+        { label: "Sel.", widthClass: "w-12", variant: "button" },
         { label: "ID", widthClass: "w-14", variant: "text" },
         { label: "Usuario", widthClass: "w-64", variant: "stack" },
         { label: "Nombre", widthClass: "w-52", variant: "text" },
@@ -389,6 +392,12 @@ export default function AdminUsuariosPage() {
   const [rowSaving, setRowSaving] = useState<Record<number, boolean>>({});
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [rowRetryPatch, setRowRetryPatch] = useState<Record<number, Partial<Usuario>>>({});
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [deleteCandidate, setDeleteCandidate] = useState<Usuario | null>(null);
+  const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
+  const [openBulkDelete, setOpenBulkDelete] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   // modal importar aprendices (excel 2 fases)
   const [openImportar, setOpenImportar] = useState(false);
@@ -441,6 +450,7 @@ export default function AdminUsuariosPage() {
   const editRolRef = useRef<HTMLSelectElement | null>(null);
   const editEstadoRef = useRef<HTMLSelectElement | null>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectAllVisibleRef = useRef<HTMLInputElement | null>(null);
 
   const importStageLabel = useMemo(() => {
     if (importStage === "parsing") return "Pendiente de validacion";
@@ -621,6 +631,122 @@ export default function AdminUsuariosPage() {
 
     return { total, activos, bloqueados, admins, guardas, aprendices };
   }, [usuariosVisibles]);
+
+  const getDeletePermissionReason = useCallback((user: Usuario): string => {
+    if (missingAdminSedeScope) {
+      return "Tu sesión admin_sede no tiene una sede activa asignada.";
+    }
+    if (actorRole === "superadmin") return "Puedes eliminar este usuario.";
+    if (actorRole === "admin_sede") {
+      if (!actorSede) {
+        return "Tu sesión admin_sede no tiene una sede válida.";
+      }
+      if (user.rol !== "guarda" && user.rol !== "aprendiz") {
+        return "Solo puedes eliminar guardas o aprendices de tu sede.";
+      }
+      if ((user.sede_principal ?? "") !== actorSede) {
+        return "Solo puedes eliminar usuarios de tu misma sede.";
+      }
+      return "Puedes eliminar este usuario.";
+    }
+    return "No tienes permisos para eliminar usuarios.";
+  }, [actorRole, actorSede, missingAdminSedeScope]);
+
+  // El backend debe volver a validar permisos; este chequeo solo mejora la UX.
+  const isUserDeletable = useCallback((user: Usuario): boolean => {
+    if (missingAdminSedeScope) return false;
+    return canDeleteByRole(actorRole, actorSede, user);
+  }, [actorRole, actorSede, missingAdminSedeScope]);
+
+  function clearSelection() {
+    setSelectedIds([]);
+  }
+
+  function toggleSelectedUser(userId: number) {
+    if (deleteSubmitting) return;
+    const target = pageItems.find((item) => item.id === userId);
+    if (!target || !isUserDeletable(target)) return;
+    setSelectedIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
+  }
+
+  function toggleSelectAllVisible() {
+    if (deleteSubmitting) return;
+    const visibleDeletableIds = pageItems.filter(isUserDeletable).map((item) => item.id);
+    if (!visibleDeletableIds.length) return;
+    setSelectedIds((prev) => {
+      const everySelected = visibleDeletableIds.every((id) => prev.includes(id));
+      if (everySelected) {
+        return prev.filter((id) => !visibleDeletableIds.includes(id));
+      }
+      return Array.from(new Set([...prev, ...visibleDeletableIds]));
+    });
+  }
+
+  function openDeleteConfirmation(user: Usuario) {
+    setDeleteCandidate(user);
+    setDeleteModalError(null);
+  }
+
+  function openBulkDeleteConfirmation() {
+    setBulkDeleteError(null);
+    setOpenBulkDelete(true);
+  }
+
+  function closeDeleteConfirmation() {
+    if (deleteSubmitting) return;
+    setDeleteCandidate(null);
+    setDeleteModalError(null);
+  }
+
+  function closeBulkDeleteConfirmation() {
+    if (deleteSubmitting) return;
+    setOpenBulkDelete(false);
+    setBulkDeleteError(null);
+  }
+
+  function closeEditModal() {
+    setOpen(false);
+    setSelected(null);
+  }
+
+  function buildDeleteErrorMessage(user: Usuario, error: any): string {
+    const parsed = parseSharedApiError(error);
+    if (parsed.status === 403) {
+      return `El backend rechazó la eliminación de ${user.username} por permisos insuficientes.`;
+    }
+    if (parsed.status === 400) {
+      return `No se pudo eliminar ${user.username}: ${parsed.message}`;
+    }
+    return `No se pudo eliminar ${user.username}: ${parsed.message}`;
+  }
+
+  const selectedUsers = useMemo(
+    () => pageItems.filter((user) => selectedIds.includes(user.id)),
+    [pageItems, selectedIds],
+  );
+  const visibleDeletableUsers = useMemo(
+    () => pageItems.filter(isUserDeletable),
+    [pageItems, isUserDeletable],
+  );
+  const allVisibleSelected =
+    visibleDeletableUsers.length > 0 &&
+    visibleDeletableUsers.every((user) => selectedIds.includes(user.id));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleDeletableUsers.some((user) => selectedIds.includes(user.id));
+
+  useEffect(() => {
+    if (selectAllVisibleRef.current) {
+      selectAllVisibleRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected]);
+
+  useEffect(() => {
+    setSelectedIds((prev) =>
+      prev.filter((id) => pageItems.some((user) => user.id === id && isUserDeletable(user))),
+    );
+  }, [pageItems, isUserDeletable]);
 
   function aplicarFiltrosDesdeCard(next: {
     rol?: UserFilterRole;
@@ -949,12 +1075,8 @@ export default function AdminUsuariosPage() {
     setImportBanner(null);
     setValidandoImport(true);
     try {
-      const form = new FormData();
-      form.append("file", fileToUpload);
-
-      const res = await api.post("/api/usuarios/importar-aprendices/validar/", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const form = buildAprendizImportFormData(fileToUpload, fileToUpload.name);
+      const res = await api.post("/api/usuarios/importar-aprendices/validar/", form);
 
       const data = res?.data?.data ?? res?.data ?? {};
       const resumen = data.resumen ?? null;
@@ -1085,6 +1207,111 @@ export default function AdminUsuariosPage() {
       return;
     }
     await runImportByRows(retryRows, { appendToExisting: true });
+  }
+
+  async function confirmarEliminarIndividual() {
+    if (!deleteCandidate || deleteSubmitting) return;
+    if (!isUserDeletable(deleteCandidate)) {
+      setDeleteModalError(getDeletePermissionReason(deleteCandidate));
+      return;
+    }
+
+    setDeleteSubmitting(true);
+    setDeleteModalError(null);
+    try {
+      await api.delete(`/api/usuarios/${deleteCandidate.id}/`);
+
+      if (selected?.id === deleteCandidate.id) {
+        closeEditModal();
+      }
+
+      setSelectedIds((prev) => prev.filter((id) => id !== deleteCandidate.id));
+      const nextPage = pageItems.length === 1 && page > 1 ? page - 1 : page;
+      closeDeleteConfirmation();
+      if (nextPage !== page) setPage(nextPage);
+      await cargar(nextPage);
+      setPageBanner({
+        type: "success",
+        message: `Usuario ${deleteCandidate.username} eliminado correctamente.`,
+      });
+    } catch (error: any) {
+      setDeleteModalError(buildDeleteErrorMessage(deleteCandidate, error));
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }
+
+  async function confirmarEliminarMasivo() {
+    if (deleteSubmitting) return;
+    if (!selectedUsers.length) {
+      setBulkDeleteError("Selecciona al menos un usuario eliminable.");
+      return;
+    }
+
+    setDeleteSubmitting(true);
+    setBulkDeleteError(null);
+
+    const deletedIds = new Set<number>();
+    const failed: Array<{ user: Usuario; message: string }> = [];
+    const denied: Usuario[] = [];
+
+    try {
+      for (const user of selectedUsers) {
+        if (!isUserDeletable(user)) {
+          denied.push(user);
+          continue;
+        }
+
+        try {
+          await api.delete(`/api/usuarios/${user.id}/`);
+          deletedIds.add(user.id);
+        } catch (error: any) {
+          const parsed = parseSharedApiError(error);
+          if (parsed.status === 403) {
+            denied.push(user);
+            continue;
+          }
+          failed.push({ user, message: buildDeleteErrorMessage(user, error) });
+        }
+      }
+
+      if (selected?.id && deletedIds.has(selected.id)) {
+        closeEditModal();
+      }
+
+      const nextPageItems = pageItems.filter((user) => !deletedIds.has(user.id));
+      const nextPage = deletedIds.size > 0 && nextPageItems.length === 0 && page > 1 ? page - 1 : page;
+
+      clearSelection();
+      closeBulkDeleteConfirmation();
+      if (nextPage !== page) setPage(nextPage);
+      await cargar(nextPage);
+
+      if (deletedIds.size > 0 && failed.length === 0 && denied.length === 0) {
+        setPageBanner({
+          type: "success",
+          message: `Se eliminaron ${deletedIds.size} usuario(s) correctamente.`,
+        });
+        return;
+      }
+
+      const parts = [
+        deletedIds.size > 0 ? `${deletedIds.size} eliminado(s)` : null,
+        failed.length > 0 ? `${failed.length} fallido(s)` : null,
+        denied.length > 0 ? `${denied.length} sin permiso` : null,
+      ].filter(Boolean);
+
+      setPageBanner({
+        type: failed.length > 0 || denied.length > 0 ? "warning" : "success",
+        message: parts.length > 0 ? `Eliminación masiva finalizada: ${parts.join(", ")}.` : "No se eliminó ningún usuario.",
+      });
+
+      if (failed.length > 0) {
+        setBulkDeleteError(failed.map((item) => item.message).join(" "));
+      }
+    } finally {
+      setDeleteSubmitting(false);
+    }
   }
 
   return (
@@ -1224,13 +1451,59 @@ export default function AdminUsuariosPage() {
       )}
 
       <div className="space-y-4">
+        {selectedUsers.length > 0 ? (
+          <section className="command-noir-metric flex flex-col gap-3 border-[color:rgba(255,107,122,0.2)] bg-[linear-gradient(135deg,rgba(255,107,122,0.09),rgba(255,255,255,0.03))] sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">Selección activa</p>
+              <p className="mt-1 text-sm text-[color:var(--color-text)]">
+                {selectedUsers.length} usuario(s) listo(s) para eliminación permanente.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={clearSelection}
+                disabled={deleteSubmitting}
+              >
+                Limpiar selección
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={openBulkDeleteConfirmation}
+                disabled={deleteSubmitting}
+                className="border-[color:rgba(255,107,122,0.32)] text-[color:var(--danger)] hover:bg-[rgba(255,107,122,0.08)]"
+              >
+                Eliminar seleccionados
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
           <DataTable
             loading={loadingTable}
             skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
             hasRows={pageItems.length > 0}
-            tableClassName="min-w-[760px] xl:min-w-full table-fixed"
+            tableClassName="min-w-[820px] xl:min-w-full table-fixed"
             headers={
               <tr className="text-left">
+                <th className="w-12 px-2.5 py-2">
+                  <input
+                    ref={selectAllVisibleRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    disabled={deleteSubmitting || visibleDeletableUsers.length === 0}
+                    title={
+                      visibleDeletableUsers.length === 0
+                        ? "No hay usuarios eliminables en esta página."
+                        : "Seleccionar todos los usuarios eliminables visibles."
+                    }
+                    aria-label="Seleccionar todos los usuarios eliminables visibles"
+                    className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--danger)] focus:ring-[color:rgba(255,107,122,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                </th>
                 <th className="w-14 px-2.5 py-2">ID</th>
                 <th className="w-[22%] px-2.5 py-2">Usuario</th>
                 <th className="hidden w-[18%] px-2.5 py-2 lg:table-cell">Nombre</th>
@@ -1244,7 +1517,7 @@ export default function AdminUsuariosPage() {
             }
           emptyState={
             <tr>
-              <td className="p-10 text-center" colSpan={9}>
+              <td className="p-10 text-center" colSpan={10}>
                 <div className="mx-auto max-w-md">
                   <EmptyState
                     title="No hay usuarios para mostrar"
@@ -1262,6 +1535,17 @@ export default function AdminUsuariosPage() {
 
               return (
             <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(255,255,255,0.015)]")}>
+              <td className="px-2.5 py-2 align-middle">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(u.id)}
+                  onChange={() => toggleSelectedUser(u.id)}
+                  disabled={deleteSubmitting || !isUserDeletable(u)}
+                  title={isUserDeletable(u) ? "Seleccionar usuario para eliminación masiva." : getDeletePermissionReason(u)}
+                  aria-label={`Seleccionar a ${u.username}`}
+                  className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--danger)] focus:ring-[color:rgba(255,107,122,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </td>
               <td className="command-noir-table-cell px-2.5 py-2">{u.id}</td>
 
               <td className="command-noir-table-cell px-2.5 py-2">
@@ -1281,7 +1565,7 @@ export default function AdminUsuariosPage() {
                     value={u.rol ?? "aprendiz"}
                     onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
                     title="Cambiar rol (rapido)"
-                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
+                    disabled={deleteSubmitting || Boolean(rowSaving[u.id]) || !editableRow}
                   >
                     {!editableRow ? (
                       <option value={u.rol ?? ""}>{getRoleBadgeLabel(u.rol)}</option>
@@ -1303,7 +1587,7 @@ export default function AdminUsuariosPage() {
                     value={(u.estado ?? "activo").toLowerCase()}
                     onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
                     title="Cambiar estado (rapido)"
-                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
+                    disabled={deleteSubmitting || Boolean(rowSaving[u.id]) || !editableRow}
                   >
                     <option value="activo">activo</option>
                     <option value="bloqueado">bloqueado</option>
@@ -1323,9 +1607,18 @@ export default function AdminUsuariosPage() {
                     onClick={() => abrirEditar(u)}
                     variant="secondary"
                     className="min-h-8 px-2.5 py-1 text-xs"
-                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
+                    disabled={deleteSubmitting || Boolean(rowSaving[u.id]) || !editableRow}
                   >
                     Editar
+                  </Button>
+                  <Button
+                    onClick={() => openDeleteConfirmation(u)}
+                    variant="secondary"
+                    className="min-h-8 px-2.5 py-1 text-xs border-[color:rgba(255,107,122,0.32)] text-[color:var(--danger)] hover:bg-[rgba(255,107,122,0.08)]"
+                    disabled={deleteSubmitting || !isUserDeletable(u)}
+                    title={isUserDeletable(u) ? `Eliminar a ${u.username}` : getDeletePermissionReason(u)}
+                  >
+                    {deleteSubmitting && deleteCandidate?.id === u.id ? "Eliminando..." : "Eliminar"}
                   </Button>
                   {rowSaving[u.id] ? <div className="text-[11px] text-[color:var(--color-text-muted)]">Guardando...</div> : null}
                   {rowError[u.id] ? (
@@ -1537,6 +1830,127 @@ export default function AdminUsuariosPage() {
           </ModalFrame>
         </Modal>
       )}
+
+      {deleteCandidate ? (
+        <Modal
+          open={Boolean(deleteCandidate)}
+          title={`Eliminar usuario #${deleteCandidate.id}`}
+          onClose={closeDeleteConfirmation}
+          maxWidthClassName="max-w-lg"
+          closeDisabled={deleteSubmitting}
+        >
+          <ModalFrame
+            footer={
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeDeleteConfirmation}
+                  disabled={deleteSubmitting}
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarEliminarIndividual}
+                  disabled={deleteSubmitting}
+                  className="rounded-xl border border-[color:rgba(255,107,122,0.3)] bg-[linear-gradient(135deg,rgba(255,107,122,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] transition hover:border-[color:rgba(255,107,122,0.45)] disabled:opacity-50"
+                >
+                  {deleteSubmitting ? "Eliminando..." : "Confirmar eliminación"}
+                </button>
+              </div>
+            }
+          >
+            {deleteModalError ? <FormBanner type="error" message={deleteModalError} className="mb-3" /> : null}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[color:rgba(255,107,122,0.24)] bg-[rgba(255,107,122,0.08)] px-4 py-3 text-sm text-[color:var(--danger)]">
+                Esta acción es permanente. El backend también validará permisos antes de eliminar.
+              </div>
+
+              <dl className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3">
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Username</dt>
+                  <dd className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{deleteCandidate.username}</dd>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3">
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Rol</dt>
+                  <dd className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{getRoleBadgeLabel(deleteCandidate.rol)}</dd>
+                </div>
+                <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3">
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sede</dt>
+                  <dd className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{deleteCandidate.sede_principal || "Sin sede"}</dd>
+                </div>
+              </dl>
+            </div>
+          </ModalFrame>
+        </Modal>
+      ) : null}
+
+      {openBulkDelete ? (
+        <Modal
+          open={openBulkDelete}
+          title={`Eliminar ${selectedUsers.length} usuario(s)`}
+          onClose={closeBulkDeleteConfirmation}
+          maxWidthClassName="max-w-2xl"
+          closeDisabled={deleteSubmitting}
+        >
+          <ModalFrame
+            footer={
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeBulkDeleteConfirmation}
+                  disabled={deleteSubmitting}
+                  className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarEliminarMasivo}
+                  disabled={deleteSubmitting || selectedUsers.length === 0}
+                  className="rounded-xl border border-[color:rgba(255,107,122,0.3)] bg-[linear-gradient(135deg,rgba(255,107,122,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-[color:var(--color-text)] transition hover:border-[color:rgba(255,107,122,0.45)] disabled:opacity-50"
+                >
+                  {deleteSubmitting ? "Eliminando..." : "Confirmar eliminación masiva"}
+                </button>
+              </div>
+            }
+          >
+            {bulkDeleteError ? <FormBanner type="error" message={bulkDeleteError} className="mb-3" /> : null}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-[color:rgba(255,107,122,0.24)] bg-[rgba(255,107,122,0.08)] px-4 py-3 text-sm text-[color:var(--danger)]">
+                Vas a eliminar {selectedUsers.length} usuario(s). La operación es permanente y seguirá intentando con los demás aunque alguna eliminación falle.
+              </div>
+
+              <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Resumen</p>
+                <p className="mt-1 text-sm text-[color:var(--color-text)]">
+                  {selectedUsers.length} seleccionado(s) en la página actual.
+                </p>
+              </div>
+
+              <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
+                <div className="border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)]">
+                  Usuarios seleccionados
+                </div>
+                <ul className="max-h-64 divide-y overflow-auto bg-[color:var(--surface-subtle)]">
+                  {selectedUsers.map((user) => (
+                    <li key={`bulk-delete-${user.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                      <div>
+                        <p className="font-semibold text-[color:var(--color-text)]">{user.username}</p>
+                        <p className="text-[color:var(--color-text-muted)]">
+                          {getRoleBadgeLabel(user.rol)} · {user.sede_principal || "Sin sede"}
+                        </p>
+                      </div>
+                      <span className="command-noir-chip">{user.id}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </ModalFrame>
+        </Modal>
+      ) : null}
 
         {/* MODAL CREAR */}
         {openCrear && (
@@ -2175,6 +2589,3 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
-
-
-

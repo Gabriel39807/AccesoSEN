@@ -10,6 +10,10 @@ export type TechnicalUserRole = (typeof TECHNICAL_USER_ROLES)[number];
 export type UserReadRole = TechnicalUserRole | "admin" | string | null | undefined;
 export type UserFilterRole = "todos" | TechnicalUserRole;
 export type UserStateFilter = "todos" | "activo" | "bloqueado";
+export type UserDeleteTarget = {
+  rol?: UserReadRole;
+  sede_principal?: string | null;
+};
 
 type AprendizImportTemplateInput = {
   actorRole: UserReadRole;
@@ -94,6 +98,28 @@ export function canManageRole(actorRole: UserReadRole, targetRole: UserReadRole)
   return getVisibleRoleOptions(actorRole).includes(normalizedTarget as TechnicalUserRole);
 }
 
+export function canDeleteByRole(
+  actorRole: UserReadRole,
+  actorSede: string | null | undefined,
+  target: UserDeleteTarget,
+): boolean {
+  const normalizedActor = normalize(actorRole);
+  const normalizedActorSede = normalize(actorSede);
+  const normalizedTargetRole = normalize(target.rol);
+  const normalizedTargetSede = normalize(target.sede_principal);
+
+  if (!normalizedTargetRole) return false;
+  if (normalizedActor === "superadmin") return true;
+
+  if (normalizedActor === "admin_sede") {
+    if (!normalizedActorSede) return false;
+    if (normalizedTargetRole !== "guarda" && normalizedTargetRole !== "aprendiz") return false;
+    return normalizedTargetSede !== "" && normalizedTargetSede === normalizedActorSede;
+  }
+
+  return false;
+}
+
 export function shouldHideRoleFromAdminSede(actorRole: UserReadRole, targetRole: UserReadRole): boolean {
   return normalize(actorRole) === "admin_sede" && isAdministrativeOrLegacyRole(targetRole);
 }
@@ -167,6 +193,13 @@ export function buildAprendizImportTemplateWorkbook(input: AprendizImportTemplat
   utils.book_append_sheet(workbook, worksheet, APRENDIZ_IMPORT_TEMPLATE_SHEET_NAME);
 
   return write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+}
+
+export function buildAprendizImportFormData(file: Blob, filename?: string): FormData {
+  const form = new FormData();
+  const fallbackName = typeof filename === "string" && filename.trim().length > 0 ? filename.trim() : "aprendices.xlsx";
+  form.append("file", file, fallbackName);
+  return form;
 }
 
 export function formatFileSize(bytes: number): string {
