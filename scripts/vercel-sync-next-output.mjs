@@ -11,13 +11,13 @@ const targetPublic = path.join(repoRoot, "public");
 const sourceStandaloneNodeModules = path.join(sourceStandalone, "node_modules");
 const targetNodeModules = path.join(repoRoot, "node_modules");
 
-function copyDir(sourceDir, targetDir, label) {
+function copyDir(sourceDir, targetDir, label, options = {}) {
   if (!fs.existsSync(sourceDir)) {
     throw new Error(`Missing source directory: ${sourceDir}`);
   }
 
   fs.rmSync(targetDir, { recursive: true, force: true });
-  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  fs.cpSync(sourceDir, targetDir, { recursive: true, ...options });
   console.log(`[vercel-build] Copied ${label}.`);
 }
 
@@ -47,7 +47,9 @@ if (fs.existsSync(sourcePublic)) {
 }
 
 if (fs.existsSync(sourceStandaloneNodeModules)) {
-  copyDir(sourceStandaloneNodeModules, targetNodeModules, "apps/web/.next/standalone/node_modules to root/node_modules");
+  copyDir(sourceStandaloneNodeModules, targetNodeModules, "apps/web/.next/standalone/node_modules to root/node_modules", {
+    dereference: true,
+  });
 } else if (fs.existsSync(sourceStandalone)) {
   console.log("[vercel-build] Standalone directory present but node_modules trace was not found.");
 }

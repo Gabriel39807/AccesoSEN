@@ -132,12 +132,7 @@ export default function PasswordRecoveryClient() {
   }
 
   return (
-    <AuthLayout
-      role="aprendiz"
-      title="Recuperación de contraseña"
-      subtitle="Protege tu cuenta con un flujo guiado de verificación y cambio de clave."
-      badge="Soporte de acceso"
-    >
+    <AuthLayout role="aprendiz">
       <AuthCard className="p-5 md:p-6">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Recuperación segura</p>
