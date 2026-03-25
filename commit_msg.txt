@@ -1,8 +1,0 @@
-feat(ui): implement 'Dynamic Glifo & Glass' design across app screens
-
-- Redesigned Guard module (home, scanner, history, alerts, turnos) with deep sapphire gradients, glowing accents, and floating glass cards.
-- Refactored Aprendiz module (home, profile, history, equipment, QR) adopting the new premium dynamic aesthetics.
-- Updated authentication screens (login, password recovery) and index to match the new visual identity.
-- Enhanced modern UI components (`src/ui/modern.tsx`).
-- Updated project documentation (APA 7ma).
-- Config tweaks in `src/config.ts` and `development.py`.

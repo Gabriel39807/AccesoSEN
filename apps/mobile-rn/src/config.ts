@@ -9,7 +9,7 @@
 // Examples:
 // - http://192.168.1.100:8000
 // - https://api.tu-dominio.com
-const RAW_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.217.195.70:8000";
+const RAW_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.2:8000";
 const RAW_INSTITUTION_NAME = process.env.EXPO_PUBLIC_INSTITUTION_NAME || "Institucin";
 const RAW_SEDE_LABEL = process.env.EXPO_PUBLIC_SEDE_LABEL || "La Sede";
 
@@ -18,7 +18,7 @@ const RAW_SEDE_LABEL = process.env.EXPO_PUBLIC_SEDE_LABEL || "La Sede";
  */
 function normalizeApiUrl(value: string): string {
   const trimmed = (value || "").trim().replace(/\/+$/, "");
-  if (!trimmed) return "http://10.217.195.70:8000";
+  if (!trimmed) return "http://192.168.1.2:8000";
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `http://${trimmed}`;
 }
