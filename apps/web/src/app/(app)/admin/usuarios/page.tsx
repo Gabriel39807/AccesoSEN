@@ -2225,14 +2225,31 @@ export default function AdminUsuariosPage() {
             ) : null}
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] xl:items-end">
-              <input
-                ref={importFileInputRef}
-                type="file"
-                accept={importAccept}
-                onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
-                className="command-noir-control min-w-0 w-full rounded-xl px-3 py-2 text-sm"
-                aria-describedby="import-file-help"
-              />
+              <div className="min-w-0 xl:col-span-2">
+                <input
+                  ref={importFileInputRef}
+                  type="file"
+                  accept={importAccept}
+                  onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
+                  className="sr-only"
+                  aria-describedby="import-file-help"
+                />
+                <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => importFileInputRef.current?.click()}
+                    disabled={validandoImport || confirmandoImport}
+                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-1.5 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {importFile ? "Cambiar archivo" : "Seleccionar archivo"}
+                  </button>
+                  <div className="min-w-0 flex-1 text-sm text-[color:var(--color-text-soft)]">
+                    <span className="block truncate">
+                      {importFile ? `${importFile.name} - ${formatFileSize(importFile.size)}` : `Ningun archivo seleccionado. Usa ${importFormatsLabel}.`}
+                    </span>
+                  </div>
+                </div>
+              </div>
               <div id="import-file-help" className="text-xs text-[color:var(--color-text-muted)] xl:col-span-2">
                 Si reemplazas el archivo, la validacion anterior se limpia para evitar importar datos obsoletos.
               </div>
