@@ -1,116 +1,72 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { MoonStar, SunMedium } from "lucide-react";
+import { useTheme } from "next-themes";
 import HeroVisual from "./HeroVisual";
 import type { AuthRole } from "./RoleSwitch";
 import styles from "./auth.module.css";
 
 type Props = {
   role: AuthRole;
-  title: string;
-  subtitle: string;
-  badge: string;
   children: ReactNode;
 };
 
-export default function AuthLayout({ role, title, subtitle, badge, children }: Props) {
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const [move, setMove] = useState({ x: 0, y: 0 });
-
+export default function AuthLayout({ role, children }: Props) {
   const classByRole = role === "admin" ? styles.layoutAdmin : styles.layoutAprendiz;
-  const tilt = useMemo(() => ({ tx: move.x * 14, ty: move.y * 14 }), [move.x, move.y]);
-  const trustPoints =
-    role === "admin"
-      ? ["Sesión auditada", "Acceso por rol", "Monitoreo por sede"]
-      : ["QR dinámico", "Historial personal", "Validación segura"];
-
-  function onMove(event: React.MouseEvent) {
-    const el = wrapperRef.current;
-    if (!el || typeof window === "undefined" || window.innerWidth < 1024) return;
-    const rect = el.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
-    setMove({ x: (x - 0.5) * 2, y: (y - 0.5) * 2 });
-  }
-
-  function onLeave() {
-    setMove({ x: 0, y: 0 });
-  }
+  const { resolvedTheme, setTheme } = useTheme();
+  const activeTheme = resolvedTheme === "dark" ? "dark" : "light";
 
   return (
-    <main className={`${styles.layout} ${classByRole} px-4 py-5 md:px-6 md:py-6`}>
-      <div
-        ref={wrapperRef}
-        onMouseMove={onMove}
-        onMouseLeave={onLeave}
-        className="mx-auto grid w-full max-w-7xl items-start gap-5 xl:grid-cols-[1.08fr_0.92fr]"
-      >
+    <main className={`${styles.layout} ${classByRole}`}>
+      <div className={`${styles.shell} grid min-h-[100dvh] xl:grid-cols-[0.94fr_1.06fr]`}>
         <motion.section
-          className="order-2 xl:order-1"
-          initial={{ opacity: 0, x: -60 }}
+          initial={{ opacity: 0, x: -34 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
+          className={styles.leftPane}
         >
-          <HeroVisual role={role} tx={tilt.tx} ty={tilt.ty} />
+          <HeroVisual role={role} />
         </motion.section>
 
         <motion.section
-          className="order-1 xl:order-2 xl:pt-1"
-          initial={{ opacity: 0, x: 40 }}
+          initial={{ opacity: 0, x: 28 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut", delay: 0.15 }}
+          transition={{ duration: 0.55, ease: "easeOut", delay: 0.08 }}
+          className={`${styles.rightPane} flex min-h-full flex-col`}
         >
-            <div className="w-full max-w-[32rem] xl:ml-auto">
-            <motion.p
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-               className="mb-2.5 inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--auth-accent)] shadow-sm backdrop-blur-md"
-            >
-              {badge}
-            </motion.p>
+          <div className="flex justify-end px-5 pt-5 md:px-7 md:pt-6 xl:px-8 xl:pt-7">
+            <div className={styles.themeToggle} aria-label="Cambiar tema">
+              <button
+                type="button"
+                className={`${styles.themeButton} ${activeTheme === "light" ? styles.themeButtonActive : ""}`}
+                onClick={() => setTheme("light")}
+                aria-pressed={activeTheme === "light"}
+                aria-label="Activar modo claro"
+              >
+                <SunMedium className="h-4 w-4" strokeWidth={2.2} />
+              </button>
+              <button
+                type="button"
+                className={`${styles.themeButton} ${activeTheme === "dark" ? styles.themeButtonActive : ""}`}
+                onClick={() => setTheme("dark")}
+                aria-pressed={activeTheme === "dark"}
+                aria-label="Activar modo oscuro"
+              >
+                <MoonStar className="h-4 w-4" strokeWidth={2.2} />
+              </button>
+            </div>
+          </div>
 
-            <motion.h1
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-               className={`max-w-xl text-3xl font-extrabold leading-[1.02] tracking-tight md:text-[2.75rem] ${styles.textStrong}`}
-            >
-              {title}
-            </motion.h1>
+          <div className={`${styles.rightContent} mx-auto flex flex-1 flex-col justify-center px-5 py-4 md:px-7 md:py-5 xl:px-8 xl:py-6`}>
+            {children}
+          </div>
 
-            <motion.p
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-               className={`mt-2.5 max-w-xl text-sm leading-snug md:text-[0.96rem] ${styles.textSoft}`}
-            >
-              {subtitle}
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.58 }}
-               className="mt-4 flex flex-wrap gap-2"
-            >
-              {trustPoints.map((point) => (
-                <span key={point} className={styles.metaChip}>
-                  {point}
-                </span>
-              ))}
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.6 }}
-               className="mt-4"
-            >
-              {children}
-            </motion.div>
+          <div className="px-5 pb-5 text-center md:px-7 md:pb-6 xl:px-8 xl:pb-7 xl:text-left">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--text-faint)]">
+              Asegurado por S.A.D.I. · 2026
+            </p>
           </div>
         </motion.section>
       </div>

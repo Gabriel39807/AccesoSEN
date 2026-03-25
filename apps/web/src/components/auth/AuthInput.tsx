@@ -11,9 +11,11 @@ type Props = InputHTMLAttributes<HTMLInputElement> & {
 export default function AuthInput({ id, label, error, hint, className = "", ...props }: Props) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-sm font-semibold text-[color:var(--foreground)]">
-        {label}
-      </label>
+      {label ? (
+        <label htmlFor={id} className="block text-sm font-semibold text-[color:var(--foreground)]">
+          {label}
+        </label>
+      ) : null}
       <input
         id={id}
         suppressHydrationWarning

@@ -1,20 +1,21 @@
-/**
+﻿/**
  * Login web de S.A.D.I.
  *
  * Responsabilidad:
  * - Autenticar administradores o aprendices.
  * - Aplicar bloqueo temporal y flujo passkey.
- * - Mostrar estados de carga y error claros durante toda la autenticación.
+ * - Mostrar estados de carga y error claros durante toda la autenticacion.
  */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Fingerprint, KeyRound, LockKeyhole, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { clearTokens, saveTokens } from "@/lib/auth";
 import { toErrorMessage } from "@/lib/errors";
 import { sanitizeDigits, validateDocument6to10 } from "@/lib/validators";
-import { AuthButton, AuthCard, AuthInput, AuthLayout, RoleSwitch, type AuthRole } from "@/components/auth";
+import { AuthButton, AuthCard, AuthLayout, RoleSwitch, type AuthRole } from "@/components/auth";
 import styles from "@/components/auth/auth.module.css";
 
 type MeResponse = {
@@ -50,9 +51,6 @@ function toBase64Url(buffer: ArrayBuffer) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-/**
- * Pantalla principal de inicio de sesión web.
- */
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -83,21 +81,18 @@ export default function LoginPage() {
     () =>
       role === "admin"
         ? {
-            title: "Control institucional seguro",
-            subtitle:
-              "Accede al panel de gestión de S.A.D.I. con trazabilidad de ingresos, revisión operativa y validación de usuarios autorizados.",
+            title: "Iniciar sesión",
+            subtitle: "Selecciona tu rol, ingresa tus credenciales y accede al sistema.",
             field: "Usuario o correo",
-            placeholder: "superadmin o admin@institucion.local",
-            hint: "Puedes ingresar con tu nombre de usuario o con el correo administrativo.",
+            placeholder: "ejemplo@correo.com",
             badge: "Acceso administrador",
           }
         : {
-            title: "Ingreso de aprendices",
-            subtitle: "Valida tu identidad para consultar tus accesos, gestionar tus equipos y mantener tu credencial activa.",
-            field: "Documento de identidad",
+            title: "Iniciar sesión",
+            subtitle: "Selecciona tu rol, ingresa tus credenciales y accede al sistema.",
+            field: "Documento institucional",
             placeholder: "Ingresa tu documento",
-            hint: "Solo números entre 6 y 10 dígitos.",
-            badge: "Acceso aprendiz",
+            badge: "Acceso estudiante",
           },
     [role]
   );
@@ -114,13 +109,10 @@ export default function LoginPage() {
     setPassword(raw);
   }
 
-  /**
-   * Valida los datos del formulario antes de enviar al backend.
-   */
   function validateLogin(): string | null {
     const user = username.trim();
     if (!user) return `Ingresa ${role === "admin" ? "tu usuario o correo" : "tu documento"}.`;
-    if (role === "admin" && user.length > 150) return "El usuario o correo supera el máximo permitido (150).";
+    if (role === "admin" && user.length > 150) return "El usuario o correo supera el maximo permitido (150).";
     if (role === "aprendiz") {
       const docError = validateDocument6to10(user);
       if (docError) return docError;
@@ -151,9 +143,6 @@ export default function LoginPage() {
     }
   }
 
-  /**
-   * Envía credenciales por contraseña y redirige según el rol permitido.
-   */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const validationError = validateLogin();
@@ -182,13 +171,13 @@ export default function LoginPage() {
 
       if (role === "admin" && !["superadmin", "admin_sede"].includes(currentRole)) {
         await clearTokens();
-        setError("Este módulo solo permite credenciales de administrador.");
+        setError("Este modulo solo permite credenciales de administrador.");
         return;
       }
 
       if (role === "aprendiz" && currentRole !== "aprendiz") {
         await clearTokens();
-        setError("Este módulo solo permite credenciales de aprendiz.");
+        setError("Este modulo solo permite credenciales de estudiante.");
         return;
       }
 
@@ -203,18 +192,15 @@ export default function LoginPage() {
       }
 
       await clearTokens();
-      setError("El rol de guarda no está habilitado en la web. Usa la app móvil para control de acceso.");
+      setError("El rol de guarda no esta habilitado en la web. Usa la app movil para control de acceso.");
     } catch (err: any) {
       applyLockFromError(err);
-      setError(toErrorMessage(err, "Credenciales inválidas."));
+      setError(toErrorMessage(err, "Credenciales invalidas."));
     } finally {
       setLoading(false);
     }
   }
 
-  /**
-   * Inicia sesión con passkey/WebAuthn cuando el navegador lo soporta.
-   */
   async function onPasskeyLogin() {
     if (!passkeySupported) {
       setError("Tu navegador no soporta passkeys o WebAuthn.");
@@ -279,7 +265,7 @@ export default function LoginPage() {
         router.replace(resolvePostLoginPath(currentRole));
       } else {
         await clearTokens();
-        setError("La passkey no corresponde al módulo actual.");
+        setError("La passkey no corresponde al modulo actual.");
       }
     } catch (err: any) {
       applyLockFromError(err);
@@ -290,26 +276,17 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge}>
-      <AuthCard className="p-4 md:p-5 xl:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <AuthLayout role={role}>
+      <AuthCard className="w-full p-5 md:p-6 xl:p-6">
+        <div className="space-y-4.5">
           <div className="space-y-2">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[color:var(--text-muted)]">Portal de acceso</p>
-            <h2 className="text-[1.75rem] font-bold leading-none tracking-tight text-[color:var(--foreground)]">Iniciar sesión</h2>
-            <p className="max-w-md text-sm leading-snug text-[color:var(--text-muted)]">
-              Elige tu perfil, valida tu identidad y entra al módulo correcto con una interfaz clara, ordenada y lista para trabajar.
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[color:var(--auth-accent)]">{roleCopy.badge}</p>
+            <h2 className="text-[1.8rem] font-extrabold leading-none tracking-tight text-[color:var(--foreground)] md:text-[1.95rem]">Iniciar sesión</h2>
+            <p className="max-w-md text-sm leading-5.5 text-[color:var(--text-muted)]">
+              Selecciona tu rol, valida tus credenciales y entra al entorno institucional correspondiente.
             </p>
           </div>
 
-          <span
-            className="inline-flex w-fit shrink-0 rounded-full border border-[color:var(--surface-border)] px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-[color:var(--text-soft)] shadow-sm"
-            style={{ background: "var(--auth-accent-soft)" }}
-          >
-            Sesión segura
-          </span>
-        </div>
-
-        <div className="mt-4 rounded-[1.2rem] border border-[color:var(--surface-border)] bg-[color:var(--surface-muted)]/55 p-3.5">
           <RoleSwitch
             value={role}
             onChange={(nextRole) => {
@@ -318,81 +295,104 @@ export default function LoginPage() {
               setUsername("");
             }}
           />
-          <p className="mt-2.5 text-sm leading-snug text-[color:var(--text-soft)]">
-            {role === "admin"
-              ? "Vista de gestión con foco en seguridad, trazabilidad y operación por sede."
-              : "Vista personal para validar identidad, revisar accesos y gestionar equipos."}
-          </p>
-        </div>
 
-        <form onSubmit={onSubmit} className="mt-4 space-y-4">
-          <AuthInput
-            id="auth-username"
-            label={roleCopy.field}
-            placeholder={roleCopy.placeholder}
-            value={username}
-            onChange={(e) => onUsernameChange(e.target.value)}
-            autoComplete={role === "admin" ? "username" : "off"}
-            inputMode={role === "admin" ? "text" : "numeric"}
-            type="text"
-            pattern={role === "admin" ? undefined : "[0-9]*"}
-            maxLength={role === "admin" ? 150 : 10}
-            error={null}
-            hint={roleCopy.hint}
-          />
-
-          <div className="space-y-1.5">
-            <label htmlFor="auth-password" className="block text-sm font-semibold text-[color:var(--foreground)]">
-              Contraseña
-            </label>
-            <div className="relative">
-              <input
-                id="auth-password"
-                type={showPassword ? "text" : "password"}
-                className={styles.input}
-                placeholder="Ingresa tu contraseña"
-                value={password}
-                onChange={(e) => onPasswordChange(e.target.value)}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((value) => !value)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-semibold text-[color:var(--text-soft)] transition hover:bg-[color:var(--surface-muted)] focus-visible:outline-none"
-              >
-                {showPassword ? "Ocultar" : "Mostrar"}
-              </button>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="auth-username" className="block text-sm font-semibold text-[color:var(--foreground)]">
+                {roleCopy.field}
+              </label>
+              <div className={styles.fieldShell}>
+                <span className={styles.fieldIconSlot}>
+                  <UserRound className="h-4 w-4" strokeWidth={2.2} />
+                </span>
+                <input
+                  id="auth-username"
+                  className={styles.fieldInput}
+                  placeholder={roleCopy.placeholder}
+                  value={username}
+                  onChange={(e) => onUsernameChange(e.target.value)}
+                  autoComplete={role === "admin" ? "username" : "off"}
+                  inputMode={role === "admin" ? "text" : "numeric"}
+                  type="text"
+                  pattern={role === "admin" ? undefined : "[0-9]*"}
+                  maxLength={role === "admin" ? 150 : 10}
+                />
+              </div>
             </div>
-            <p className="text-xs leading-relaxed text-[color:var(--text-muted)]">
-              La contraseña se valida de forma segura y no se almacena en el navegador.
-            </p>
-          </div>
 
-          {bloqueado ? <p className={`${styles.status} ${styles.statusError}`}>Cuenta bloqueada. Intenta en {lockRemainingSec}s.</p> : null}
-          {error ? <p className={`${styles.status} ${styles.statusError}`}>{error}</p> : null}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <label htmlFor="auth-password" className="block text-sm font-semibold text-[color:var(--foreground)]">
+                  Contraseña
+                </label>
+              </div>
 
-           <div className="space-y-2.5 pt-1">
-            <AuthButton type="submit" loading={loading} loadingLabel="Ingresando..." className="w-full" disabled={bloqueado || passkeyLoading}>
-              Entrar al sistema
-            </AuthButton>
+              <div className={`${styles.fieldShell} ${styles.fieldShellWithAction}`}>
+                <span className={styles.fieldIconSlot}>
+                  <LockKeyhole className="h-4 w-4" strokeWidth={2.1} />
+                </span>
+                <input
+                  id="auth-password"
+                  type={showPassword ? "text" : "password"}
+                  className={styles.fieldInput}
+                  placeholder="Ingresa tu contraseña"
+                  value={password}
+                  onChange={(e) => onPasswordChange(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className={styles.fieldAction}
+                >
+                  {showPassword ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
 
-            <AuthButton
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={onPasskeyLogin}
-              loading={passkeyLoading}
-              disabled={!passkeySupported || bloqueado || loading}
-            >
-              Entrar con passkey
-            </AuthButton>
+              <div className="flex justify-end pt-0.5">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[color:var(--auth-accent)] transition hover:opacity-80"
+                  onClick={() => router.push("/password-recovery")}
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
+            </div>
 
-            <AuthButton type="button" variant="ghost" className="w-full" onClick={() => router.push("/password-recovery")}>
-              Recuperar contraseña
-            </AuthButton>
-          </div>
-        </form>
+            {bloqueado ? <p className={`${styles.status} ${styles.statusError}`}>Cuenta bloqueada. Intenta en {lockRemainingSec}s.</p> : null}
+            {error ? <p className={`${styles.status} ${styles.statusError}`}>{error}</p> : null}
+
+            <div className="space-y-3 pt-0.5">
+              <AuthButton type="submit" loading={loading} loadingLabel="Ingresando..." className="w-full" disabled={bloqueado || passkeyLoading}>
+                Entrar al sistema
+              </AuthButton>
+
+              <AuthButton
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={onPasskeyLogin}
+                loading={passkeyLoading}
+                disabled={!passkeySupported || bloqueado || loading}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Fingerprint className="h-4 w-4" strokeWidth={2.1} />
+                  Entrar con passkey
+                </span>
+              </AuthButton>
+
+              <div className="flex items-center justify-center gap-2 pt-0.5 text-center text-[11px] text-[color:var(--text-faint)]">
+                <KeyRound className="h-3.5 w-3.5" strokeWidth={2.1} />
+                Acceso exclusivo para personal autorizado
+              </div>
+            </div>
+          </form>
+        </div>
       </AuthCard>
     </AuthLayout>
   );
 }
+
+
+
