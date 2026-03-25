@@ -96,6 +96,17 @@ function ensureTraceDependenciesFromNft() {
   }
 }
 
+function ensureFullWebNodeModules() {
+  if (!fs.existsSync(sourceWebNodeModules)) {
+    console.log("[vercel-build] Skipped full node_modules sync; apps/web/node_modules is missing.");
+    return;
+  }
+
+  copyDir(sourceWebNodeModules, targetNodeModules, "apps/web/node_modules to root/node_modules", {
+    dereference: true,
+  });
+}
+
 copyDir(sourceNext, targetNext, "apps/web/.next to root/.next");
 
 if (fs.existsSync(sourcePublic)) {
@@ -111,5 +122,6 @@ if (fs.existsSync(sourceStandaloneNodeModules)) {
 }
 
 ensureTraceDependenciesFromNft();
+ensureFullWebNodeModules();
 
 console.log("[vercel-build] Synced Next.js build output to repository root.");
