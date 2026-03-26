@@ -3,9 +3,8 @@
 import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ExternalLink, FileText, X } from "lucide-react";
-import { DocViewerRenderers, type IDocument, type IConfig } from "@cyntler/react-doc-viewer";
 
-const DocViewer = dynamic(() => import("@cyntler/react-doc-viewer"), {
+const DocumentViewerCanvas = dynamic(() => import("@/components/document/DocumentViewerCanvas"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full min-h-[360px] items-center justify-center rounded-3xl border border-slate-200 bg-white/70 text-sm text-slate-500">
@@ -14,7 +13,10 @@ const DocViewer = dynamic(() => import("@cyntler/react-doc-viewer"), {
   ),
 });
 
-export type ViewerDocument = IDocument & {
+export type ViewerDocument = {
+  uri: string;
+  fileType?: string;
+  fileName?: string;
   title?: string;
   description?: string;
 };
@@ -29,7 +31,7 @@ const DocumentViewerContext = createContext<DocumentViewerContextValue>({
   closeDocument: () => {},
 });
 
-const DOC_VIEWER_CONFIG: IConfig = {
+const DOC_VIEWER_CONFIG = {
   header: {
     disableHeader: true,
     disableFileName: true,
@@ -38,7 +40,7 @@ const DOC_VIEWER_CONFIG: IConfig = {
     defaultZoom: 1,
     zoomJump: 0.15,
   },
-};
+} as const;
 
 const OFFICE_FILE_TYPES = new Set([
   "doc",
@@ -173,21 +175,9 @@ export function DocumentViewerProvider({ children }: { children: React.ReactNode
               ) : null}
 
               <div className="h-full min-h-[60vh] overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-inner dark:border-slate-800 dark:bg-slate-950">
-                <DocViewer
-                  documents={[activeDocument]}
+                <DocumentViewerCanvas
                   activeDocument={activeDocument}
                   config={DOC_VIEWER_CONFIG}
-                  pluginRenderers={DocViewerRenderers}
-                  style={{ height: "100%", width: "100%" }}
-                  theme={{
-                    primary: "#0ea5e9",
-                    secondary: "#e2e8f0",
-                    tertiary: "#f8fafc",
-                    textPrimary: "#0f172a",
-                    textSecondary: "#475569",
-                    textTertiary: "#64748b",
-                    disableThemeScrollbar: false,
-                  }}
                 />
               </div>
             </div>

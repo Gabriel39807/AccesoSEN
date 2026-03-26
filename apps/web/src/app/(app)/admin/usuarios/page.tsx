@@ -2270,6 +2270,7 @@ export default function AdminUsuariosPage() {
                 Descargar CSV alternativo
               </button>
               <button
+                type="button"
                 onClick={validarImportacion}
                 disabled={!importFile || validandoImport || confirmandoImport}
                 className="rounded-xl border border-[color:rgba(111,211,255,0.24)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -2285,6 +2286,7 @@ export default function AdminUsuariosPage() {
                 Limpiar archivo
               </button>
               <button
+                type="button"
                 onClick={confirmarImportacion}
                 disabled={!importId || confirmandoImport || validandoImport || (duplicatesInFile.length > 0 && !allowSkipFileDuplicates)}
                 className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[linear-gradient(135deg,rgba(66,199,154,0.16),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(66,199,154,0.38)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -2292,6 +2294,7 @@ export default function AdminUsuariosPage() {
                 {confirmandoImport ? "Importando..." : "Importar"}
               </button>
               <button
+                type="button"
                 onClick={reintentarFallidos}
                 disabled={confirmandoImport || validandoImport || importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length === 0}
                 className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"

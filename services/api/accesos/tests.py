@@ -1756,6 +1756,11 @@ class ImportValidationApiTests(BaseApiTest):
     def _auth_superadmin(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
 
+    def _csv_upload(self, content: str, *, name: str = "aprendices.csv"):
+        upload = io.BytesIO(content.encode("utf-8"))
+        upload.name = name
+        return upload
+
     def test_validate_import_rejects_unsupported_extension(self):
         self._auth_superadmin()
         upload = io.BytesIO(b"hola")
@@ -1785,6 +1790,99 @@ class ImportValidationApiTests(BaseApiTest):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
         self.assertEqual(response.data.get("code"), "VALIDATION_ERROR")
         self.assertIn("5 MB", str(response.data.get("detail", {}).get("file", [""])[0]))
+
+    def test_validate_import_reports_missing_required_columns(self):
+        self._auth_superadmin()
+        upload = self._csv_upload(
+            "Nombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa\n"
+            "Ana,Importa,1234567890,3001234567,ana.import@sadi.test,TARDE,ADSO\n"
+        )
+
+        response = self.client.post(
+            "/api/usuarios/importar-aprendices/validar/",
+            {"file": upload},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(response.data.get("import_id"))
+        self.assertEqual(response.data.get("preview"), [])
+        self.assertEqual(response.data.get("row_numbers"), [])
+        self.assertEqual(response.data.get("resumen", {}).get("errores"), 1)
+        self.assertEqual(response.data.get("errores", [{}])[0].get("code"), "INVALID_COLUMNS")
+        self.assertIn("Sede", response.data.get("errores", [{}])[0].get("missing", []))
+
+    def test_confirm_import_creates_users_from_validated_rows(self):
+        self._auth_superadmin()
+        validate_response = self.client.post(
+            "/api/usuarios/importar-aprendices/validar/",
+            {
+                "file": self._csv_upload(
+                    "Nombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa,Sede\n"
+                    "Ana,Importa,1234567890,3001234567,ana.import@sadi.test,TARDE,ADSO,sede-1\n"
+                )
+            },
+            format="multipart",
+        )
+        self.assertEqual(validate_response.status_code, status.HTTP_200_OK, validate_response.data)
+        import_id = validate_response.data.get("import_id")
+        self.assertTrue(import_id)
+
+        confirm_response = self.client.post(
+            "/api/usuarios/importar-aprendices/confirmar/",
+            {"import_id": import_id},
+            format="json",
+        )
+
+        self.assertEqual(confirm_response.status_code, status.HTTP_200_OK, confirm_response.data)
+        self.assertEqual(confirm_response.data.get("created"), 1)
+        self.assertEqual(confirm_response.data.get("errors"), 0)
+        self.assertEqual(confirm_response.data.get("failed"), 0)
+        self.assertEqual(confirm_response.data.get("skipped"), 0)
+        self.assertEqual(confirm_response.data.get("processed"), 1)
+        self.assertEqual(confirm_response.data.get("row_results", [{}])[0].get("status"), "created")
+        self.assertTrue(self.User.objects.filter(documento="1234567890").exists())
+
+    def test_confirm_import_rejects_unknown_import_id(self):
+        self._auth_superadmin()
+
+        response = self.client.post(
+            "/api/usuarios/importar-aprendices/confirmar/",
+            {"import_id": "missing-import-id"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, response.data)
+        self.assertEqual(response.data.get("code"), "VALIDATION_ERROR")
+        self.assertIn("expir", str(response.data.get("message", "")).lower())
+
+    def test_confirm_import_requires_explicit_skip_for_duplicates_in_file(self):
+        self._auth_superadmin()
+        validate_response = self.client.post(
+            "/api/usuarios/importar-aprendices/validar/",
+            {
+                "file": self._csv_upload(
+                    "Nombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa,Sede\n"
+                    "Ana,Importa,1234567890,3001234567,ana.dup1@sadi.test,TARDE,ADSO,sede-1\n"
+                    "Ana,Dos,1234567890,3007654321,ana.dup2@sadi.test,NOCHE,ADSO,sede-1\n"
+                )
+            },
+            format="multipart",
+        )
+        self.assertEqual(validate_response.status_code, status.HTTP_200_OK, validate_response.data)
+        import_id = validate_response.data.get("import_id")
+        self.assertTrue(import_id)
+        self.assertGreaterEqual(len(validate_response.data.get("duplicates_in_file", [])), 2)
+
+        confirm_response = self.client.post(
+            "/api/usuarios/importar-aprendices/confirmar/",
+            {"import_id": import_id},
+            format="json",
+        )
+
+        self.assertEqual(confirm_response.status_code, status.HTTP_409_CONFLICT, confirm_response.data)
+        self.assertEqual(confirm_response.data.get("code"), "DUPLICATES_IN_FILE")
+        self.assertGreaterEqual(len(confirm_response.data.get("detail", {}).get("duplicates_in_file", [])), 2)
 
 
 class TurnoExpirationRulesTests(BaseApiTest):

@@ -28,6 +28,16 @@ function isSupabaseProjectUrl(value: string): boolean {
   }
 }
 
+function logApiBaseMisconfig(reason: string) {
+  if (typeof console === "undefined") return;
+  const message = `[api-config] ${reason} La web debe consumir la API Django/DRF, no el dominio del proyecto Supabase.`;
+  if (ENFORCE_DEPLOY_API_URL_GUARD) {
+    console.error(`${message} La app quedara sin API configurada hasta corregir NEXT_PUBLIC_API_URL.`);
+    return;
+  }
+  console.warn(message);
+}
+
 function isPlaceholderApiHost(value: string): boolean {
   if (!value) return false;
   try {
@@ -63,6 +73,10 @@ function reportApiBaseGuard(reason: string) {
 }
 
 export function resolveApiBaseUrl(): string {
+  if (isSupabaseProjectUrl(RAW_API_BASE)) {
+    logApiBaseMisconfig("NEXT_PUBLIC_API_URL invalida: apunta a *.supabase.co.");
+    return "";
+  }
   if (!ENFORCE_DEPLOY_API_URL_GUARD) return RAW_API_BASE;
   if (!RAW_API_BASE) {
     reportApiBaseGuard("Falta NEXT_PUBLIC_API_URL en produccion.");
@@ -70,10 +84,6 @@ export function resolveApiBaseUrl(): string {
   }
   if (isLoopbackHost(RAW_API_BASE)) {
     reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: localhost/loopback.");
-    return "";
-  }
-  if (isSupabaseProjectUrl(RAW_API_BASE)) {
-    reportApiBaseGuard("NEXT_PUBLIC_API_URL invalida: apunta a *.supabase.co.");
     return "";
   }
   if (isPlaceholderApiHost(RAW_API_BASE)) {

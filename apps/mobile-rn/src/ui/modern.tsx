@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
+  ActivityIndicator,
   Easing,
   Image,
   ImageSourcePropType,
@@ -52,8 +53,29 @@ type BrandTheme = {
   pillText: string;
 };
 
+type PaletteTheme = Omit<BrandTheme, "mode">;
+
+export const uiTheme = {
+  page: "#fbfdff",
+  ink: "#0f172a",
+  inkSoft: "#334155",
+  muted: "#64748b",
+  text: "#0f172a",
+  textMuted: "#64748b",
+  border: "rgba(148, 163, 184, 0.22)",
+  surface: "rgba(255,255,255,0.78)",
+  surfaceStrong: "#ffffff",
+  panel: "#e2e8f0",
+  accent: "#4f46e5",
+  accentSoft: "rgba(79, 70, 229, 0.12)",
+  accentDeep: "#4338ca",
+  success: "#0f8b61",
+  warning: "#b45309",
+  danger: "#be123c",
+};
+
 function resolveTheme(theme: ThemeKey, mode: "light" | "dark"): BrandTheme {
-  const palettes = {
+  const palettes: Record<ThemeKey, Record<"light" | "dark", PaletteTheme>> = {
     default: {
       light: {
         background: ["#fbfdff", "#f3f7ff", "#e8efff"],
@@ -478,6 +500,52 @@ export function Pill({
   );
 }
 
+export function LoadingBlock({ label = "Cargando..." }: { label?: string }) {
+  return (
+    <View style={styles.statusBlock}>
+      <ActivityIndicator color={uiTheme.accent} />
+      <Text style={[styles.statusText, { color: uiTheme.muted }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function EmptyState({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconWrap}>
+        <Ionicons name={icon} size={24} color={uiTheme.accentDeep} />
+      </View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptySubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
+type NoticeTone = "info" | "success" | "danger";
+
+export function NoticeBanner({ tone = "info", text }: { tone?: NoticeTone; text: string }) {
+  const palette = {
+    info: { bg: uiTheme.accentSoft, border: "rgba(79, 70, 229, 0.16)", fg: uiTheme.accentDeep, icon: "information-circle-outline" as const },
+    success: { bg: "rgba(21,128,61,0.08)", border: "rgba(21,128,61,0.16)", fg: uiTheme.success, icon: "checkmark-circle-outline" as const },
+    danger: { bg: "rgba(185,28,28,0.08)", border: "rgba(185,28,28,0.16)", fg: uiTheme.danger, icon: "alert-circle-outline" as const },
+  }[tone];
+
+  return (
+    <View style={[styles.noticeBanner, { backgroundColor: palette.bg, borderColor: palette.border }]}>
+      <Ionicons name={palette.icon} size={18} color={palette.fg} />
+      <Text style={[styles.noticeText, { color: palette.fg }]}>{text}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -628,5 +696,58 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1,
     textTransform: "uppercase",
+  },
+  statusBlock: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+    gap: 10,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  emptyIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(79, 70, 229, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(79, 70, 229, 0.14)",
+  },
+  emptyTitle: {
+    color: uiTheme.ink,
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    color: uiTheme.inkSoft,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  noticeText: {
+    flex: 1,
+    lineHeight: 20,
+    fontWeight: "700",
   },
 });

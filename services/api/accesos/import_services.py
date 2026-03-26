@@ -125,7 +125,7 @@ def _is_effectively_empty_row(values: list[str]) -> bool:
 
 
 def count_distinct_error_rows(errors: list[dict] | None) -> int:
-    row_numbers = {int(item.get("row") or 0) for item in (errors or []) if int(item.get("row") or 0) > 1}
+    row_numbers = {int(item.get("row") or 0) for item in (errors or []) if int(item.get("row") or 0) >= 1}
     return len(row_numbers)
 
 

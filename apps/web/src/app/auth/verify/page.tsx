@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { buildPasswordRecoveryUrl } from "@/lib/password-recovery-routes";
 
+export const dynamic = "force-dynamic";
+
 type VerifyPageProps = {
   searchParams: Promise<{ email?: string }>;
 };

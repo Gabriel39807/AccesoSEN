@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
+import type { EquipoAprobado } from "../../src/api/accesos";
 import { ModernButton } from "../../src/ui/modern";
 import { useResolvedThemeMode } from "../../src/store/preferences";
 import { guardHomeThemes, GuardThemeMode } from "../../src/components/guard/GuardHomeSections";
@@ -199,7 +200,7 @@ export default function ConfirmacionScreen() {
 
             {ok && equipos.length > 0 ? (
               <View style={styles.equipmentList}>
-                {equipos.map((item) => {
+                {equipos.map((item: EquipoAprobado) => {
                   const checked = selected.includes(item.id);
                   return (
                     <Pressable

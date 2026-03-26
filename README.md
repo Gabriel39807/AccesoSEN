@@ -57,6 +57,7 @@ SADI/
                                    +---- [Redis cache/rate-limit]
 ```
 - Web y Mobile consumen la API REST
+- El frontend no se conecta directo a Supabase; Supabase solo aloja PostgreSQL para la API
 - JWT corto + refresh token por dispositivo (hash, rotación y revocación)
 - OTP por correo para recuperación/cambio de correo
 - Roles: `superadmin`, `admin_sede`, `guarda`, `aprendiz`
@@ -123,6 +124,7 @@ SADI/
 ```bash
 cd services/api
 cp .env.example .env
+cp .env.local.example .env.local
 python -m venv .venv
 # Windows
 .venv\Scripts\activate
@@ -138,10 +140,18 @@ API: http://localhost:8000
 ```bash
 cd apps/web
 cp .env.example .env
+cp .env.local.example .env.local
 npm ci
 npm run dev
 ```
 Web: http://localhost:3000
+
+### Localhost + Supabase cloud (arquitectura correcta)
+
+- `apps/web` debe apuntar a `http://localhost:8000`; no debe apuntar a `*.supabase.co`
+- `services/api` es quien se conecta a Supabase PostgreSQL por `DATABASE_URL`
+- Usa `services/api/.env.local.example` para sobreescribir la DB local con el proyecto cloud
+- Solo necesitas reemplazar `replace_db_password` por la password real de la base Supabase
 
 3) 📱 Mobile
 
@@ -209,7 +219,7 @@ Guía: docs/deploy-production.md
 ### Web — `apps/web/.env`
 - `NEXT_PUBLIC_API_URL`
 - `NEXT_PUBLIC_API_TIMEOUT_MS` (opcional)
-- Variables opcionales Supabase (si aplica)
+- Variables opcionales Supabase solo si agregas un cliente directo `supabase-js`
 
 ---
 

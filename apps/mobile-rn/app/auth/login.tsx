@@ -42,7 +42,7 @@ export default function LoginScreen() {
 
   const [sede, setSede] = useState<Sede>("");
   const [sedes, setSedes] = useState<SedeItem[]>([]);
-  const [jornada, setJornada] = useState<Jornada>("MAÑANA");
+  const [jornada, setJornada] = useState<Jornada>("MAÑANA" as Jornada);
 
   const [loading, setLoading] = useState(false);
   const [biometricLoading, setBiometricLoading] = useState(false);

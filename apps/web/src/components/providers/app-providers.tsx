@@ -1,11 +1,15 @@
-﻿"use client";
+"use client";
 
+import dynamic from "next/dynamic";
 import { ThemeProvider } from "next-themes";
 
 import { DocumentViewerProvider } from "@/components/document/DocumentViewerProvider";
-import RoleThemeProvider from "@/components/providers/RoleThemeProvider";
 import { InstitutionProvider } from "@/context/institution-context";
 import { SystemThemeProvider } from "@/hooks/useSystemTheme";
+
+const RoleThemeProvider = dynamic(() => import("@/components/providers/RoleThemeProvider"), {
+  ssr: false,
+});
 
 /**
  * Proveedores globales de cliente para toda la app web.
@@ -27,4 +31,3 @@ export default function AppProviders({ children }: { children: React.ReactNode }
     </ThemeProvider>
   );
 }
-

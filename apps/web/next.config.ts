@@ -1,9 +1,11 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import { normalizeApiBaseUrl } from "./src/lib/api-config";
 
 const isProduction = process.env.NODE_ENV === "production";
 const apiBaseUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || "");
 const allowedConnectSources = ["'self'"];
+const repoRoot = path.join(__dirname, "..", "..");
 
 if (apiBaseUrl) {
   allowedConnectSources.push(apiBaseUrl);
@@ -39,7 +41,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  outputFileTracingRoot: repoRoot,
   allowedDevOrigins: ["http://172.24.160.1:3000"],
+  turbopack: {
+    root: repoRoot,
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
