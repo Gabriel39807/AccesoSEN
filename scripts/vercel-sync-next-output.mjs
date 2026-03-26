@@ -11,6 +11,8 @@ const targetPublic = path.join(repoRoot, "public");
 const sourceStandaloneNodeModules = path.join(sourceStandalone, "node_modules");
 const sourceWebNodeModules = path.join(webRoot, "node_modules");
 const targetNodeModules = path.join(repoRoot, "node_modules");
+const targetRequiredServerFilesJson = path.join(targetNext, "required-server-files.json");
+const targetRequiredServerFilesJs = path.join(targetNext, "required-server-files.js");
 
 function copyDir(sourceDir, targetDir, label, options = {}) {
   if (!fs.existsSync(sourceDir)) {
@@ -39,6 +41,22 @@ function copyFileIfExists(sourceFile, targetFile, label) {
   }
 
   copyFile(sourceFile, targetFile, label);
+}
+
+function rewriteRequiredServerFilesForRepoRoot() {
+  if (!fs.existsSync(targetRequiredServerFilesJson)) {
+    console.log("[vercel-build] Skipped required-server-files rewrite; manifest not present.");
+    return;
+  }
+
+  const manifest = JSON.parse(fs.readFileSync(targetRequiredServerFilesJson, "utf8"));
+  manifest.appDir = repoRoot;
+  manifest.relativeAppDir = ".";
+
+  fs.writeFileSync(targetRequiredServerFilesJson, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.writeFileSync(targetRequiredServerFilesJs, `self.__SERVER_FILES_MANIFEST=${JSON.stringify(manifest, null, 2)}\n`);
+
+  console.log("[vercel-build] Rewrote required-server-files manifest for repo root runtime.");
 }
 
 function ensureTraceDependenciesFromNft() {
@@ -108,6 +126,7 @@ function ensureFullWebNodeModules() {
 }
 
 copyDir(sourceNext, targetNext, "apps/web/.next to root/.next");
+rewriteRequiredServerFilesForRepoRoot();
 
 if (fs.existsSync(sourcePublic)) {
   copyDir(sourcePublic, targetPublic, "apps/web/public to root/public");
