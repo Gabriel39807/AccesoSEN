@@ -1,19 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
-
 export default function AppError({
-  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    // En dev esto ayuda a ver el error real en consola, aunque Turbopack muestre overlay genérico.
-    console.error(error);
-  }, [error]);
-
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6">
       <div className="w-full max-w-xl rounded-3xl border bg-white p-6 shadow-sm">
@@ -41,14 +33,6 @@ export default function AppError({
           </a>
         </div>
 
-        <div className="mt-5 rounded-2xl border bg-zinc-50 p-4">
-          <div className="text-xs font-semibold text-zinc-700">Detalle</div>
-          <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-600">
-{process.env.NODE_ENV === "development"
-  ? error.message
-  : `Referencia: ${error.digest ?? ""}`}
-          </pre>
-        </div>
       </div>
     </div>
   );
