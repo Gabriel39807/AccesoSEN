@@ -51,14 +51,6 @@ function toBase64Url(buffer: ArrayBuffer) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function formatLockCountdown(seconds: number) {
-  const safeSeconds = Math.max(0, seconds);
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainingSeconds = safeSeconds % 60;
-  if (minutes <= 0) return `${remainingSeconds}s`;
-  return `${minutes}m ${String(remainingSeconds).padStart(2, "0")}s`;
-}
-
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -72,7 +64,6 @@ export default function LoginPage() {
   const [passkeySupported, setPasskeySupported] = useState(false);
 
   const bloqueado = lockRemainingSec > 0;
-  const lockCountdownLabel = formatLockCountdown(lockRemainingSec);
 
   useEffect(() => {
     setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials);
@@ -106,29 +97,6 @@ export default function LoginPage() {
     [role]
   );
 
-  const roleHighlights = useMemo(
-    () =>
-      role === "admin"
-        ? [
-            { label: "Acceso", value: "Panel administrativo" },
-            { label: "Recuperacion", value: "Correo institucional" },
-          ]
-        : [
-            { label: "Acceso", value: "Panel del aprendiz" },
-            { label: "Identificador", value: "Documento institucional" },
-          ],
-    [role]
-  );
-
-  const usernameHint =
-    role === "admin"
-      ? "Usa tu usuario o correo habilitado para el portal web."
-      : "Ingresa el documento asociado a tu cuenta de aprendiz.";
-
-  const passkeyHint = passkeySupported
-    ? "Si ya registraste una passkey en este equipo, puedes entrar sin escribir la contraseña."
-    : "Este navegador no detecta soporte para passkeys o WebAuthn.";
-
   function onUsernameChange(raw: string) {
     if (role === "aprendiz") {
       setUsername(sanitizeDigits(raw).slice(0, 10));
@@ -150,7 +118,7 @@ export default function LoginPage() {
       if (docError) return docError;
     }
     if (!password) return "Ingresa tu contraseña.";
-    if (bloqueado) return `Cuenta bloqueada temporalmente. Intenta en ${lockCountdownLabel}.`;
+    if (bloqueado) return `Cuenta bloqueada temporalmente. Intenta en ${lockRemainingSec}s.`;
     return null;
   }
 
@@ -240,7 +208,7 @@ export default function LoginPage() {
     }
 
     if (bloqueado) {
-      setError(`Cuenta bloqueada temporalmente. Intenta en ${lockCountdownLabel}.`);
+      setError(`Cuenta bloqueada temporalmente. Intenta en ${lockRemainingSec}s.`);
       return;
     }
 
@@ -308,7 +276,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout role={role} title={roleCopy.title} subtitle={roleCopy.subtitle} badge={roleCopy.badge}>
+    <AuthLayout role={role}>
       <AuthCard className="w-full p-5 md:p-6 xl:p-6">
         <div className="space-y-4.5">
           <div className="space-y-2">
@@ -317,13 +285,6 @@ export default function LoginPage() {
             <p className="max-w-md text-sm leading-5.5 text-[color:var(--text-muted)]">
               Selecciona tu rol, valida tus credenciales y entra al entorno institucional correspondiente.
             </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {roleHighlights.map((item) => (
-                <span key={item.label} className={styles.metaChip}>
-                  {item.label}: {item.value}
-                </span>
-              ))}
-            </div>
           </div>
 
           <RoleSwitch
@@ -334,14 +295,6 @@ export default function LoginPage() {
               setUsername("");
             }}
           />
-
-          <div className="grid gap-2 rounded-[1.2rem] border border-[color:rgba(130,153,177,0.16)] bg-[color:rgba(255,255,255,0.46)] p-3 text-sm text-[color:var(--text-soft)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[color:rgba(255,255,255,0.03)]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-semibold text-[color:var(--foreground)]">{roleCopy.title}</p>
-              <span className={styles.metaChip}>{role === "admin" ? "Solo personal autorizado" : "Flujo estudiantil"}</span>
-            </div>
-            <p className="text-sm leading-5 text-[color:var(--text-muted)]">{roleCopy.subtitle}</p>
-          </div>
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-1.5">
@@ -365,7 +318,6 @@ export default function LoginPage() {
                   maxLength={role === "admin" ? 150 : 10}
                 />
               </div>
-              <p className="text-xs text-[color:var(--text-muted)]">{usernameHint}</p>
             </div>
 
             <div className="space-y-1.5">
@@ -406,22 +358,9 @@ export default function LoginPage() {
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
-              <p className="text-xs text-[color:var(--text-muted)]">
-                {role === "admin"
-                  ? "Si no recuerdas tu acceso, usa la recuperacion por correo antes de intentar demasiadas veces."
-                  : "Si olvidaste tu clave, te enviaremos un codigo OTP al correo registrado."}
-              </p>
             </div>
 
-            <div className="rounded-[1rem] border border-[color:rgba(130,153,177,0.16)] bg-[color:rgba(255,255,255,0.46)] p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] dark:bg-[color:rgba(255,255,255,0.03)]">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-semibold text-[color:var(--foreground)]">Acceso con passkey</p>
-                <span className={styles.metaChip}>{passkeySupported ? "Disponible" : "No disponible"}</span>
-              </div>
-              <p className="mt-1 text-xs leading-5 text-[color:var(--text-muted)]">{passkeyHint}</p>
-            </div>
-
-            {bloqueado ? <p className={`${styles.status} ${styles.statusError}`}>Cuenta bloqueada. Intenta nuevamente en {lockCountdownLabel}.</p> : null}
+            {bloqueado ? <p className={`${styles.status} ${styles.statusError}`}>Cuenta bloqueada. Intenta en {lockRemainingSec}s.</p> : null}
             {error ? <p className={`${styles.status} ${styles.statusError}`}>{error}</p> : null}
 
             <div className="space-y-3 pt-0.5">
@@ -454,3 +393,6 @@ export default function LoginPage() {
     </AuthLayout>
   );
 }
+
+
+

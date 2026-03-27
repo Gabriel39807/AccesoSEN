@@ -14,13 +14,6 @@ type PasswordRule = {
   valid: boolean;
 };
 
-const recoverySteps: Array<{ id: Step; label: string; shortLabel: string }> = [
-  { id: "request", label: "Confirmar correo", shortLabel: "Correo" },
-  { id: "sent", label: "Validar codigo", shortLabel: "Codigo" },
-  { id: "reset", label: "Crear nueva clave", shortLabel: "Clave" },
-  { id: "done", label: "Acceso restablecido", shortLabel: "Listo" },
-];
-
 function buildPasswordRules(password: string, confirmPassword: string): PasswordRule[] {
   return [
     { id: "len", label: "Mínimo 8 caracteres", valid: password.length >= 8 },
@@ -53,7 +46,6 @@ export default function PasswordRecoveryClient() {
   const rules = buildPasswordRules(newPass, newPass2);
   const allRulesValid = rules.every((rule) => rule.valid);
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
-  const activeStepIndex = recoverySteps.findIndex((item) => item.id === step);
 
   async function onRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -140,54 +132,12 @@ export default function PasswordRecoveryClient() {
   }
 
   return (
-    <AuthLayout
-      role="aprendiz"
-      title="Recuperación de contraseña"
-      subtitle="Protege tu cuenta con un flujo guiado para validar tu identidad y crear una nueva clave."
-      badge="Soporte de acceso"
-    >
+    <AuthLayout role="aprendiz">
       <AuthCard className="p-5 md:p-6">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-500">Recuperación segura</p>
           <h2 className="mt-2 text-3xl font-bold leading-none text-slate-900">Restablecer acceso</h2>
           <p className="mt-2 max-w-sm text-sm text-slate-500">Seguiremos un proceso breve para validar tu identidad y entregarte una nueva contraseña.</p>
-        </div>
-
-        <div className="mt-5 grid gap-2 sm:grid-cols-4">
-          {recoverySteps.map((item, index) => {
-            const isCurrent = index === activeStepIndex;
-            const isCompleted = index < activeStepIndex;
-            return (
-              <div
-                key={item.id}
-                className={`rounded-2xl border px-3 py-2.5 text-left transition ${
-                  isCurrent
-                    ? "border-[color:var(--auth-accent)] bg-[color:var(--auth-accent-soft)] text-[color:var(--foreground)]"
-                    : isCompleted
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-slate-50 text-slate-500"
-                }`}
-              >
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em]">Paso {index + 1}</p>
-                <p className="mt-1 text-sm font-semibold">{item.shortLabel}</p>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-3 py-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Correo</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{normalizedEmail || "Aun sin confirmar"}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-3 py-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Codigo OTP</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{otp ? `Listo (${otp.length}/5)` : "Pendiente"}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-3 py-2.5">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Seguridad</p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">{step === "reset" ? "Definiendo clave" : step === "done" ? "Confirmada" : "En verificacion"}</p>
-          </div>
         </div>
 
         {step === "request" ? (
@@ -232,9 +182,6 @@ export default function PasswordRecoveryClient() {
                 Reenviar código
               </AuthButton>
             </div>
-            <AuthButton type="button" variant="secondary" className="w-full" onClick={() => setStep("request")}>
-              Cambiar correo
-            </AuthButton>
           </form>
         ) : null}
 
@@ -290,22 +237,11 @@ export default function PasswordRecoveryClient() {
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {rules.map((rule) => (
-                <p
-                  key={rule.id}
-                  className={`rounded-2xl border px-3 py-2 text-sm font-medium ${
-                    rule.valid
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-slate-50 text-slate-500"
-                  }`}
-                >
+                <p key={rule.id} className={`${styles.checkItem} ${rule.valid ? styles.checkItemOk : ""}`}>
                   {rule.valid ? "OK" : "..."} {rule.label}
                 </p>
               ))}
             </div>
-
-            <p className="text-xs text-[color:var(--text-muted)]">
-              Usa una contraseña nueva que no hayas utilizado antes en SADI.
-            </p>
 
             <AuthButton type="submit" loading={loading} loadingLabel="Actualizando..." disabled={!allRulesValid} className="w-full">
               Cambiar contraseña
