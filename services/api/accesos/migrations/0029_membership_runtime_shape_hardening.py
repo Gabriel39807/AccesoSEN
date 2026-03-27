@@ -85,8 +85,27 @@ def _merge_membership_flags(source, target):
     if source.can_switch_sede and not target.can_switch_sede:
         target.can_switch_sede = True
         update_fields.append("can_switch_sede")
+    return update_fields
+
+
+def _merge_duplicate_membership(source, *, role_id, sede_id, UserMembership):
+    target = (
+        UserMembership.objects.filter(
+            user_id=source.user_id,
+            role_id=role_id,
+            sede_id=sede_id,
+        )
+        .exclude(pk=source.pk)
+        .order_by("id")
+        .first()
+    )
+    if target is None:
+        return False
+    update_fields = _merge_membership_flags(source, target)
+    source.delete()
     if update_fields:
         target.save(update_fields=update_fields)
+    return True
 
 
 def normalize_membership_runtime_shapes(apps, schema_editor):
@@ -105,18 +124,12 @@ def normalize_membership_runtime_shapes(apps, schema_editor):
 
     if legacy_admin_role:
         for membership in UserMembership.objects.filter(role=legacy_admin_role).order_by("id"):
-            target = (
-                UserMembership.objects.filter(
-                    user_id=membership.user_id,
-                    role=admin_sede_role,
-                    sede_id=membership.sede_id,
-                )
-                .exclude(pk=membership.pk)
-                .first()
-            )
-            if target is not None:
-                _merge_membership_flags(membership, target)
-                membership.delete()
+            if _merge_duplicate_membership(
+                membership,
+                role_id=admin_sede_role.id,
+                sede_id=membership.sede_id,
+                UserMembership=UserMembership,
+            ):
                 continue
             membership.role_id = admin_sede_role.id
             membership.save(update_fields=["role"])
@@ -145,17 +158,23 @@ def normalize_membership_runtime_shapes(apps, schema_editor):
             if len(sibling_sede_ids) == 1:
                 inferred_sede_id = sibling_sede_ids[0]
         if inferred_sede_id is None:
-            invalid_memberships.append(f"user={membership.user_id},membership={membership.pk},role={membership.role.code}")
+            invalid_memberships.append(
+                f"user={membership.user_id},membership={membership.pk},role={membership.role.code}"
+            )
+            continue
+        if _merge_duplicate_membership(
+            membership,
+            role_id=membership.role_id,
+            sede_id=inferred_sede_id,
+            UserMembership=UserMembership,
+        ):
             continue
         membership.sede_id = inferred_sede_id
         membership.save(update_fields=["sede"])
 
     if invalid_memberships:
         details = "; ".join(invalid_memberships)
-        raise RuntimeError(
-            "Could not infer sede for legacy memberships during runtime shape hardening: "
-            f"{details}"
-        )
+        raise RuntimeError(f"Could not infer sede for legacy memberships during runtime shape hardening: {details}")
 
 
 def create_membership_role_shape_triggers(apps, schema_editor):
@@ -184,7 +203,6 @@ def drop_membership_role_shape_triggers(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("accesos", "0028_fix_access_guard_function_search_path"),
     ]
