@@ -10,6 +10,7 @@ import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
 import Button from "@/components/dashboard/shared/Button";
+import { IconBell, IconClock, IconHistory, IconLaptop, IconShield, IconUser } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import FormBanner from "@/components/feedback/FormBanner";
 import FieldError from "@/components/feedback/FieldError";
@@ -335,7 +336,13 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function StatSkeleton() {
-  return <div className="command-noir-metric h-[104px] animate-pulse" />;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/90 bg-white/80 p-5 shadow-[0_8px_24px_rgba(2,6,23,0.05)] backdrop-blur-sm animate-pulse">
+      <div className="h-6 w-6 rounded-2xl bg-sky-100" />
+      <div className="mt-4 h-3 w-20 rounded bg-zinc-200" />
+      <div className="mt-2 h-8 w-14 rounded bg-zinc-200" />
+    </div>
+  );
 }
 
 function FilterSkeleton() {
@@ -358,24 +365,48 @@ function MetricPanel({
   label,
   value,
   detail,
+  icon,
   tone = "neutral",
   onClick,
 }: {
   label: string;
   value: number;
   detail: string;
+  icon?: ReactNode;
   tone?: "neutral" | "info" | "success" | "warning" | "danger";
   onClick?: () => void;
 }) {
+  const barClass =
+    tone === "success"
+      ? "from-sky-500/90 to-cyan-500/90"
+      : tone === "warning"
+        ? "from-amber-500/90 to-orange-500/90"
+        : tone === "danger"
+          ? "from-red-500/90 to-rose-500/90"
+          : tone === "info"
+            ? "from-cyan-500/90 to-sky-500/90"
+            : "from-zinc-500/90 to-slate-500/90";
+  const iconClass =
+    tone === "success"
+      ? "bg-sky-100 text-sky-700"
+      : tone === "warning"
+        ? "bg-amber-100 text-amber-700"
+        : tone === "danger"
+          ? "bg-red-100 text-red-700"
+          : tone === "info"
+            ? "bg-cyan-100 text-cyan-700"
+            : "bg-zinc-100 text-zinc-700";
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
-          <p className="mt-1.5 text-[1.45rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+          <p className="mt-1 text-3xl font-extrabold tracking-tight text-zinc-900">{value.toLocaleString("es-CO")}</p>
+          <p className="mt-2 text-xs font-medium text-zinc-500">{detail}</p>
         </div>
-        <span className="command-noir-chip" data-tone={tone}>{detail}</span>
+        {icon ? <span className={cx("inline-flex h-10 w-10 items-center justify-center rounded-2xl", iconClass)}>{icon}</span> : null}
       </div>
+      <div className={cx("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", barClass)} />
     </>
   );
 
@@ -384,7 +415,7 @@ function MetricPanel({
       <button
         type="button"
         onClick={onClick}
-        className="command-noir-metric text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.05)]"
+        className="group relative overflow-hidden rounded-2xl border border-white/90 bg-white/80 p-4 text-left shadow-[0_8px_24px_rgba(2,6,23,0.05)] backdrop-blur-sm transition hover:-translate-y-1 hover:shadow-[0_10px_30px_rgba(2,6,23,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
       >
         {content}
       </button>
@@ -392,7 +423,7 @@ function MetricPanel({
   }
 
   return (
-    <div className="command-noir-metric text-left">
+    <div className="group relative overflow-hidden rounded-2xl border border-white/90 bg-white/80 p-4 text-left shadow-[0_8px_24px_rgba(2,6,23,0.05)] backdrop-blur-sm">
       {content}
     </div>
   );
@@ -1521,7 +1552,7 @@ export default function AdminUsuariosPage() {
         />
       ) : null}
 
-      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {loading ? (
           <>
             <StatSkeleton />
@@ -1533,14 +1564,14 @@ export default function AdminUsuariosPage() {
           </>
         ) : (
           <>
-            <MetricPanel label="Total" value={stats.total} detail="universo" onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
-            <MetricPanel label="Activos" value={stats.activos} detail="operativos" tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
-            <MetricPanel label="Bloqueados" value={stats.bloqueados} detail="atencion" tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
+            <MetricPanel label="Total" value={stats.total} detail="Universo visible" icon={<IconHistory className="h-5 w-5" />} onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
+            <MetricPanel label="Activos" value={stats.activos} detail="Cuentas operativas" icon={<IconShield className="h-5 w-5" />} tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
+            <MetricPanel label="Bloqueados" value={stats.bloqueados} detail="Requieren atencion" icon={<IconBell className="h-5 w-5" />} tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
             {canManageAdministrativeRoles ? (
-              <MetricPanel label="Admins" value={stats.admins} detail="control" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin_sede", estado: "todos" })} />
+              <MetricPanel label="Admins" value={stats.admins} detail="Control administrativo" icon={<IconUser className="h-5 w-5" />} tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin_sede", estado: "todos" })} />
             ) : null}
-            <MetricPanel label="Guardas" value={stats.guardas} detail="cobertura" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
-            <MetricPanel label="Aprendices" value={stats.aprendices} detail="poblacion" tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
+            <MetricPanel label="Guardas" value={stats.guardas} detail="Cobertura operativa" icon={<IconClock className="h-5 w-5" />} tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
+            <MetricPanel label="Aprendices" value={stats.aprendices} detail="Poblacion gestionada" icon={<IconLaptop className="h-5 w-5" />} tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
           </>
         )}
       </div>
@@ -1555,48 +1586,48 @@ export default function AdminUsuariosPage() {
             ) : null
           }
         >
-          <div className="md:col-span-12">
-            <div className="flex flex-col gap-3 rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">
-                  Vista de usuarios
-                </p>
-                <p className="mt-1 text-sm text-[color:var(--color-text)]">
-                  {currentResultLabel}. {selectedIds.length > 0 ? `${selectedIds.length} seleccionados para acciones masivas.` : "Usa filtros y acciones rápidas sin salir de la tabla."}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="command-noir-chip whitespace-nowrap" data-tone={hasFilters ? "info" : "neutral"}>
-                  {activeFilterCount} filtro(s)
-                </span>
-                <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
-                  {totalCount} usuarios
-                </span>
-                <span className="command-noir-chip whitespace-nowrap" data-tone={visibleDeletableUsers.length > 0 ? "warning" : "neutral"}>
-                  {visibleDeletableUsers.length} eliminables en vista
-                </span>
-              </div>
+            <div className="md:col-span-12">
+             <div className="flex flex-col gap-3 rounded-[1.2rem] border border-zinc-200 bg-white/85 px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.04)] backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+               <div>
+                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                   Vista de usuarios
+                 </p>
+                 <p className="mt-1 text-sm text-zinc-700">
+                   {currentResultLabel}. {selectedIds.length > 0 ? `${selectedIds.length} seleccionados para acciones masivas.` : "Usa filtros y acciones rápidas sin salir de la tabla."}
+                 </p>
+               </div>
+               <div className="flex flex-wrap items-center gap-2">
+                 <span className={cx("inline-flex whitespace-nowrap items-center rounded-full border px-3 py-1.5 text-sm font-medium", hasFilters ? "border-sky-200 bg-sky-50 text-sky-700" : "border-zinc-200 bg-zinc-50 text-zinc-700")}>
+                   {activeFilterCount} filtro(s)
+                 </span>
+                 <span className="inline-flex whitespace-nowrap items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700">
+                   {totalCount} usuarios
+                 </span>
+                 <span className={cx("inline-flex whitespace-nowrap items-center rounded-full border px-3 py-1.5 text-sm font-medium", visibleDeletableUsers.length > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-zinc-200 bg-zinc-50 text-zinc-700")}>
+                   {visibleDeletableUsers.length} eliminables en vista
+                 </span>
+               </div>
             </div>
           </div>
 
           <div className="relative w-full md:col-span-12 lg:col-span-4">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
-              Buscar usuario
-            </label>
-              <input
-                className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
-              placeholder="Username, correo, documento o nombre"
-               value={q}
-               onChange={(e) => setQ(e.target.value)}
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                Buscar usuario
+              </label>
+                <input
+                className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+               placeholder="Username, correo, documento o nombre"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
              />
           </div>
 
           <div className="md:col-span-4 lg:col-span-2">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
               Rol
             </label>
             <select
-              className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
               value={rolFilter}
               onChange={(e) => setRolFilter(e.target.value as UserFilterRole)}
             >
@@ -1610,11 +1641,11 @@ export default function AdminUsuariosPage() {
           </div>
 
           <div className="md:col-span-4 lg:col-span-2">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
               Estado
             </label>
             <select
-              className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
               value={estadoFilter}
               onChange={(e) => setEstadoFilter(e.target.value as UserStateFilter)}
             >
@@ -1625,11 +1656,11 @@ export default function AdminUsuariosPage() {
           </div>
 
           <div className="md:col-span-4 lg:col-span-2">
-            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
               Sede
             </label>
             <select
-              className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              className="h-10 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
               value={sedeFilter}
               onChange={(e) => setSedeFilter(e.target.value)}
               disabled={isScopedAdminSede}
@@ -1653,7 +1684,7 @@ export default function AdminUsuariosPage() {
           </Button>
 
           <div className="flex h-10 items-center justify-end md:col-span-6 lg:col-span-1">
-            <span className="command-noir-chip whitespace-nowrap" data-tone={serverPaginated ? "info" : "neutral"}>
+            <span className={cx("inline-flex whitespace-nowrap items-center rounded-full border px-3 py-1.5 text-sm font-medium", serverPaginated ? "border-sky-200 bg-sky-50 text-sky-700" : "border-zinc-200 bg-zinc-50 text-zinc-700")}>
               {serverPaginated ? `Página ${page}` : "Vista local"}
             </span>
           </div>
@@ -1662,10 +1693,10 @@ export default function AdminUsuariosPage() {
 
       <div className="space-y-4">
         {selectedUsers.length > 0 ? (
-          <section className="command-noir-metric flex flex-col gap-3 border-[color:rgba(255,107,122,0.2)] bg-[linear-gradient(135deg,rgba(255,107,122,0.09),rgba(255,255,255,0.03))] sm:flex-row sm:items-center sm:justify-between">
+          <section className="flex flex-col gap-3 rounded-[1.35rem] border border-red-200 bg-[linear-gradient(135deg,rgba(254,242,242,0.96),rgba(255,255,255,0.9))] px-4 py-4 shadow-[0_8px_24px_rgba(239,68,68,0.08)] sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">Selección activa</p>
-              <p className="mt-1 text-sm text-[color:var(--color-text)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-red-500">Selección activa</p>
+              <p className="mt-1 text-sm text-zinc-700">
                 {selectedUsers.length} usuario(s) listo(s) para eliminación permanente.
               </p>
             </div>
@@ -1695,9 +1726,9 @@ export default function AdminUsuariosPage() {
             loading={loadingTable}
             skeleton={<TableSkeleton rows={Math.min(8, pageSize)} />}
             hasRows={pageItems.length > 0}
-            tableClassName="min-w-[820px] xl:min-w-full table-fixed"
+            tableClassName="min-w-[1120px] table-fixed"
             headers={
-              <tr className="text-left">
+              <tr className="text-left text-zinc-700">
                 <th className="w-12 px-2.5 py-2">
                   <input
                     ref={selectAllVisibleRef}
@@ -1751,7 +1782,7 @@ export default function AdminUsuariosPage() {
               const rowRoleOptions = editableRow ? roleOptions : [];
 
               return (
-            <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(255,255,255,0.015)]")}>
+            <tr key={u.id} className={cx("align-top transition hover:bg-sky-50/40", idx % 2 === 1 && "bg-zinc-50/35")}>
               <td className="px-2.5 py-2 align-middle">
                 <input
                   type="checkbox"
@@ -1763,18 +1794,18 @@ export default function AdminUsuariosPage() {
                   className="h-4 w-4 rounded border-[color:var(--color-border)] text-[color:var(--danger)] focus:ring-[color:rgba(255,107,122,0.35)] disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </td>
-              <td className="command-noir-table-cell px-2.5 py-2">{u.id}</td>
+              <td className="px-2.5 py-2 text-zinc-700">{u.id}</td>
 
-              <td className="command-noir-table-cell px-2.5 py-2">
-                <div className="truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
-                {u.email ? <div className="truncate text-[12px] text-[color:var(--color-text-muted)]">{u.email}</div> : null}
-                <div className="mt-1 space-y-1 text-[11px] text-[color:var(--color-text-muted)] lg:hidden">
+              <td className="px-2.5 py-2">
+                <div className="truncate font-semibold text-sky-900">{u.username}</div>
+                {u.email ? <div className="truncate text-[12px] text-zinc-500">{u.email}</div> : null}
+                <div className="mt-1 space-y-1 text-[11px] text-zinc-500 lg:hidden">
                   <div>{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "Sin nombre registrado"}</div>
                   <div>{u.documento ? `Doc. ${u.documento}` : "Sin documento"}</div>
                 </div>
               </td>
 
-              <td className="command-noir-table-cell hidden px-2.5 py-2 lg:table-cell">
+              <td className="hidden px-2.5 py-2 text-zinc-700 lg:table-cell">
                 <div className="truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
               </td>
 
@@ -1782,7 +1813,7 @@ export default function AdminUsuariosPage() {
                 <div className="flex flex-col gap-1.5">
                   <BadgeChip tone={getRoleBadgeTone(u.rol)}>{getRoleBadgeLabel(u.rol)}</BadgeChip>
                   <select
-                    className="command-noir-control h-8 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
+                    className="h-8 w-full rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                     value={u.rol ?? "aprendiz"}
                     onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
                     title="Cambiar rol (rapido)"
@@ -1804,7 +1835,7 @@ export default function AdminUsuariosPage() {
                 <div className="flex flex-col gap-1.5">
                   <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
                   <select
-                    className="command-noir-control h-8 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
+                    className="h-8 w-full rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                     value={(u.estado ?? "activo").toLowerCase()}
                     onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
                     title="Cambiar estado (rapido)"
@@ -1816,11 +1847,11 @@ export default function AdminUsuariosPage() {
                 </div>
               </td>
 
-              <td className="command-noir-table-cell hidden px-2.5 py-2 xl:table-cell"><div className="truncate">{u.documento ?? "-"}</div></td>
-              <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell">
+              <td className="hidden px-2.5 py-2 text-zinc-700 xl:table-cell"><div className="truncate">{u.documento ?? "-"}</div></td>
+              <td className="hidden px-2.5 py-2 text-zinc-700 2xl:table-cell">
                 <div className="truncate">{u.sede_principal ? sedesByCode.get(u.sede_principal) || u.sede_principal : "-"}</div>
               </td>
-              <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell"><div className="truncate">{u.programa_formacion ?? "-"}</div></td>
+              <td className="hidden px-2.5 py-2 text-zinc-700 2xl:table-cell"><div className="truncate">{u.programa_formacion ?? "-"}</div></td>
 
               <td className="px-2.5 py-2 text-right">
                 <div className="flex flex-col items-end gap-1">
