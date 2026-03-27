@@ -11,6 +11,7 @@ import { useSessionStore } from "../../src/store/session";
 import { useResolvedThemeMode } from "../../src/store/preferences";
 
 type Mode = "light" | "dark";
+type Equipo = { id: number; serial: string; marca: string; modelo: string; estado: string };
 
 const themes = {
   light: {
@@ -18,7 +19,6 @@ const themes = {
     ambientTop: ["rgba(109,190,245,0.13)", "rgba(109,190,245,0.03)", "transparent"] as [string, string, string],
     ambientBeam: ["transparent", "rgba(196,230,255,0.16)", "rgba(255,255,255,0.05)"] as [string, string, string],
     ambientBottom: ["rgba(255,255,255,0.03)", "rgba(221,238,255,0.20)", "rgba(243,249,255,0.22)"] as [string, string, string],
-    meshBorder: "rgba(173, 210, 237, 0.20)",
     cardBg: "rgba(255,255,255,0.78)",
     cardBorder: "rgba(96, 173, 229, 0.18)",
     text: "#132844",
@@ -34,7 +34,6 @@ const themes = {
     ambientTop: ["rgba(82,195,255,0.13)", "rgba(82,195,255,0.03)", "transparent"] as [string, string, string],
     ambientBeam: ["transparent", "rgba(25,144,209,0.10)", "transparent"] as [string, string, string],
     ambientBottom: ["transparent", "rgba(37,164,229,0.08)", "rgba(37,164,229,0.02)"] as [string, string, string],
-    meshBorder: "rgba(96, 177, 230, 0.10)",
     cardBg: "rgba(12,24,38,0.72)",
     cardBorder: "rgba(71, 181, 245, 0.18)",
     text: "#f6fbff",
@@ -54,7 +53,7 @@ export default function AprendizHome() {
   const theme = themes[mode];
   const isDark = mode === "dark";
   const [loadingEquipos, setLoadingEquipos] = useState(true);
-  const [equipos, setEquipos] = useState<{ id: number; serial: string; marca: string; modelo: string; estado: string }[]>([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
 
   const fullName = `${user?.first_name || ""} ${user?.last_name || ""}`.trim() || user?.username || "Aprendiz";
   const documento = user?.documento || "-";
@@ -68,7 +67,7 @@ export default function AprendizHome() {
     async function loadEquipos() {
       setLoadingEquipos(true);
       try {
-        const r = await api.get<{ id: number; serial: string; marca: string; modelo: string; estado: string }[] | { results: { id: number; serial: string; marca: string; modelo: string; estado: string }[] }>("/api/equipos/");
+        const r = await api.get<Equipo[] | { results: Equipo[] }>("/api/equipos/");
         const data = Array.isArray(r.data) ? r.data : r.data?.results ?? [];
         if (!cancelled) setEquipos(data);
       } catch {
@@ -92,6 +91,7 @@ export default function AprendizHome() {
       <LinearGradient colors={theme.ambientTop} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ambientTop} />
       <LinearGradient colors={theme.ambientBeam} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ambientBeam} />
       <LinearGradient colors={theme.ambientBottom} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.ambientBottom} />
+
       <View style={[styles.content, { paddingTop: insets.top + 18, paddingBottom: 132 + Math.max(insets.bottom, 8) }]}>
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: theme.textSoft }]}>Identificacion digital</Text>
@@ -103,36 +103,72 @@ export default function AprendizHome() {
             {
               backgroundColor: theme.cardBg,
               borderColor: theme.cardBorder,
-              shadowColor: mode === "light" ? "rgba(133, 181, 225, 0.18)" : "rgba(0,0,0,0.28)",
+              shadowColor: isDark ? "rgba(0,0,0,0.28)" : "rgba(133, 181, 225, 0.18)",
             },
           ]}
         >
-          <View style={styles.identityRow}>
-            <View style={[styles.avatarShell, { backgroundColor: theme.accentSoft, borderColor: theme.cardBorder, shadowColor: isDark ? "rgba(0,0,0,0.24)" : "rgba(90, 165, 225, 0.16)" }]}>
+          <LinearGradient
+            colors={mode === "dark" ? ["rgba(79,201,255,0.16)", "rgba(79,201,255,0.03)", "transparent"] : ["rgba(255,255,255,0.72)", "rgba(170,223,255,0.16)", "transparent"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.credentialGlow}
+          />
+
+          <View style={[styles.identityHeader, { borderColor: theme.line, backgroundColor: mode === "dark" ? "rgba(255,255,255,0.015)" : "rgba(255,255,255,0.22)" }]}>
+            <View style={[styles.avatarFrame, { backgroundColor: theme.accentSoft, borderColor: theme.cardBorder }]}>
               <LinearGradient
-                colors={mode === "dark" ? ["rgba(79,201,255,0.18)", "rgba(79,201,255,0.04)"] : ["rgba(255,255,255,0.72)", "rgba(14,165,233,0.02)"]}
+                colors={mode === "dark" ? ["rgba(79,201,255,0.18)", "rgba(79,201,255,0.05)"] : ["rgba(255,255,255,0.78)", "rgba(14,165,233,0.04)"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
-              <Ionicons name="person-outline" size={36} color={theme.accentStrong} />
+              <Ionicons name="person-outline" size={38} color={theme.accentStrong} />
             </View>
 
-            <View style={styles.nameWrap}>
+            <View style={styles.identityMain}>
+              <Text style={[styles.credentialEyebrow, { color: theme.textSoft }]}>Perfil del estudiante</Text>
               <Text style={[styles.name, { color: theme.text }]} numberOfLines={2}>
                 {fullName}
               </Text>
-              <Text style={[styles.documentLabel, { color: theme.textSoft }]}>Documento</Text>
-              <Text style={[styles.document, { color: theme.textMuted }]}>{documento}</Text>
+
+              <View style={[styles.documentBadge, { backgroundColor: theme.accentSoft, borderColor: theme.line }]}>
+                <Ionicons name="card-outline" size={14} color={theme.accentStrong} />
+                <View style={styles.documentBadgeCopy}>
+                  <Text style={[styles.documentLabel, { color: theme.textSoft }]}>Documento</Text>
+                  <Text style={[styles.document, { color: theme.textMuted }]} numberOfLines={1}>
+                    {documento}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
-          <View style={[styles.divider, { backgroundColor: theme.line }]} />
+          <View style={[styles.programBanner, { backgroundColor: theme.accentSoft, borderColor: theme.line }]}>
+            <View style={[styles.programIcon, { backgroundColor: theme.cardBg, borderColor: theme.line }]}>
+              <Ionicons name="school-outline" size={15} color={theme.accentStrong} />
+            </View>
+            <View style={styles.programCopy}>
+              <Text style={[styles.metaLabel, { color: theme.textSoft }]}>Programa</Text>
+              <Text style={[styles.programValue, { color: theme.text }]} numberOfLines={2}>
+                {programa}
+              </Text>
+            </View>
+          </View>
 
-          <View style={styles.detailsStack}>
-            <CredentialLine label="Programa" value={programa} theme={theme} />
-            <CredentialLine label="Sede" value={sede} theme={theme} />
-            <CredentialLine label="Jornada" value={String(jornada)} theme={theme} />
+          <View style={[styles.metaBoard, { borderColor: theme.line, backgroundColor: mode === "dark" ? "rgba(255,255,255,0.015)" : "rgba(255,255,255,0.24)" }]}>
+            <View style={styles.metaBoardItem}>
+                <Text style={[styles.metaLabel, { color: theme.textSoft }]}>Sede</Text>
+                <Text style={[styles.metaBoardValue, { color: theme.text }]} numberOfLines={2}>
+                  {sede}
+                </Text>
+            </View>
+            <View style={[styles.metaBoardDivider, { backgroundColor: theme.line }]} />
+            <View style={styles.metaBoardItem}>
+                <Text style={[styles.metaLabel, { color: theme.textSoft }]}>Jornada</Text>
+                <Text style={[styles.metaBoardValue, { color: theme.text }]} numberOfLines={2}>
+                  {String(jornada)}
+                </Text>
+            </View>
           </View>
         </View>
 
@@ -147,10 +183,10 @@ export default function AprendizHome() {
           ]}
         >
           <View style={styles.equiposHeader}>
-            <View>
+            <View style={styles.equiposTitleWrap}>
               <Text style={[styles.equiposTitle, { color: theme.text }]}>Mis equipos</Text>
-              <Text style={[styles.equiposSubtitle, { color: theme.textSoft }]}>
-                {loadingEquipos ? "Consultando equipos registrados..." : `${equipos.length} registrado${equipos.length === 1 ? "" : "s"}`}
+              <Text style={[styles.equiposCount, { color: theme.textSoft }]}>
+                {loadingEquipos ? "Consultando..." : `${equipos.length} registrado${equipos.length === 1 ? "" : "s"}`}
               </Text>
             </View>
 
@@ -160,45 +196,36 @@ export default function AprendizHome() {
           </View>
 
           {loadingEquipos ? (
-            <View style={styles.emptyState}>
+            <View style={[styles.loadingState, { borderColor: theme.line, backgroundColor: mode === "dark" ? "rgba(255,255,255,0.015)" : "rgba(255,255,255,0.28)" }]}>
               <ActivityIndicator color={theme.accent} />
             </View>
           ) : previewEquipos.length > 0 ? (
             <View style={styles.equiposList}>
               {previewEquipos.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.equipoRow,
-                    {
-                      backgroundColor: mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.58)",
-                      borderColor: theme.line,
-                    },
-                  ]}
-                >
-                  <View style={[styles.equipoIcon, { backgroundColor: theme.accentSoft }]}>
-                    <Ionicons name="cube-outline" size={16} color={theme.accent} />
-                  </View>
-                  <View style={styles.equipoCopy}>
-                    <Text style={[styles.equipoName, { color: theme.text }]}>{item.marca} {item.modelo}</Text>
-                    <Text style={[styles.equipoMeta, { color: theme.textSoft }]} numberOfLines={1}>
-                      {item.serial} · {item.estado}
-                    </Text>
-                  </View>
-                </View>
+                <EquipoPreviewCard key={item.id} item={item} theme={theme} mode={mode} />
               ))}
             </View>
           ) : (
-            <View style={[styles.emptyState, { backgroundColor: mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.52)", borderColor: theme.line }]}>
+            <View style={[styles.emptyState, { backgroundColor: mode === "dark" ? "rgba(255,255,255,0.015)" : "rgba(255,255,255,0.28)", borderColor: theme.line }]}>
               <View style={[styles.emptyIcon, { backgroundColor: theme.accentSoft }]}>
                 <Ionicons name="cube-outline" size={16} color={theme.accentStrong} />
               </View>
               <View style={styles.emptyCopy}>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>Sin equipos registrados</Text>
-                <Text style={[styles.emptyText, { color: theme.textSoft }]}>Puedes agregarlos desde el detalle de equipos cuando los necesites.</Text>
+                <Text style={[styles.emptyText, { color: theme.textSoft }]}>Agrega tu primer dispositivo desde el modulo de equipos.</Text>
               </View>
             </View>
           )}
+
+          <Pressable onPress={() => router.push("/aprendiz/equipos" as any)} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}>
+            <View style={[styles.registerAction, { borderColor: theme.line, backgroundColor: mode === "dark" ? "rgba(255,255,255,0.015)" : "rgba(255,255,255,0.28)" }]}>
+              <View style={styles.registerCopy}>
+                <Text style={[styles.registerTitle, { color: theme.text }]}>Registrar nuevo</Text>
+                <Text style={[styles.registerText, { color: theme.textSoft }]}>Agregar otro equipo</Text>
+              </View>
+              <Ionicons name="add" size={18} color={theme.accentStrong} />
+            </View>
+          </Pressable>
         </View>
       </View>
 
@@ -207,21 +234,39 @@ export default function AprendizHome() {
   );
 }
 
-function CredentialLine({
-  label,
-  value,
+function EquipoPreviewCard({
+  item,
   theme,
+  mode,
 }: {
-  label: string;
-  value: string;
+  item: Equipo;
   theme: (typeof themes)["light"];
+  mode: Mode;
 }) {
+  const status = (item.estado || "Pendiente").toUpperCase();
+
   return (
-    <View style={styles.detailRow}>
-      <Text style={[styles.detailLabel, { color: theme.textSoft }]}>{label}</Text>
-      <Text style={[styles.detailValue, { color: theme.text }]} numberOfLines={1}>
-        {value}
-      </Text>
+    <View style={[styles.equipoCard, { backgroundColor: mode === "dark" ? "rgba(255,255,255,0.014)" : "rgba(255,255,255,0.26)", borderColor: theme.line }]}>
+      <View style={styles.equipoRow}>
+        <View style={[styles.equipoIcon, { backgroundColor: theme.accentSoft }]}>
+          <Ionicons name="cube-outline" size={16} color={theme.accentStrong} />
+        </View>
+
+        <View style={styles.equipoCopy}>
+          <Text style={[styles.equipoName, { color: theme.text }]} numberOfLines={1}>
+            {[item.marca, item.modelo].filter(Boolean).join(" ") || "Equipo registrado"}
+          </Text>
+          <Text style={[styles.equipoSerial, { color: theme.textSoft }]} numberOfLines={1}>
+            {item.serial || "-"}
+          </Text>
+        </View>
+
+        <View style={[styles.statusBadge, { backgroundColor: theme.accentSoft, borderColor: theme.line }]}>
+          <Text style={[styles.statusText, { color: theme.accentStrong }]} numberOfLines={1}>
+            {status}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -256,7 +301,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 22,
     justifyContent: "center",
-    gap: 16,
+    gap: 13,
   },
   header: {
     paddingHorizontal: 2,
@@ -269,82 +314,145 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   credentialCard: {
-    borderRadius: 32,
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 30,
     borderWidth: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 26,
-    gap: 20,
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 9 },
+    paddingHorizontal: 18,
+    paddingVertical: 17,
+    gap: 9,
+    shadowOpacity: 0.1,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 5 },
   },
-  identityRow: {
+  credentialGlow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 116,
+  },
+  identityHeader: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 18,
+    alignItems: "stretch",
+    gap: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  avatarShell: {
-    width: 78,
-    height: 78,
+  credentialEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+  },
+  avatarFrame: {
+    width: 84,
+    minHeight: 110,
     borderRadius: 24,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
   },
-  nameWrap: {
+  identityMain: {
     flex: 1,
-    gap: 2,
+    justifyContent: "space-between",
+    gap: 10,
   },
   name: {
-    fontSize: 32,
-    lineHeight: 36,
+    fontSize: 29,
+    lineHeight: 32,
     fontWeight: "900",
-    letterSpacing: -1,
+    letterSpacing: -0.95,
   },
   documentLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  document: {
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  divider: {
-    height: 1,
-  },
-  detailsStack: {
-    gap: 14,
-  },
-  detailRow: {
-    gap: 4,
-  },
-  detailLabel: {
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
-  detailValue: {
-    fontSize: 19,
+  document: {
+    fontSize: 14,
     fontWeight: "800",
-    lineHeight: 23,
+  },
+  documentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  documentBadgeCopy: {
+    gap: 1,
+  },
+  programBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    paddingHorizontal: 11,
+    paddingVertical: 11,
+  },
+  programIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  programCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  metaLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  programValue: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "800",
+  },
+  metaBoard: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 18,
+    overflow: "hidden",
+  },
+  metaBoardItem: {
+    flex: 1,
+    minHeight: 68,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 3,
+  },
+  metaBoardDivider: {
+    width: 1,
+  },
+  metaBoardValue: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "800",
   },
   equiposCard: {
     borderRadius: 26,
     borderWidth: 1,
     paddingHorizontal: 18,
     paddingVertical: 15,
-    gap: 12,
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 7 },
+    gap: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 5 },
   },
   equiposHeader: {
     flexDirection: "row",
@@ -352,13 +460,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  equiposTitleWrap: {
+    flex: 1,
+    gap: 3,
+  },
   equiposTitle: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
     letterSpacing: -0.2,
   },
-  equiposSubtitle: {
-    marginTop: 2,
+  equiposCount: {
     fontSize: 11,
     fontWeight: "600",
   },
@@ -366,22 +477,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
   },
+  loadingState: {
+    minHeight: 64,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   equiposList: {
-    gap: 8,
+    gap: 6,
+  },
+  equipoCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
   },
   equipoRow: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
   equipoIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -390,27 +510,40 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   equipoName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
   },
-  equipoMeta: {
-    fontSize: 12,
+  equipoSerial: {
+    fontSize: 11,
     fontWeight: "600",
   },
+  statusBadge: {
+    maxWidth: 88,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
   emptyState: {
-    minHeight: 72,
+    minHeight: 68,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 11,
   },
   emptyIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -425,6 +558,29 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 12,
     lineHeight: 17,
+    fontWeight: "600",
+  },
+  registerAction: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  registerCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  registerTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  registerText: {
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: "600",
   },
 });

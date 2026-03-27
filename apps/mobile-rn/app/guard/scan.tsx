@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
-import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
+import { sanitizeDigits, validateScanValue } from "../../src/lib/validators";
 import { InputField, ModernButton } from "../../src/ui/modern";
 import { useResolvedThemeMode } from "../../src/store/preferences";
 import GuardBottomDock from "../../src/components/guard/GuardBottomDock";
@@ -43,14 +43,9 @@ export default function ScanScreen() {
 
   async function validar(doc: string) {
     const clean = doc.trim();
-    if (!clean) {
-      setMsg("Ingresa o escanea un documento.");
-      return;
-    }
-
-    const documentError = validateDocument6to10(clean);
-    if (documentError) {
-      setMsg(documentError);
+    const scanError = validateScanValue(clean);
+    if (scanError) {
+      setMsg(scanError);
       setIsProcessing(false);
       return;
     }
@@ -88,10 +83,10 @@ export default function ScanScreen() {
 
   const onBarcodeDetected = async (raw: string) => {
     if (!canScan) return;
-    const scannedValue = sanitizeDigits((raw || "").trim()).slice(0, 10);
+    const scannedValue = String(raw || "").trim();
     setScanned(true);
     setIsProcessing(true);
-    setDocumento(scannedValue);
+    setDocumento(/^\d+$/.test(scannedValue) ? sanitizeDigits(scannedValue).slice(0, 10) : "");
     setMsg("Codigo detectado. Validando acceso...");
     await validar(scannedValue);
   };

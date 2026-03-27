@@ -7,7 +7,7 @@
  */
 // Configure EXPO_PUBLIC_API_URL in local `.env`.
 // Examples:
-// - http://192.168.1.100:8000
+// - http://192.168.1.2:8000
 // - https://api.tu-dominio.com
 const RAW_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.2:8000";
 const RAW_INSTITUTION_NAME = process.env.EXPO_PUBLIC_INSTITUTION_NAME || "Institucin";

@@ -48,39 +48,39 @@ export default function EquipoCreateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl border bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b p-4">
-          <p className="font-semibold">Registrar nuevo equipo</p>
-          <button onClick={onClose} className="text-sm text-gray-600 hover:underline">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-4 backdrop-blur-[2px]">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-surface-border bg-[color:var(--surface-elevated)] shadow-[0_22px_48px_rgba(0,0,0,0.32)]">
+        <div className="flex items-center justify-between border-b border-surface-border p-4">
+          <p className="font-semibold text-foreground">Registrar nuevo equipo</p>
+          <button onClick={onClose} className="text-sm text-[color:var(--text-soft)] transition hover:text-foreground">
             Cerrar
           </button>
         </div>
 
         <div className="space-y-3 p-4">
           <input
-            className="w-full rounded-xl border p-3"
-            placeholder="Serial (único)"
+            className="command-noir-control h-auto rounded-xl p-3"
+            placeholder="Serial (unico)"
             value={serial}
             onChange={(e) => setSerial(e.target.value)}
           />
           <input
-            className="w-full rounded-xl border p-3"
+            className="command-noir-control h-auto rounded-xl p-3"
             placeholder="Marca (HP, Lenovo...)"
             value={marca}
             onChange={(e) => setMarca(e.target.value)}
           />
           <input
-            className="w-full rounded-xl border p-3"
+            className="command-noir-control h-auto rounded-xl p-3"
             placeholder="Modelo (ThinkPad, Pavilion...)"
             value={modelo}
             onChange={(e) => setModelo(e.target.value)}
           />
 
-          {msg ? <div className="rounded-xl border bg-gray-50 p-3 text-sm">{msg}</div> : null}
+          {msg ? <div className="rounded-xl border border-surface-border bg-[color:var(--surface-muted)] p-3 text-sm text-[color:var(--text-soft)]">{msg}</div> : null}
         </div>
 
-        <div className="border-t p-4">
+        <div className="border-t border-surface-border p-4">
           <button
             disabled={loading}
             onClick={crear}
@@ -88,8 +88,8 @@ export default function EquipoCreateModal({
           >
             {loading ? "Registrando..." : "Registrar"}
           </button>
-          <p className="mt-2 text-xs text-gray-500">
-            El equipo quedará en estado <span className="font-medium">pendiente</span> hasta que administración lo apruebe.
+          <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+            El equipo quedara en estado <span className="font-medium text-[color:var(--text-soft)]">pendiente</span> hasta que administracion lo apruebe.
           </p>
         </div>
       </div>

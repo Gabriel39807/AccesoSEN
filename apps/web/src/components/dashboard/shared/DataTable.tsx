@@ -19,7 +19,7 @@ export default function DataTable({
 }) {
   if (loading && skeleton) return <>{skeleton}</>;
   return (
-    <section className="sadi-card-strong min-w-0 overflow-hidden rounded-[1.35rem] border">
+    <section className="sadi-card-strong min-w-0 overflow-hidden rounded-[1.55rem] border">
       <div className="w-full overflow-x-auto overscroll-x-contain">
         <table className={`min-w-full table-auto text-sm text-[color:var(--text-soft)]${tableClassName ? ` ${tableClassName}` : ""}`}>
           <thead
@@ -36,4 +36,3 @@ export default function DataTable({
     </section>
   );
 }
-

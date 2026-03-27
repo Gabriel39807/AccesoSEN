@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Easing,
   Image,
@@ -324,6 +325,16 @@ export function TitleBlock({ title, subtitle }: { title: string; subtitle?: stri
     <View style={{ gap: 6 }}>
       <Text style={[styles.title, { color: brand.text }]}>{title}</Text>
       {subtitle ? <Text style={[styles.subtitle, { color: brand.textSoft }]}>{subtitle}</Text> : null}
+    </View>
+  );
+}
+
+export function LoadingBlock({ label }: { label: string }) {
+  const brand = useBrandTheme("default");
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12 }}>
+      <ActivityIndicator size="small" color={brand.accent} />
+      <Text style={[styles.subtitle, { color: brand.textSoft }]}>{label}</Text>
     </View>
   );
 }

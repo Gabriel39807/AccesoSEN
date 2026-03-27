@@ -1,18 +1,17 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import { IconHistory } from "@/components/aprendiz/dashboard/DashboardIcons";
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
+import Button from "@/components/dashboard/shared/Button";
 import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
-import Button from "@/components/dashboard/shared/Button";
-import { IconHistory } from "@/components/aprendiz/dashboard/DashboardIcons";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
-import { api } from "@/lib/api";
 import { useSedes } from "@/hooks/useSedes";
+import { api } from "@/lib/api";
 
 type Usuario = {
   id: number;
@@ -29,7 +28,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: string;
-  jornada: "MANANA" | "MAÃ‘ANA" | "TARDE" | "NOCHE";
+  jornada: "MANANA" | "MA\u00d1ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -62,10 +61,10 @@ type Paginated<T> = {
   results: T[];
 };
 
-function clsBadge(variant: "green" | "red" | "blue" | "amber" | "gray") {
+function clsBadge(variant: "green" | "red" | "teal" | "amber" | "gray") {
   if (variant === "green") return "success";
   if (variant === "red") return "danger";
-  if (variant === "blue") return "info";
+  if (variant === "teal") return "info";
   if (variant === "amber") return "warning";
   return "neutral";
 }
@@ -74,29 +73,33 @@ function Badge({
   variant,
   label,
 }: {
-  variant: "green" | "red" | "blue" | "amber" | "gray";
+  variant: "green" | "red" | "teal" | "amber" | "gray";
   label: string;
 }) {
-  return <span className="command-noir-chip" data-tone={clsBadge(variant)}>{label}</span>;
+  return (
+    <span className="command-noir-chip" data-tone={clsBadge(variant)}>
+      {label}
+    </span>
+  );
 }
 
-function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "â€”";
-  const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
-  return full || u.username;
+function nombreUsuario(usuario?: Usuario | null) {
+  if (!usuario) return "-";
+  const full = `${usuario.first_name ?? ""} ${usuario.last_name ?? ""}`.trim();
+  return full || usuario.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "â€”";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "â€”";
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(d);
+  }).format(date);
 }
 
 function safeErrorMessage(e: any) {
@@ -111,31 +114,32 @@ function safeErrorMessage(e: any) {
 
 function useDebounced<T>(value: T, delay = 450) {
   const [debounced, setDebounced] = useState(value);
+
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
   }, [value, delay]);
+
   return debounced;
 }
 
 function StatSkeleton() {
-  return <div className="command-noir-metric h-[110px] animate-pulse" />;
+  return <div className="command-noir-metric h-[92px] animate-pulse" />;
 }
 
 function FilterSkeleton() {
   return (
-    <section className="sadi-card-strong rounded-[1.55rem] p-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-12 lg:col-span-5" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-3" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-3" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-3" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-6 lg:col-span-1" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-12 lg:col-span-2" />
+    <section className="sadi-card rounded-[1.3rem] p-3 sm:p-3.5">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-12 lg:col-span-4" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-6 lg:col-span-1" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-12 lg:col-span-2" />
       </div>
     </section>
   );
@@ -150,26 +154,31 @@ function MetricPanel({
   label: string;
   value: number;
   detail: string;
-  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+  tone?: "neutral" | "success" | "warning" | "danger";
 }) {
   return (
-    <article className="command-noir-metric">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
-          <p className="mt-2.5 text-[1.65rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+    <article data-tone={tone} className="command-noir-metric text-left">
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="min-w-0">
+          <p className="text-[8.5px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-1 text-[1.55rem] font-semibold leading-none tracking-[-0.05em] text-[color:var(--color-text)]">
+            {value.toLocaleString("es-CO")}
+          </p>
+          <p className="mt-1 text-[10.5px] leading-relaxed text-[color:var(--color-text-muted)]">{detail}</p>
         </div>
-        <span className="command-noir-chip" data-tone={tone}>{detail}</span>
+        <span
+          className={[
+            "mt-0.5 h-2 w-2 shrink-0 rounded-full opacity-90",
+            tone === "danger"
+              ? "bg-[color:var(--danger)]"
+              : tone === "warning"
+                ? "bg-[color:var(--warning)]"
+                : tone === "success"
+                  ? "bg-[color:var(--success)]"
+                  : "bg-[color:var(--primary)]",
+          ].join(" ")}
+        />
       </div>
-      <p className="mt-3 text-sm text-[color:var(--color-text-soft)]">
-        {label === "Total"
-          ? "Ledger operativo del rango filtrado."
-          : label === "Ingresos"
-            ? "Flujo de entradas registradas con trazabilidad."
-            : label === "Salidas"
-              ? "Eventos de salida confirmados en el periodo."
-              : "Registros con activos asociados listos para auditoria."}
-      </p>
     </article>
   );
 }
@@ -226,19 +235,19 @@ export default function AdminAccesosPage() {
   const requestIdRef = useRef(0);
 
   const usuariosMap = useMemo(() => {
-    const m = new Map<number, Usuario>();
-    usuarios.forEach((u) => m.set(u.id, u));
-    return m;
+    const map = new Map<number, Usuario>();
+    usuarios.forEach((usuario) => map.set(usuario.id, usuario));
+    return map;
   }, [usuarios]);
 
-  const aprendicesAll = useMemo(() => usuarios.filter((u) => u.rol === "aprendiz"), [usuarios]);
-  const guardasAll = useMemo(() => usuarios.filter((u) => u.rol === "guarda"), [usuarios]);
+  const aprendicesAll = useMemo(() => usuarios.filter((usuario) => usuario.rol === "aprendiz"), [usuarios]);
+  const guardasAll = useMemo(() => usuarios.filter((usuario) => usuario.rol === "guarda"), [usuarios]);
 
   const stats = useMemo(() => {
     const total = count;
-    const ingresos = accesos.filter((a) => a.tipo === "ingreso").length;
-    const salidas = accesos.filter((a) => a.tipo === "salida").length;
-    const conEquipos = accesos.filter((a) => (a.equipos ?? []).length > 0).length;
+    const ingresos = accesos.filter((acceso) => acceso.tipo === "ingreso").length;
+    const salidas = accesos.filter((acceso) => acceso.tipo === "salida").length;
+    const conEquipos = accesos.filter((acceso) => (acceso.equipos ?? []).length > 0).length;
     return { total, ingresos, salidas, conEquipos };
   }, [accesos, count]);
 
@@ -263,7 +272,7 @@ export default function AdminAccesosPage() {
     setError(null);
 
     try {
-      const params: any = { page: p, page_size: pageSize };
+      const params: Record<string, string | number> = { page: p, page_size: pageSize };
       if (dq.trim()) params.q = dq.trim();
       if (tipo) params.tipo = tipo;
       if (sede) params.sede = sede;
@@ -272,14 +281,14 @@ export default function AdminAccesosPage() {
       if (dDateFrom) params.date_from = dDateFrom;
       if (dDateTo) params.date_to = dDateTo;
 
-      const r = await api.get<Paginated<Acceso> | Acceso[]>("/api/accesos/", { params });
-      const payload: any = r.data;
+      const response = await api.get<Paginated<Acceso> | Acceso[]>("/api/accesos/", { params });
+      const payload: any = response.data;
       const results = Array.isArray(payload) ? payload : payload.results ?? [];
-      const c = Array.isArray(payload) ? results.length : payload.count ?? results.length;
+      const total = Array.isArray(payload) ? results.length : payload.count ?? results.length;
 
       if (rid !== requestIdRef.current) return;
       setAccesos(results);
-      setCount(c);
+      setCount(total);
     } catch (e: any) {
       if (rid !== requestIdRef.current) return;
       setError(safeErrorMessage(e));
@@ -292,6 +301,7 @@ export default function AdminAccesosPage() {
     setLoading(true);
     setLoadingTable(true);
     setError(null);
+
     try {
       await cargarUsuarios();
       await cargarAccesos(1);
@@ -315,30 +325,33 @@ export default function AdminAccesosPage() {
     setPage(1);
   }
 
-  async function abrirDetalle(a: Acceso) {
-    setSelected(a);
+  async function abrirDetalle(acceso: Acceso) {
+    setSelected(acceso);
     setOpenDetalle(true);
     setDetalleTurno(null);
     setDetalleEquipos([]);
     setLoadingDetalle(true);
 
     try {
-      const promises: Promise<any>[] = [];
-      if (a.turno) promises.push(api.get<Turno>(`/api/turnos/${a.turno}/`));
-      for (const id of a.equipos ?? []) promises.push(api.get<Equipo>(`/api/equipos/${id}/`));
-      const results = await Promise.allSettled(promises);
+      const requests: Promise<any>[] = [];
+      if (acceso.turno) requests.push(api.get<Turno>(`/api/turnos/${acceso.turno}/`));
+      for (const id of acceso.equipos ?? []) requests.push(api.get<Equipo>(`/api/equipos/${id}/`));
 
-      let idx = 0;
-      if (a.turno) {
-        const tr = results[idx++];
-        if (tr.status === "fulfilled") setDetalleTurno(tr.value.data);
+      const results = await Promise.allSettled(requests);
+      let index = 0;
+
+      if (acceso.turno) {
+        const turnoResult = results[index++];
+        if (turnoResult.status === "fulfilled") setDetalleTurno(turnoResult.value.data);
       }
-      const eqs: Equipo[] = [];
-      for (; idx < results.length; idx++) {
-        const rr = results[idx];
-        if (rr.status === "fulfilled") eqs.push(rr.value.data);
+
+      const equipos: Equipo[] = [];
+      for (; index < results.length; index += 1) {
+        const result = results[index];
+        if (result.status === "fulfilled") equipos.push(result.value.data);
       }
-      setDetalleEquipos(eqs);
+
+      setDetalleEquipos(equipos);
     } finally {
       setLoadingDetalle(false);
     }
@@ -365,15 +378,15 @@ export default function AdminAccesosPage() {
   return (
     <div className="space-y-4 pb-2">
       <PageHeader
-        breadcrumb="ADMIN > ACCESOS"
+        breadcrumb="ADMIN / ACCESOS"
         title="Accesos"
-        description="Ledger operativo premium para auditar eventos por usuario, sede, tipo y ventana temporal sin perder claridad."
+        description="Trazabilidad operativa por usuario, sede, tipo y ventana temporal con lectura mas clara."
         actions={
-          <>
-            <Button onClick={() => cargarAccesos(page)} variant="secondary" className="min-w-[132px]">
+          <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[1.05rem] border border-[color:var(--surface-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-subtle)_98%,white),color-mix(in_srgb,var(--surface-muted)_92%,transparent))] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+            <Button onClick={() => cargarAccesos(page)} variant="secondary" className="px-3 py-1.5 text-[13px]">
               Recargar
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -387,10 +400,10 @@ export default function AdminAccesosPage() {
           </>
         ) : (
           <>
-            <MetricPanel label="Total" value={stats.total} detail={`${count} registros`} />
-            <MetricPanel label="Ingresos" value={stats.ingresos} detail="flujo activo" tone="success" />
-            <MetricPanel label="Salidas" value={stats.salidas} detail="egreso trazado" tone="danger" />
-            <MetricPanel label="Con equipos" value={stats.conEquipos} detail="cadena completa" tone="warning" />
+            <MetricPanel label="Total" value={stats.total} detail="Registros visibles." />
+            <MetricPanel label="Ingresos" value={stats.ingresos} detail="Entradas confirmadas." tone="success" />
+            <MetricPanel label="Salidas" value={stats.salidas} detail="Egresos registrados." tone="danger" />
+            <MetricPanel label="Con equipos" value={stats.conEquipos} detail="Eventos con activos." tone="warning" />
           </>
         )}
       </div>
@@ -400,114 +413,117 @@ export default function AdminAccesosPage() {
       ) : (
         <FilterBar
           footer={
-            error ? <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] p-3 text-sm text-[color:var(--danger)]">{error}</div> : null
+            error ? (
+              <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] p-3 text-sm text-[color:var(--danger)]">
+                {error}
+              </div>
+            ) : null
           }
         >
-          <input
-            className="command-noir-control h-10 w-full md:col-span-12 lg:col-span-4"
-            placeholder="Buscar por documento o username..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-
-          <select
-            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
-            value={tipo}
-            onChange={(e) => setTipo(e.target.value as any)}
-          >
-            <option value="">Tipo</option>
-            <option value="ingreso">Ingreso</option>
-            <option value="salida">Salida</option>
-          </select>
-
-          <select
-            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
-            value={sede}
-            onChange={(e) => setSede(e.target.value as any)}
-          >
-            <option value="">Sede</option>
-            {sedes.map((item) => (
-              <option key={item.id} value={item.code}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
-            value={aprendizId}
-            onChange={(e) => setAprendizId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Aprendiz</option>
-            {aprendicesAll.map((u) => (
-              <option key={u.id} value={u.id}>
-                {nombreUsuario(u)} ({u.documento ?? "sin doc"})
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="command-noir-control h-10 w-full md:col-span-6 lg:col-span-2"
-            value={guardaId}
-            onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Guarda</option>
-            {guardasAll.map((u) => (
-              <option key={u.id} value={u.id}>
-                {nombreUsuario(u)}
-              </option>
-            ))}
-          </select>
-
-          <div className="md:col-span-6 lg:col-span-2">
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Desde</label>
-              <input
-                className="command-noir-control h-10 w-full"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+          <label className="md:col-span-12 lg:col-span-4">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Buscar</div>
+            <input
+              className="command-noir-control h-10 w-full text-sm"
+              placeholder="Documento o username"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
             />
-          </div>
+          </label>
 
-          <div className="md:col-span-6 lg:col-span-2">
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hasta</label>
-              <input
-                className="command-noir-control h-10 w-full"
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Tipo</div>
+            <select className="command-noir-control h-10 w-full text-sm" value={tipo} onChange={(event) => setTipo(event.target.value as "" | Acceso["tipo"])}>
+              <option value="">Todos</option>
+              <option value="ingreso">Ingreso</option>
+              <option value="salida">Salida</option>
+            </select>
+          </label>
+
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sede</div>
+            <select className="command-noir-control h-10 w-full text-sm" value={sede} onChange={(event) => setSede(event.target.value)}>
+              <option value="">Todas</option>
+              {sedes.map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Aprendiz</div>
+            <select
+              className="command-noir-control h-10 w-full text-sm"
+              value={aprendizId}
+              onChange={(event) => setAprendizId(event.target.value ? Number(event.target.value) : "")}
+            >
+              <option value="">Todos</option>
+              {aprendicesAll.map((usuario) => (
+                <option key={usuario.id} value={usuario.id}>
+                  {nombreUsuario(usuario)} ({usuario.documento ?? "sin doc"})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Registrado</div>
+            <select
+              className="command-noir-control h-10 w-full text-sm"
+              value={guardaId}
+              onChange={(event) => setGuardaId(event.target.value ? Number(event.target.value) : "")}
+            >
+              <option value="">Todos</option>
+              {guardasAll.map((usuario) => (
+                <option key={usuario.id} value={usuario.id}>
+                  {nombreUsuario(usuario)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Desde</div>
+            <input className="command-noir-control h-10 w-full" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+          </label>
+
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Hasta</div>
+            <input className="command-noir-control h-10 w-full" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+          </label>
 
           <div className="md:col-span-6 lg:col-span-1">
-            <Button onClick={resetFiltros} variant="secondary" disabled={!hasFilters}>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-transparent">Reset</div>
+            <Button onClick={resetFiltros} variant="secondary" disabled={!hasFilters} className="h-10 w-full px-3 text-[13px]">
               Limpiar
             </Button>
           </div>
 
-          <div className="flex h-10 items-center justify-end md:col-span-12 lg:col-span-2">
-            <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
-              {count} accesos
-            </span>
+          <div className="flex h-10 items-end justify-end md:col-span-12 lg:col-span-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-subtle)] px-2.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--primary)]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-soft)]">{count} accesos</span>
+            </div>
           </div>
         </FilterBar>
       )}
 
-      <div className="space-y-4 text-[color:var(--color-text-soft)]">
+      <div className="space-y-3 text-[color:var(--color-text-soft)]">
         <DataTable
           loading={loadingTable}
           skeleton={<TableSkeleton />}
           hasRows={accesos.length > 0}
           tableClassName="min-w-[680px] xl:min-w-full table-fixed"
           headers={
-            <tr className="text-left">
-              <th className="px-2.5 py-2 font-semibold">Fecha</th>
-              <th className="px-2.5 py-2 font-semibold">Tipo</th>
-              <th className="hidden px-2.5 py-2 font-semibold xl:table-cell">Sede</th>
-              <th className="px-2.5 py-2 font-semibold">Aprendiz</th>
-              <th className="hidden px-2.5 py-2 font-semibold lg:table-cell">Registrado por</th>
-              <th className="hidden px-2.5 py-2 font-semibold md:table-cell">Equipos</th>
-              <th className="px-2.5 py-2 text-right font-semibold">Acciones</th>
+            <tr className="text-left text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">
+              <th className="px-3 py-3">Fecha</th>
+              <th className="px-3 py-3">Tipo</th>
+              <th className="hidden px-3 py-3 xl:table-cell">Sede</th>
+              <th className="px-3 py-3">Aprendiz</th>
+              <th className="hidden px-3 py-3 lg:table-cell">Registrado por</th>
+              <th className="hidden px-3 py-3 md:table-cell">Equipos</th>
+              <th className="px-3 py-3 text-right">Acciones</th>
             </tr>
           }
           emptyState={
@@ -524,34 +540,36 @@ export default function AdminAccesosPage() {
             </tr>
           }
         >
-          {accesos.map((a) => {
-            const aprendiz = usuariosMap.get(a.usuario);
-            const registrado = a.registrado_por ? usuariosMap.get(a.registrado_por) : null;
-            const equiposCount = (a.equipos ?? []).length;
+          {accesos.map((acceso) => {
+            const aprendiz = usuariosMap.get(acceso.usuario);
+            const registrado = acceso.registrado_por ? usuariosMap.get(acceso.registrado_por) : null;
+            const equiposCount = (acceso.equipos ?? []).length;
 
             return (
-              <tr key={a.id} className="command-noir-table-row">
-                <td className="command-noir-table-cell px-2.5 py-2 text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
-                <td className="command-noir-table-cell px-2.5 py-2">
-                  {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
+              <tr key={acceso.id} className="command-noir-table-row">
+                <td className="command-noir-table-cell px-3 py-3.5">
+                  <div className="font-medium text-[color:var(--color-text)]">{formatFecha(acceso.fecha)}</div>
+                  <div className="mt-0.5 text-[11px] text-[color:var(--color-text-muted)]">#{acceso.id}</div>
                 </td>
-                <td className="command-noir-table-cell hidden px-2.5 py-2 xl:table-cell">
-                  {a.sede ? (
-                    <Badge variant="blue" label={sedesByCode.get(a.sede) || a.sede} />
-                  ) : (
-                    <Badge variant="gray" label="(sin sede)" />
-                  )}
+                <td className="command-noir-table-cell px-3 py-3.5">
+                  {acceso.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </td>
-                <td className="command-noir-table-cell px-2.5 py-2">
+                <td className="command-noir-table-cell hidden px-3 py-3.5 xl:table-cell">
+                  {acceso.sede ? <Badge variant="teal" label={sedesByCode.get(acceso.sede) || acceso.sede} /> : <Badge variant="gray" label="Sin sede" />}
+                </td>
+                <td className="command-noir-table-cell px-3 py-3.5">
                   <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(aprendiz)}</div>
-                  <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "â€”"}</div>
+                  <div className="mt-0.5 text-[11.5px] text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "-"}</div>
                 </td>
-                <td className="command-noir-table-cell hidden px-2.5 py-2 text-[color:var(--color-text-soft)] lg:table-cell">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
-                <td className="command-noir-table-cell hidden px-2.5 py-2 md:table-cell">
-                  {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "â€”"}
+                <td className="command-noir-table-cell hidden px-3 py-3.5 lg:table-cell">
+                  <div className="text-[color:var(--color-text)]">{registrado ? nombreUsuario(registrado) : "-"}</div>
+                  <div className="mt-0.5 text-[11px] text-[color:var(--color-text-muted)]">{registrado?.username ?? ""}</div>
                 </td>
-                <td className="px-2.5 py-2 text-right">
-                  <Button onClick={() => abrirDetalle(a)} variant="secondary" className="min-h-8 px-3 py-1 text-xs">
+                <td className="command-noir-table-cell hidden px-3 py-3.5 md:table-cell">
+                  {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo${equiposCount > 1 ? "s" : ""}`} /> : <span className="text-[color:var(--color-text-muted)]">-</span>}
+                </td>
+                <td className="px-3 py-3.5 text-right">
+                  <Button onClick={() => abrirDetalle(acceso)} variant="secondary" className="rounded-xl px-2.5 py-1.5 text-[11px]">
                     Ver
                   </Button>
                 </td>
@@ -570,8 +588,8 @@ export default function AdminAccesosPage() {
             setPageSize(size);
             setPage(1);
           }}
-          onPrev={() => setPage((p) => Math.max(1, p - 1))}
-          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          onPrev={() => setPage((current) => Math.max(1, current - 1))}
+          onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
         />
       </div>
 
@@ -603,18 +621,14 @@ export default function AdminAccesosPage() {
               <div className="command-noir-detail-card">
                 <div className="text-xs text-[color:var(--color-text-muted)]">Sede</div>
                 <div className="mt-1">
-                  {selected.sede ? (
-                    <Badge variant="blue" label={sedesByCode.get(selected.sede) || selected.sede} />
-                  ) : (
-                    <Badge variant="gray" label="(sin sede)" />
-                  )}
+                  {selected.sede ? <Badge variant="teal" label={sedesByCode.get(selected.sede) || selected.sede} /> : <Badge variant="gray" label="Sin sede" />}
                 </div>
               </div>
 
               <div className="command-noir-detail-card">
                 <div className="text-xs text-[color:var(--color-text-muted)]">Turno</div>
                 <div className="font-semibold">
-                  {selected.turno ? `#${selected.turno}` : "â€”"}
+                  {selected.turno ? `#${selected.turno}` : "-"}
                   {detalleTurno ? ` (${detalleTurno.activo ? "activo" : "finalizado"})` : ""}
                 </div>
               </div>
@@ -629,9 +643,7 @@ export default function AdminAccesosPage() {
                 </div>
                 <div>
                   <span className="text-[color:var(--color-text-muted)]">Registrado por:</span>{" "}
-                  <span className="font-medium">
-                    {selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "â€”"}
-                  </span>
+                  <span className="font-medium">{selected.registrado_por ? nombreUsuario(usuariosMap.get(selected.registrado_por)) : "-"}</span>
                 </div>
               </div>
             </div>
@@ -647,26 +659,29 @@ export default function AdminAccesosPage() {
                   <div className="text-sm text-[color:var(--color-text-muted)]">Sin equipos asociados.</div>
                 ) : detalleEquipos.length ? (
                   <div className="space-y-2">
-                    {detalleEquipos.map((e) => (
-                      <div key={e.id} className="flex items-center justify-between rounded-[1.1rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] p-3">
+                    {detalleEquipos.map((equipo) => (
+                      <div
+                        key={equipo.id}
+                        className="flex items-center justify-between rounded-[1.05rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] p-3"
+                      >
                         <div>
-                          <div className="font-semibold text-[color:var(--color-text)]">{e.serial}</div>
+                          <div className="font-semibold text-[color:var(--color-text)]">{equipo.serial}</div>
                           <div className="text-xs text-[color:var(--color-text-muted)]">
-                            {e.marca} {e.modelo} - propietario #{e.propietario}
+                            {equipo.marca} {equipo.modelo} - propietario #{equipo.propietario}
                           </div>
                         </div>
                         <Badge
                           variant={
-                            String(e.estado).toLowerCase() === "aprobado"
+                            String(equipo.estado).toLowerCase() === "aprobado"
                               ? "green"
-                              : String(e.estado).toLowerCase() === "rechazado"
+                              : String(equipo.estado).toLowerCase() === "rechazado"
                                 ? "red"
                                 : "amber"
                           }
                           label={
-                            String(e.estado).toLowerCase() === "aprobado"
+                            String(equipo.estado).toLowerCase() === "aprobado"
                               ? "Aprobado"
-                              : String(e.estado).toLowerCase() === "rechazado"
+                              : String(equipo.estado).toLowerCase() === "rechazado"
                                 ? "Rechazado"
                                 : "Pendiente"
                           }
@@ -676,8 +691,7 @@ export default function AdminAccesosPage() {
                   </div>
                 ) : (
                   <div className="text-sm text-[color:var(--color-text-soft)]">
-                    IDs: {(selected.equipos ?? []).join(", ")}{" "}
-                    <span className="text-xs text-[color:var(--color-text-muted)]">(sin detalles)</span>
+                    IDs: {(selected.equipos ?? []).join(", ")} <span className="text-xs text-[color:var(--color-text-muted)]">(sin detalles)</span>
                   </div>
                 )}
               </div>
@@ -688,4 +702,3 @@ export default function AdminAccesosPage() {
     </div>
   );
 }
-

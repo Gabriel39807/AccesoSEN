@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleAlert, FileSpreadsheet, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import BadgeChip from "@/components/admin/BadgeChip";
 import FilterBar from "@/components/admin/FilterBar";
@@ -129,6 +130,13 @@ function ModalFrame({
   );
 }
 
+function getImportStageTone(stage: "parsing" | "ready" | "importing" | "done") {
+  if (stage === "ready") return "info";
+  if (stage === "importing") return "warning";
+  if (stage === "done") return "success";
+  return "neutral";
+}
+
 function useDebounced<T>(value: T, delay = 450) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -253,11 +261,14 @@ function MetricPanel({
   const content = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
-          <p className="mt-1.5 text-[1.45rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+        <div className="min-w-0">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-1.5 text-[1.85rem] font-semibold leading-none tracking-[-0.05em] text-[color:var(--color-text)]">
+            {value.toLocaleString("es-CO")}
+          </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-[color:var(--color-text-muted)]">{detail}</p>
         </div>
-        <span className="command-noir-chip" data-tone={tone}>{detail}</span>
+        <span className={cx("mt-1 h-2.5 w-2.5 shrink-0 rounded-full opacity-90", tone === "danger" ? "bg-[color:var(--danger)]" : tone === "warning" ? "bg-[color:var(--warning)]" : tone === "success" ? "bg-[color:var(--success)]" : "bg-[color:var(--primary)]")} />
       </div>
     </>
   );
@@ -267,7 +278,8 @@ function MetricPanel({
       <button
         type="button"
         onClick={onClick}
-        className="command-noir-metric text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.05)]"
+        data-tone={tone}
+        className="command-noir-metric text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)]"
       >
         {content}
       </button>
@@ -275,7 +287,7 @@ function MetricPanel({
   }
 
   return (
-    <div className="command-noir-metric text-left">
+    <div data-tone={tone} className="command-noir-metric text-left">
       {content}
     </div>
   );
@@ -632,6 +644,17 @@ export default function AdminUsuariosPage() {
     setEstadoFilter(next.estado ?? "todos");
     setPage(1);
   }
+
+  const metricCards = [
+    { label: "Total", value: stats.total, detail: "Universo total de cuentas visibles en esta sesión administrativa.", onClick: () => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" }) },
+    { label: "Activos", value: stats.activos, detail: "Operativos", tone: "success" as const, onClick: () => aplicarFiltrosDesdeCard({ estado: "activo" }) },
+    { label: "Bloqueados", value: stats.bloqueados, detail: "Requieren atención", tone: "danger" as const, onClick: () => aplicarFiltrosDesdeCard({ estado: "bloqueado" }) },
+    ...(canManageAdministrativeRoles
+      ? [{ label: "Admins", value: stats.admins, detail: "Gestión", tone: "info" as const, onClick: () => aplicarFiltrosDesdeCard({ rol: "admin_sede", estado: "todos" }) }]
+      : []),
+    { label: "Guardas", value: stats.guardas, detail: "Cobertura operativa", tone: "info" as const, onClick: () => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" }) },
+    { label: "Aprendices", value: stats.aprendices, detail: "Base institucional", tone: "warning" as const, onClick: () => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" }) },
+  ];
 
   function abrirEditar(u: Usuario) {
     if (!canManageRole(actorRole, u.rol)) return;
@@ -1088,23 +1111,23 @@ export default function AdminUsuariosPage() {
   }
 
   return (
-    <div className="space-y-4 pb-2">
+    <div className="space-y-5 pb-3">
       <PageHeader
-        breadcrumb="ADMIN > USUARIOS"
+        breadcrumb="ADMIN / USUARIOS"
         title="Usuarios"
-        description="Gestión de cuentas, roles, estado y carga de aprendices."
+        description="Gestión centralizada de cuentas, roles, estados y carga institucional de aprendices."
         actions={
-          <>
-            <Button onClick={abrirCrear} variant="primary" disabled={loadingMe || roleOptions.length === 0 || missingAdminSedeScope}>
+          <div className="inline-flex flex-wrap items-center gap-2 rounded-[1.2rem] border border-[color:var(--surface-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-subtle)_98%,white),color-mix(in_srgb,var(--surface-muted)_92%,transparent))] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+            <Button onClick={abrirCrear} variant="primary" accent="emerald" disabled={loadingMe || roleOptions.length === 0 || missingAdminSedeScope}>
               Crear usuario
             </Button>
-            <Button onClick={abrirImportar} variant="primary" disabled={loadingMe || missingAdminSedeScope}>
+            <Button onClick={abrirImportar} variant="primary" accent="emerald" disabled={loadingMe || missingAdminSedeScope}>
               Cargar aprendices
             </Button>
-            <Button onClick={() => cargar(page)} variant="secondary">
+            <Button onClick={() => cargar(page)} variant="secondary" className="px-3.5">
               Recargar
             </Button>
-          </>
+          </div>
         }
       />
 
@@ -1120,7 +1143,7 @@ export default function AdminUsuariosPage() {
         />
       ) : null}
 
-      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {loading ? (
           <>
             <StatSkeleton />
@@ -1132,14 +1155,9 @@ export default function AdminUsuariosPage() {
           </>
         ) : (
           <>
-            <MetricPanel label="Total" value={stats.total} detail="universo" onClick={() => aplicarFiltrosDesdeCard({ rol: "todos", estado: "todos" })} />
-            <MetricPanel label="Activos" value={stats.activos} detail="operativos" tone="success" onClick={() => aplicarFiltrosDesdeCard({ estado: "activo" })} />
-            <MetricPanel label="Bloqueados" value={stats.bloqueados} detail="atencion" tone="danger" onClick={() => aplicarFiltrosDesdeCard({ estado: "bloqueado" })} />
-            {canManageAdministrativeRoles ? (
-              <MetricPanel label="Admins" value={stats.admins} detail="control" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "admin_sede", estado: "todos" })} />
-            ) : null}
-            <MetricPanel label="Guardas" value={stats.guardas} detail="cobertura" tone="info" onClick={() => aplicarFiltrosDesdeCard({ rol: "guarda", estado: "todos" })} />
-            <MetricPanel label="Aprendices" value={stats.aprendices} detail="poblacion" tone="warning" onClick={() => aplicarFiltrosDesdeCard({ rol: "aprendiz", estado: "todos" })} />
+            {metricCards.map((metric) => (
+              <MetricPanel key={metric.label} {...metric} />
+            ))}
           </>
         )}
       </div>
@@ -1154,51 +1172,61 @@ export default function AdminUsuariosPage() {
             ) : null
           }
         >
-            <div className="relative w-full md:col-span-12 lg:col-span-4">
+            <div className="relative w-full md:col-span-12 xl:col-span-4">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Buscar</div>
               <input
-                className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
-              placeholder="Buscar: username, email, documento, nombre..."
+                className="command-noir-control w-full text-sm outline-none transition"
+              placeholder="Buscar por usuario, nombre, correo o documento"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
           </div>
 
-          <select
-            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
-            value={rolFilter}
-            onChange={(e) => setRolFilter(e.target.value as UserFilterRole)}
-          >
-            <option value="todos">Rol: Todos</option>
-            {roleFilterOptions.map((role) => (
-              <option key={role} value={role}>
-                {`Rol: ${role}`}
-              </option>
-            ))}
-          </select>
+          <label className="md:col-span-4 xl:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Rol</div>
+            <select
+              className="command-noir-control w-full text-sm outline-none transition"
+              value={rolFilter}
+              onChange={(e) => setRolFilter(e.target.value as UserFilterRole)}
+            >
+              <option value="todos">Todos</option>
+              {roleFilterOptions.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <select
-            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
-            value={estadoFilter}
-            onChange={(e) => setEstadoFilter(e.target.value as UserStateFilter)}
-          >
-            <option value="todos">Estado: Todos</option>
-            <option value="activo">Estado: activo</option>
-            <option value="bloqueado">Estado: bloqueado</option>
-          </select>
+          <label className="md:col-span-4 xl:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Estado</div>
+            <select
+              className="command-noir-control w-full text-sm outline-none transition"
+              value={estadoFilter}
+              onChange={(e) => setEstadoFilter(e.target.value as UserStateFilter)}
+            >
+              <option value="todos">Todos</option>
+              <option value="activo">Activo</option>
+              <option value="bloqueado">Bloqueado</option>
+            </select>
+          </label>
 
-          <select
-            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
-            value={sedeFilter}
-            onChange={(e) => setSedeFilter(e.target.value)}
-            disabled={isScopedAdminSede}
-          >
-            <option value="todos">{isScopedAdminSede ? "Sede: fija por sesión" : "Sede: Todas"}</option>
-            {sedes.map((item) => (
-              <option key={item.id} value={item.code}>
-                {item.code}
-              </option>
-            ))}
-          </select>
+          <label className="md:col-span-4 xl:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sede</div>
+            <select
+              className="command-noir-control w-full text-sm outline-none transition"
+              value={sedeFilter}
+              onChange={(e) => setSedeFilter(e.target.value)}
+              disabled={isScopedAdminSede}
+            >
+              <option value="todos">{isScopedAdminSede ? "Fija por sesión" : "Todas"}</option>
+              {sedes.map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.code}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <Button
             onClick={() => {
@@ -1208,17 +1236,18 @@ export default function AdminUsuariosPage() {
               setSedeFilter(isScopedAdminSede ? actorSede ?? "todos" : "todos");
               setPage(1);
             }}
-            className="h-10 md:col-span-6 lg:col-span-1"
+            className="h-11 md:col-span-6 xl:col-span-1 xl:mt-[19px]"
             variant="secondary"
             disabled={!hasFilters}
           >
             Limpiar
           </Button>
 
-          <div className="flex h-10 items-center justify-end md:col-span-6 lg:col-span-1">
-            <span className="command-noir-chip whitespace-nowrap">
-              {totalCount} usuarios
-            </span>
+          <div className="flex h-11 items-end justify-end md:col-span-6 xl:col-span-1 xl:mt-[19px]">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-subtle)] px-3 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+              <span className="h-2 w-2 rounded-full bg-[color:var(--primary)]" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-soft)]">{totalCount} usuarios</span>
+            </div>
           </div>
         </FilterBar>
       )}
@@ -1230,16 +1259,16 @@ export default function AdminUsuariosPage() {
             hasRows={pageItems.length > 0}
             tableClassName="min-w-[760px] xl:min-w-full table-fixed"
             headers={
-              <tr className="text-left">
-                <th className="w-14 px-2.5 py-2">ID</th>
-                <th className="w-[22%] px-2.5 py-2">Usuario</th>
-                <th className="hidden w-[18%] px-2.5 py-2 lg:table-cell">Nombre</th>
-                <th className="w-[16%] px-2.5 py-2">Rol</th>
-                <th className="w-[16%] px-2.5 py-2">Estado</th>
-                <th className="hidden w-[14%] px-2.5 py-2 xl:table-cell">Documento</th>
-                <th className="hidden w-[12%] px-2.5 py-2 2xl:table-cell">Sede</th>
-                <th className="hidden px-2.5 py-2 2xl:table-cell 2xl:w-[16%]">Programa</th>
-                <th className="w-24 px-2.5 py-2 text-right">Acciones</th>
+              <tr className="text-left text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">
+                <th className="w-14 px-4 py-3.5">ID</th>
+                <th className="w-[24%] px-4 py-3.5">Usuario</th>
+                <th className="hidden w-[18%] px-4 py-3.5 lg:table-cell">Nombre</th>
+                <th className="w-[14%] px-4 py-3.5">Rol</th>
+                <th className="w-[14%] px-4 py-3.5">Estado</th>
+                <th className="hidden w-[14%] px-4 py-3.5 xl:table-cell">Documento</th>
+                <th className="hidden w-[12%] px-4 py-3.5 2xl:table-cell">Sede</th>
+                <th className="hidden px-4 py-3.5 2xl:table-cell 2xl:w-[16%]">Programa</th>
+                <th className="w-44 px-4 py-3.5 text-right">Gestión</th>
               </tr>
             }
           emptyState={
@@ -1261,72 +1290,94 @@ export default function AdminUsuariosPage() {
               const rowRoleOptions = editableRow ? roleOptions : [];
 
               return (
-            <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(255,255,255,0.015)]")}>
-              <td className="command-noir-table-cell px-2.5 py-2">{u.id}</td>
+            <tr key={u.id} className={cx("align-top command-noir-table-row", idx % 2 === 1 && "bg-[color:rgba(15,143,122,0.018)]")}>
+              <td className="command-noir-table-cell px-4 py-4.5 text-sm font-medium text-[color:var(--color-text-soft)]">{u.id}</td>
 
-              <td className="command-noir-table-cell px-2.5 py-2">
-                <div className="truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
-                {u.email ? <div className="truncate text-[12px] text-[color:var(--color-text-muted)]">{u.email}</div> : null}
+              <td className="command-noir-table-cell px-4 py-4.5">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[1.05rem] border border-[color:color-mix(in_srgb,var(--primary)_18%,var(--surface-border))] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--primary)_10%,white),color-mix(in_srgb,var(--surface-muted)_96%,transparent))] text-sm font-semibold text-[color:var(--primary-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]">
+                    {u.username?.slice(0, 1).toUpperCase() || "U"}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-[0.95rem] font-semibold tracking-[-0.02em] text-[color:var(--color-text)]">{u.username}</div>
+                    {u.email ? <div className="mt-1 truncate text-[12px] leading-relaxed text-[color:var(--color-text-muted)]">{u.email}</div> : null}
+                  </div>
+                </div>
               </td>
 
-              <td className="command-noir-table-cell hidden px-2.5 py-2 lg:table-cell">
-                <div className="truncate">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
+              <td className="command-noir-table-cell hidden px-4 py-4.5 lg:table-cell">
+                <div className="truncate text-[0.92rem] font-medium tracking-[-0.01em] text-[color:var(--color-text-soft)]">{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "-"}</div>
               </td>
 
-              <td className="px-2.5 py-2 align-middle">
+              <td className="px-4 py-4.5 align-middle">
                 <div className="flex flex-col gap-1.5">
                   <BadgeChip tone={getRoleBadgeTone(u.rol)}>{getRoleBadgeLabel(u.rol)}</BadgeChip>
-                  <select
-                    className="command-noir-control h-8 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
-                    value={u.rol ?? "aprendiz"}
-                    onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
-                    title="Cambiar rol (rapido)"
-                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
-                  >
-                    {!editableRow ? (
-                      <option value={u.rol ?? ""}>{getRoleBadgeLabel(u.rol)}</option>
-                    ) : null}
-                    {rowRoleOptions.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-text-faint)]">Perfil de acceso</div>
                 </div>
               </td>
 
-              <td className="px-2.5 py-2 align-middle">
+              <td className="px-4 py-4.5 align-middle">
                 <div className="flex flex-col gap-1.5">
                   <BadgeChip tone={(u.estado ?? "").toLowerCase() === "bloqueado" ? "danger" : "success"}>{u.estado ?? "-"}</BadgeChip>
-                  <select
-                    className="command-noir-control h-8 w-full rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
-                    value={(u.estado ?? "activo").toLowerCase()}
-                    onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
-                    title="Cambiar estado (rapido)"
-                    disabled={Boolean(rowSaving[u.id]) || !editableRow}
-                  >
-                    <option value="activo">activo</option>
-                    <option value="bloqueado">bloqueado</option>
-                  </select>
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-text-faint)]">Estado actual</div>
                 </div>
               </td>
 
-              <td className="command-noir-table-cell hidden px-2.5 py-2 xl:table-cell"><div className="truncate">{u.documento ?? "-"}</div></td>
-              <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell">
+              <td className="command-noir-table-cell hidden px-4 py-4.5 xl:table-cell"><div className="truncate">{u.documento ?? "-"}</div></td>
+              <td className="command-noir-table-cell hidden px-4 py-4.5 2xl:table-cell">
                 <div className="truncate">{u.sede_principal ?? "-"}</div>
               </td>
-              <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell"><div className="truncate">{u.programa_formacion ?? "-"}</div></td>
+              <td className="command-noir-table-cell hidden px-4 py-4.5 2xl:table-cell"><div className="truncate">{u.programa_formacion ?? "-"}</div></td>
 
-              <td className="px-2.5 py-2 text-right">
-                <div className="flex flex-col items-end gap-1">
+              <td className="px-4 py-4.5 text-right">
+                <div className="flex flex-col items-end gap-2">
                   <Button
                     onClick={() => abrirEditar(u)}
                     variant="secondary"
-                    className="min-h-8 px-2.5 py-1 text-xs"
+                    className="min-h-9 rounded-xl px-3 py-1.5 text-xs"
                     disabled={Boolean(rowSaving[u.id]) || !editableRow}
                   >
                     Editar
                   </Button>
+                  <details className="w-full max-w-[11.5rem] text-left">
+                    <summary className="list-none rounded-xl border border-[color:var(--surface-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-elevated)_98%,white),color-mix(in_srgb,var(--surface-muted)_95%,transparent))] px-3 py-2 text-xs font-semibold text-[color:var(--color-text-soft)] transition hover:border-[color:var(--surface-border-strong)] hover:text-[color:var(--color-text)]">
+                      Ajustes rápidos
+                    </summary>
+                    <div className="sadi-inline-panel mt-2 space-y-2 p-2.5">
+                      <label className="block">
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)]">Rol</div>
+                        <select
+                          className="command-noir-control h-9 rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
+                          value={u.rol ?? "aprendiz"}
+                          onChange={(e) => inlinePatch(u.id, { rol: e.target.value })}
+                          title="Cambiar rol rápido"
+                          disabled={Boolean(rowSaving[u.id]) || !editableRow}
+                        >
+                          {!editableRow ? (
+                            <option value={u.rol ?? ""}>{getRoleBadgeLabel(u.rol)}</option>
+                          ) : null}
+                          {rowRoleOptions.map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[color:var(--color-text-muted)]">Estado</div>
+                        <select
+                          className="command-noir-control h-9 rounded-xl px-2.5 py-1.5 text-xs outline-none transition"
+                          value={(u.estado ?? "activo").toLowerCase()}
+                          onChange={(e) => inlinePatch(u.id, { estado: e.target.value })}
+                          title="Cambiar estado rápido"
+                          disabled={Boolean(rowSaving[u.id]) || !editableRow}
+                        >
+                          <option value="activo">activo</option>
+                          <option value="bloqueado">bloqueado</option>
+                        </select>
+                      </label>
+                    </div>
+                  </details>
                   {rowSaving[u.id] ? <div className="text-[11px] text-[color:var(--color-text-muted)]">Guardando...</div> : null}
                   {rowError[u.id] ? (
                     <InlineNotice type="error" className="max-w-[190px] text-right" message={`No se pudo guardar. ${rowError[u.id]}`}>
@@ -1790,84 +1841,143 @@ export default function AdminUsuariosPage() {
           maxWidthClassName="max-w-5xl"
           closeDisabled={validandoImport || confirmandoImport}
         >
-          <ModalFrame className="space-y-4">
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3 text-sm text-[color:var(--color-text-soft)]">
-              <div className="font-medium text-[color:var(--color-text)]">Solo importa aprendices.</div>
-              <div className="mt-1">Formatos soportados: {importFormatsLabel}. Flujo: 1) descarga la plantilla, 2) completa el archivo, 3) valida, 4) importa.</div>
-              <div className="mt-1">Campos obligatorios: {importRequiredColumnsLabel}. Telefono y Correo son opcionales.</div>
-              <div className="mt-1">Columnas visibles en plantilla: {importTemplateColumns.join(", ")}.</div>
-              <div className="mt-1">Jornada usa valores tecnicos exactos: {APRENDIZ_IMPORT_JORNADAS.join(", ")}.</div>
-              <div className="mt-1">
-                {isScopedAdminSede
-                  ? `No incluyas columna Sede; la importacion queda fijada a tu sede activa (${actorSede ?? "sin sede"}).`
-                  : "Si cargas Sede, usa el codigo tecnico exacto de una sede activa."}
-              </div>
-              <div className="mt-1">Tamano maximo recomendado por archivo: {importMaxFileSizeLabel}.</div>
-              <div className="mt-1">Programa debe usar el nombre exacto del catalogo existente cuando el sistema ya tenga programas cargados.</div>
+          <ModalFrame className="space-y-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
+              <section className="rounded-[1.35rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-[0.95rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-elevated)] text-[color:var(--primary)]">
+                    <CircleAlert className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-[color:var(--color-text)]">Guia rapida de importacion</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-text-muted)]">
+                      Prepara el archivo una sola vez, validalo y luego ejecuta la importacion.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Formatos</div>
+                    <div className="mt-1 text-sm font-medium text-[color:var(--color-text)]">{importFormatsLabel}</div>
+                    <div className="mt-1 text-[12px] text-[color:var(--color-text-muted)]">Tamano maximo sugerido: {importMaxFileSizeLabel}</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Flujo</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-text-soft)]">1. Descarga plantilla. 2. Completa filas. 3. Valida. 4. Importa.</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Campos obligatorios</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-text-soft)]">{importRequiredColumnsLabel}</div>
+                    <div className="mt-1 text-[12px] text-[color:var(--color-text-muted)]">Telefono y correo son opcionales.</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Reglas clave</div>
+                    <div className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-text-soft)]">
+                      Jornada: {APRENDIZ_IMPORT_JORNADAS.join(", ")}. Programa debe coincidir con el catalogo actual.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-2.5 text-[12px] leading-relaxed text-[color:var(--color-text-soft)]">
+                  {isScopedAdminSede
+                    ? `Sede fija por contexto admin: ${actorSede ?? "sin sede"}. No incluyas esa columna en el archivo.`
+                    : "Si incluyes la columna Sede, usa el codigo tecnico exacto de una sede activa."}
+                </div>
+              </section>
+
+              <section className="rounded-[1.35rem] border border-[color:var(--color-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,white),color-mix(in_srgb,var(--surface-subtle)_96%,transparent))] p-4">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Archivo fuente</div>
+                <div className="mt-2 text-base font-semibold tracking-[-0.02em] text-[color:var(--color-text)]">Carga central del proceso</div>
+                <div className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-text-muted)]">
+                  Selecciona el archivo base para validar su estructura antes de importar.
+                </div>
+
+                <label className="group relative mt-4 block cursor-pointer overflow-hidden rounded-[1.25rem] border border-dashed border-[color:color-mix(in_srgb,var(--primary)_26%,var(--color-border))] bg-[color:color-mix(in_srgb,var(--primary)_5%,var(--surface-subtle))] p-4 transition hover:border-[color:color-mix(in_srgb,var(--primary)_40%,var(--color-border-strong))] hover:bg-[color:color-mix(in_srgb,var(--primary)_8%,var(--surface-subtle))]">
+                  <input
+                    ref={importFileInputRef}
+                    type="file"
+                    accept={importAccept}
+                    onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-describedby="import-file-help"
+                  />
+                  <div className="pointer-events-none flex items-start gap-3">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[1rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-elevated)] text-[color:var(--primary)] shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+                      <Upload className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-[color:var(--color-text)]">
+                        {importFile ? "Archivo seleccionado" : "Selecciona el archivo para validar"}
+                      </div>
+                      <div className="mt-1 text-[12px] leading-relaxed text-[color:var(--color-text-muted)]">
+                        {importFile
+                          ? `${importFile.name} · ${formatFileSize(importFile.size)}`
+                          : `Compatibles: ${importFormatsLabel}. Se recomienda no superar ${importMaxFileSizeLabel}.`}
+                      </div>
+                      <div id="import-file-help" className="mt-2 text-[11px] text-[color:var(--color-text-faint)]">
+                        Si reemplazas el archivo, la validacion anterior se limpia para evitar importar datos obsoletos.
+                      </div>
+                    </div>
+                  </div>
+                </label>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button type="button" onClick={downloadImportTemplateXlsx} disabled={loadingMe} variant="secondary" className="px-3 py-2 text-[13px]">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    Descargar plantilla
+                  </Button>
+                  <Button type="button" onClick={downloadImportTemplateCsv} disabled={loadingMe} variant="secondary" className="px-3 py-2 text-[13px]">
+                    Descargar CSV alternativo
+                  </Button>
+                </div>
+              </section>
             </div>
 
-            {importBanner ? (
-              <FormBanner type={importBanner.type} message={importBanner.message} />
-            ) : null}
+            {importBanner ? <FormBanner type={importBanner.type} message={importBanner.message} /> : null}
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] xl:items-end">
-              <input
-                ref={importFileInputRef}
-                type="file"
-                accept={importAccept}
-                onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
-                className="command-noir-control min-w-0 w-full rounded-xl px-3 py-2 text-sm"
-                aria-describedby="import-file-help"
-              />
-              <div id="import-file-help" className="text-xs text-[color:var(--color-text-muted)] xl:col-span-2">
-                Si reemplazas el archivo, la validacion anterior se limpia para evitar importar datos obsoletos.
+            <section className="rounded-[1.3rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Acciones</div>
+                  <div className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">Valida primero y luego ejecuta la importacion</div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={validarImportacion} disabled={!importFile || validandoImport || confirmandoImport} variant="primary" className="px-4 py-2 text-[13px]">
+                    {validandoImport ? "Validando..." : "Validar archivo"}
+                  </Button>
+                  <Button
+                    onClick={confirmarImportacion}
+                    disabled={!importId || confirmandoImport || validandoImport || (duplicatesInFile.length > 0 && !allowSkipFileDuplicates)}
+                    variant="secondary"
+                    className="border-[color:color-mix(in_srgb,var(--success)_22%,var(--surface-border))] text-[color:var(--color-text)]"
+                  >
+                    {confirmandoImport ? "Importando..." : "Importar"}
+                  </Button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={downloadImportTemplateXlsx}
-                disabled={loadingMe}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Descargar plantilla (.xlsx)
-              </button>
-              <button
-                type="button"
-                onClick={downloadImportTemplateCsv}
-                disabled={loadingMe}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Descargar CSV alternativo
-              </button>
-              <button
-                onClick={validarImportacion}
-                disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl border border-[color:rgba(111,211,255,0.24)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {validandoImport ? "Validando..." : "Validar archivo"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleImportFileChange(null)}
-                disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Limpiar archivo
-              </button>
-              <button
-                onClick={confirmarImportacion}
-                disabled={!importId || confirmandoImport || validandoImport || (duplicatesInFile.length > 0 && !allowSkipFileDuplicates)}
-                className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[linear-gradient(135deg,rgba(66,199,154,0.16),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(66,199,154,0.38)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {confirmandoImport ? "Importando..." : "Importar"}
-              </button>
-              <button
-                onClick={reintentarFallidos}
-                disabled={confirmandoImport || validandoImport || importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length === 0}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Reintentar fallidos
-              </button>
-            </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => handleImportFileChange(null)}
+                  disabled={!importFile || validandoImport || confirmandoImport}
+                  variant="ghost"
+                  className="px-2.5 py-1.5 text-[12px]"
+                >
+                  Limpiar archivo
+                </Button>
+                <Button
+                  onClick={reintentarFallidos}
+                  disabled={confirmandoImport || validandoImport || importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length === 0}
+                  variant="ghost"
+                  className="px-2.5 py-1.5 text-[12px]"
+                >
+                  Reintentar fallidos
+                </Button>
+              </div>
+            </section>
 
             {importFile ? (
               <InlineNotice
@@ -1876,39 +1986,57 @@ export default function AdminUsuariosPage() {
               />
             ) : null}
 
-            {importResumen ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
-                  <div className="text-xs text-[color:var(--color-text-muted)]">Total</div>
-                  <div className="text-xl font-semibold text-[color:var(--color-text)]">{importResumen.total}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[rgba(66,199,154,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--success)]">VÃ¡lidos</div>
-                  <div className="text-xl font-semibold text-[color:var(--success)]">{importResumen.validos}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--danger)]">Errores</div>
-                  <div className="text-xl font-semibold text-[color:var(--danger)]">{importResumen.errores}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--warning)]">Duplicados en archivo</div>
-                  <div className="text-xl font-semibold text-[color:var(--warning)]">{duplicatesInFile.length}</div>
-                </div>
-              </div>
-            ) : null}
+            {(importResumen || importProgress.total > 0) ? (
+              <section className="rounded-[1.3rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Estado actual</div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="command-noir-chip" data-tone={getImportStageTone(importStage)}>
+                        {importStageLabel}
+                      </span>
+                      <span className="text-[12px] text-[color:var(--color-text-muted)]">
+                        {importProgress.processed}/{importProgress.total} procesados
+                      </span>
+                    </div>
+                  </div>
 
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
-              <div className="mb-2 flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
-                <span>Estado: {importStageLabel}</span>
-                <span>Progreso: {importProgress.processed}/{importProgress.total}</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-[color:rgba(255,255,255,0.06)]">
-                <div
-                  className="h-full bg-[linear-gradient(90deg,rgba(111,211,255,0.92),rgba(79,163,255,0.62))] transition-all"
-                  style={{ width: `${importProgress.total > 0 ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
+                  {importResumen ? (
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-2.5">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Total</div>
+                        <div className="mt-1 text-lg font-semibold text-[color:var(--color-text)]">{importResumen.total}</div>
+                      </div>
+                      <div className="rounded-[1rem] border border-[color:rgba(66,199,154,0.22)] bg-[rgba(66,199,154,0.08)] px-3 py-2.5">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--success)]">Validos</div>
+                        <div className="mt-1 text-lg font-semibold text-[color:var(--success)]">{importResumen.validos}</div>
+                      </div>
+                      <div className="rounded-[1rem] border border-[color:rgba(255,107,122,0.22)] bg-[rgba(255,107,122,0.08)] px-3 py-2.5">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--danger)]">Errores</div>
+                        <div className="mt-1 text-lg font-semibold text-[color:var(--danger)]">{importResumen.errores}</div>
+                      </div>
+                      <div className="rounded-[1rem] border border-[color:rgba(240,178,77,0.24)] bg-[rgba(240,178,77,0.08)] px-3 py-2.5">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--warning)]">Duplicados</div>
+                        <div className="mt-1 text-lg font-semibold text-[color:var(--warning)]">{duplicatesInFile.length}</div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface)] p-3">
+                  <div className="mb-2 flex items-center justify-between text-[11px] text-[color:var(--color-text-muted)]">
+                    <span>Progreso de importacion</span>
+                    <span>{importProgress.total > 0 ? Math.round((importProgress.processed / importProgress.total) * 100) : 0}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--surface-muted)_88%,transparent)]">
+                    <div
+                      className="h-full bg-[linear-gradient(90deg,color-mix(in_srgb,var(--primary)_92%,white),color-mix(in_srgb,var(--primary-strong)_88%,black))] transition-all duration-300"
+                      style={{ width: `${importProgress.total > 0 ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             {(importStage === "done" || importRowResults.length > 0) && importProgress.total > 0 ? (
               <div className="grid gap-3 sm:grid-cols-3">
@@ -2175,6 +2303,3 @@ export default function AdminUsuariosPage() {
     </div>
   );
 }
-
-
-

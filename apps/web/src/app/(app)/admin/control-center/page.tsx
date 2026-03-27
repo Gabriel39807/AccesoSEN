@@ -141,6 +141,37 @@ function toRows<T>(payload: T[] | Paginated<T>): T[] {
   return Array.isArray(payload) ? payload : payload?.results ?? [];
 }
 
+const sectionDetails: Record<SectionKey, { eyebrow: string; description: string }> = {
+  branding: {
+    eyebrow: "Configuracion central",
+    description: "Gestiona presets, tokens activos y cuotas del panel.",
+  },
+  sedes: {
+    eyebrow: "Cobertura institucional",
+    description: "Administra catalogo, estados y datos base de las sedes.",
+  },
+  roles: {
+    eyebrow: "Gobierno RBAC",
+    description: "Define la estructura de roles disponible para el sistema.",
+  },
+  permisos: {
+    eyebrow: "Mapa de acciones",
+    description: "Controla permisos explicitamente mapeados para cada flujo.",
+  },
+  asignaciones: {
+    eyebrow: "Enlace operativo",
+    description: "Relaciona roles, permisos y alcance efectivo.",
+  },
+  dominios: {
+    eyebrow: "Politica institucional",
+    description: "Aplica reglas de dominio con alcance global, por rol o por sede.",
+  },
+  auditoria: {
+    eyebrow: "Trazabilidad",
+    description: "Revisa eventos recientes y cambios ejecutados desde el panel.",
+  },
+};
+
 function formatDate(value?: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -385,6 +416,10 @@ export default function SuperadminControlCenterPage() {
   }, [activeSection, controlPanelSession.active, domainFilter, domainRoleFilter, domainSedeFilter, domainStatusFilter, domainScopeFilter]);
 
   const sedesByCode = useMemo(() => new Map(sedes.map((sede) => [sede.code, sede.name])), [sedes]);
+  const activeSectionMeta = useMemo(
+    () => sections.find((section) => section.key === activeSection) ?? sections[0],
+    [activeSection],
+  );
 
   if (loadingMe || loading) {
     return (
@@ -802,30 +837,50 @@ export default function SuperadminControlCenterPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="sadi-card rounded-3xl p-4 sm:p-5">
-        <h1 className="text-2xl font-bold text-primary">Superadmin / Centro de control</h1>
-        <p className="sadi-text-soft text-sm">
-          Gestión centralizada de sedes, RBAC y visibilidad de auditoría.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <header className="sadi-card rounded-[30px] p-5 sm:p-6">
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <span className="inline-flex rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Modulo ejecutivo
+            </span>
+            <div className="space-y-2">
+              <h1 className="text-3xl font-bold tracking-tight text-text sm:text-[2rem]">
+                Superadmin / Centro de control
+              </h1>
+              <p className="max-w-4xl text-sm leading-6 text-text/72">
+                Gestion centralizada de sedes, politicas RBAC, dominios y auditoria. La navegacion organiza el dominio que administras y la validacion reforzada acompana los cambios sensibles.
+              </p>
+            </div>
+          </div>
 
-      <ControlPanelAccessCard
-        active={controlPanelSession.active}
-        busy={busy}
-        passkeySupported={passkeySupported}
-        otpRequestId={otpRequestId}
-        otpCode={otpCode}
-        sessionId={controlPanelSession.session?.id}
-        expiresAtLabel={formatDate(controlPanelSession.session?.expires_at)}
-        actionReason={actionReason}
-        onOtpCodeChange={setOtpCode}
-        onActionReasonChange={setActionReason}
-        onRequestOtp={requestControlPanelOtp}
-        onOpenPasskey={openControlPanelWithPasskey}
-        onVerifyOtp={verifyControlPanelOtp}
-        onCloseSession={closeControlPanelSession}
-      />
+          <div className="grid gap-3 lg:grid-cols-[1.1fr,1fr,1.1fr]">
+            <div className="rounded-[22px] border border-surface-border bg-surface-muted/40 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text/50">Sesion</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${controlPanelSession.active ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                <p className="text-sm font-semibold text-text">
+                  {controlPanelSession.active ? "Reforzada activa para cambios sensibles" : "Validacion pendiente para operar"}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-[22px] border border-surface-border bg-surface-muted/40 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text/50">Seccion activa</p>
+              <p className="mt-2 text-sm font-semibold text-text">{activeSectionMeta.label}</p>
+              <p className="mt-1 text-sm text-text/65">{sectionDetails[activeSectionMeta.key].eyebrow}</p>
+            </div>
+            <div className="rounded-[22px] border border-surface-border bg-surface-muted/40 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text/50">Motivo</p>
+              <p className="mt-2 text-sm font-semibold text-text">
+                {actionReason.trim() ? "Contexto documentado para auditoria" : "Aun no se ha documentado el cambio"}
+              </p>
+              <p className="mt-1 text-sm text-text/65">
+                {actionReason.trim() ? "El proceso operativo ya tiene contexto de negocio." : "Se solicitara antes de ejecutar mutaciones del panel."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </header>
 
 
       {formErrors.length > 0 ? (
@@ -838,28 +893,75 @@ export default function SuperadminControlCenterPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[280px,minmax(0,1fr)] 2xl:grid-cols-[300px,minmax(0,1fr)]">
-        <aside className="sadi-card rounded-3xl p-3">
-          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 xl:mx-0 xl:block xl:space-y-2 xl:overflow-visible xl:px-0 xl:pb-0">
-            {sections.map((section) => {
-              const active = section.key === activeSection;
-              return (
-                <button
-                  key={section.key}
-                  type="button"
-                  onClick={() => setActiveSection(section.key)}
-                  className={`shrink-0 rounded-2xl px-3 py-2 text-left text-sm font-semibold transition xl:w-full ${
-                    active ? "bg-primary text-white shadow-sm" : "bg-surface-muted text-text hover:bg-primary/10 hover:text-primary"
-                  }`}
-                >
-                  {section.label}
-                </button>
-              );
-            })}
+      <div className="space-y-5">
+        <section className="sadi-card rounded-[28px] p-4 sm:p-5">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">Navegacion interna</p>
+              <h2 className="text-base font-semibold text-text">Secciones del panel</h2>
+              <p className="text-sm text-text/68">
+                La navegacion organiza el centro de control y define el dominio que estas administrando.
+              </p>
+            </div>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {sections.map((section, index) => {
+                const active = section.key === activeSection;
+                return (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => setActiveSection(section.key)}
+                    className={`group min-w-[220px] shrink-0 rounded-[22px] border px-4 py-3 text-left transition sm:min-w-[240px] ${
+                      active
+                        ? "border-primary bg-primary text-white shadow-sm"
+                        : "border-surface-border bg-surface-muted/60 text-text hover:border-primary/30 hover:bg-primary/5"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${active ? "text-white/75" : "text-text/45"}`}>
+                          {sectionDetails[section.key].eyebrow}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold">{section.label}</p>
+                        <p className={`mt-1 text-xs ${active ? "text-white/80" : "text-text/60"}`}>
+                          {sectionDetails[section.key].description}
+                        </p>
+                      </div>
+                      <span
+                        className={`mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
+                          active ? "bg-white/16 text-white" : "bg-surface text-text/65"
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </aside>
+        </section>
 
-        <section className="space-y-4 sadi-card rounded-3xl p-4 sm:p-5">
+        <section className="space-y-5">
+          <div className="sadi-card rounded-[28px] p-4 sm:p-5">
+          <div className="border-b border-surface-border pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+                  {sectionDetails[activeSectionMeta.key].eyebrow}
+                </p>
+                <h2 className="text-xl font-semibold text-text">{activeSectionMeta.label}</h2>
+                <p className="max-w-3xl text-sm text-text/70">
+                  {sectionDetails[activeSectionMeta.key].description}
+                </p>
+              </div>
+              <div className="rounded-full border border-surface-border bg-surface-muted/40 px-3 py-1.5 text-xs font-medium text-text/60">
+                Contenido activo
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
           {activeSection === "branding" ? (
             <BrandingSection
               busy={busy}
@@ -1273,6 +1375,25 @@ export default function SuperadminControlCenterPage() {
               </div>
             </div>
           ) : null}
+          </div>
+          </div>
+
+          <ControlPanelAccessCard
+            active={controlPanelSession.active}
+            busy={busy}
+            passkeySupported={passkeySupported}
+            otpRequestId={otpRequestId}
+            otpCode={otpCode}
+            sessionId={controlPanelSession.session?.id}
+            expiresAtLabel={formatDate(controlPanelSession.session?.expires_at)}
+            actionReason={actionReason}
+            onOtpCodeChange={setOtpCode}
+            onActionReasonChange={setActionReason}
+            onRequestOtp={requestControlPanelOtp}
+            onOpenPasskey={openControlPanelWithPasskey}
+            onVerifyOtp={verifyControlPanelOtp}
+            onCloseSession={closeControlPanelSession}
+          />
         </section>
       </div>
     </div>

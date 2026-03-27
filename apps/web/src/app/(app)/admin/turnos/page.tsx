@@ -1,21 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import { IconClock } from "@/components/aprendiz/dashboard/DashboardIcons";
+import BadgeChip from "@/components/admin/BadgeChip";
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
-import StatCard from "@/components/admin/StatCard";
+import Button from "@/components/dashboard/shared/Button";
 import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
-import Button from "@/components/dashboard/shared/Button";
-import { IconClock } from "@/components/aprendiz/dashboard/DashboardIcons";
 import FormBanner from "@/components/feedback/FormBanner";
 import Modal from "@/components/ui/Modal";
 import Pagination from "@/components/ui/Pagination";
+import { useSedes } from "@/hooks/useSedes";
 import { api } from "@/lib/api";
 import { parseApiError } from "@/lib/apiError";
-import { useSedes } from "@/hooks/useSedes";
 
 type Usuario = {
   id: number;
@@ -29,7 +28,7 @@ type Turno = {
   id: number;
   guarda: number;
   sede: string;
-  jornada: "MANANA" | "MAÑANA" | "TARDE" | "NOCHE";
+  jornada: "MANANA" | "MA\u00d1ANA" | "TARDE" | "NOCHE";
   inicio: string;
   fin: string | null;
   activo: boolean;
@@ -42,65 +41,52 @@ type Paginated<T> = {
   results: T[];
 };
 
-const JORNADAS: Turno["jornada"][] = ["MANANA", "MAÑANA", "TARDE", "NOCHE"];
+const JORNADAS: Turno["jornada"][] = ["MANANA", "MA\u00d1ANA", "TARDE", "NOCHE"];
 
-function badgeBase() {
-  return "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold";
-}
-
-function badgeEstado(turno: Turno) {
-  const isActivo = turno.activo && !turno.fin;
-  return isActivo
-    ? `${badgeBase()} border-emerald-200 bg-emerald-100 text-emerald-800`
-    : `${badgeBase()} border-zinc-200 bg-zinc-100 text-zinc-700`;
-}
-
-function badgeJornada(j: Turno["jornada"]) {
-  if (j === "MANANA" || j === "MAÑANA") return `${badgeBase()} border-sky-200 bg-sky-100 text-sky-800`;
-  if (j === "TARDE") return `${badgeBase()} border-amber-200 bg-amber-100 text-amber-800`;
-  return `${badgeBase()} border-indigo-200 bg-indigo-100 text-indigo-800`;
-}
-
-function nombreUsuario(u?: Usuario | null) {
-  if (!u) return "—";
-  const full = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
-  return full || u.username;
+function nombreUsuario(usuario?: Usuario | null) {
+  if (!usuario) return "-";
+  const full = `${usuario.first_name ?? ""} ${usuario.last_name ?? ""}`.trim();
+  return full || usuario.username;
 }
 
 function formatFecha(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (!iso) return "-";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
+
   return new Intl.DateTimeFormat("es-CO", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(d);
+  }).format(date);
 }
 
-function normalizarJornada(j: Turno["jornada"]) {
-  return j === "MANANA" || j === "MAÑANA" ? "Mañana" : j === "TARDE" ? "Tarde" : "Noche";
+function normalizarJornada(jornada: Turno["jornada"]) {
+  if (jornada === "MANANA" || jornada === "MA\u00d1ANA") return "Ma\u00f1ana";
+  if (jornada === "TARDE") return "Tarde";
+  return "Noche";
 }
 
 function safeErrorMessage(e: any) {
-  return parseApiError(e).message;
+  const parsed = parseApiError(e);
+  return parsed.message || "No se pudo completar la operacion.";
 }
 
 function StatSkeleton() {
-  return <div className="h-[92px] animate-pulse rounded-2xl border bg-white p-4 shadow-sm" />;
+  return <div className="command-noir-metric h-[92px] animate-pulse" />;
 }
 
 function FilterSkeleton() {
   return (
-    <section className="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-[0_10px_28px_rgba(2,6,23,0.06)] backdrop-blur-sm">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-3" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-3" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
-        <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
+    <section className="sadi-card rounded-[1.3rem] p-3 sm:p-3.5">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-12">
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-3" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-3" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-2" />
+        <div className="sadi-skeleton h-10 rounded-xl md:col-span-2" />
       </div>
     </section>
   );
@@ -122,6 +108,44 @@ function TableSkeleton({ rows = 8 }: { rows?: number }) {
       ]}
     />
   );
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "success";
+}) {
+  return (
+    <div data-tone={tone} className="command-noir-metric text-left">
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="min-w-0">
+          <p className="text-[8.5px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-1 text-[1.55rem] font-semibold leading-none tracking-[-0.05em] text-[color:var(--color-text)]">
+            {value.toLocaleString("es-CO")}
+          </p>
+          <p className="mt-1 text-[10.5px] leading-relaxed text-[color:var(--color-text-muted)]">{detail}</p>
+        </div>
+        <span
+          className={[
+            "mt-0.5 h-2 w-2 shrink-0 rounded-full opacity-90",
+            tone === "success" ? "bg-[color:var(--success)]" : "bg-[color:var(--primary)]",
+          ].join(" ")}
+        />
+      </div>
+    </div>
+  );
+}
+
+function jornadaTone(jornada: Turno["jornada"]) {
+  if (jornada === "TARDE") return "warning" as const;
+  if (jornada === "NOCHE") return "neutral" as const;
+  return "info" as const;
 }
 
 export default function AdminTurnosPage() {
@@ -150,23 +174,22 @@ export default function AdminTurnosPage() {
   const firstPageFetchRef = useRef(true);
 
   const usuariosMap = useMemo(() => {
-    const m = new Map<number, Usuario>();
-    usuarios.forEach((u) => m.set(u.id, u));
-    return m;
+    const map = new Map<number, Usuario>();
+    usuarios.forEach((usuario) => map.set(usuario.id, usuario));
+    return map;
   }, [usuarios]);
 
-  const guardas = useMemo(() => usuarios.filter((u) => u.rol === "guarda"), [usuarios]);
+  const guardas = useMemo(() => usuarios.filter((usuario) => usuario.rol === "guarda"), [usuarios]);
 
   const stats = useMemo(() => {
     const total = count;
-    const activosCount = turnos.filter((t) => t.activo && !t.fin).length;
-    const finalizados = turnos.filter((t) => !t.activo || !!t.fin).length;
+    const activosCount = turnos.filter((turno) => turno.activo && !turno.fin).length;
+    const finalizados = turnos.filter((turno) => !turno.activo || !!turno.fin).length;
     return { total, activos: activosCount, finalizados };
   }, [count, turnos]);
 
   const hasFilters = sede !== "" || jornada !== "" || activo !== "" || guardaId !== "";
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
-  const pagedRows = turnos;
 
   async function cargarUsuarios() {
     const res = await api.get<Paginated<Usuario> | Usuario[]>("/api/usuarios/", {
@@ -178,7 +201,8 @@ export default function AdminTurnosPage() {
 
   async function cargarTurnos(targetPage = page) {
     setLoadingTable(true);
-    const params: any = { page: targetPage, page_size: pageSize };
+
+    const params: Record<string, string | number> = { page: targetPage, page_size: pageSize };
     if (sede) params.sede = sede;
     if (jornada) params.jornada = jornada;
     if (activo) params.activo = activo;
@@ -200,6 +224,7 @@ export default function AdminTurnosPage() {
     setLoading(true);
     setLoadingTable(true);
     setError(null);
+
     try {
       await Promise.all([cargarUsuarios(), cargarTurnos(1)]);
       setPage(1);
@@ -214,6 +239,7 @@ export default function AdminTurnosPage() {
   async function refrescar() {
     setReloading(true);
     setError(null);
+
     try {
       await cargarTurnos(page);
     } catch (e: any) {
@@ -231,27 +257,29 @@ export default function AdminTurnosPage() {
     setPage(1);
   }
 
-  function abrirFinalizar(t: Turno) {
-    setTurnoFinalizar(t);
+  function abrirFinalizar(turno: Turno) {
+    setTurnoFinalizar(turno);
     setOpenFinalizar(true);
   }
 
   async function confirmarFinalizar() {
     if (!turnoFinalizar) return;
+
     setFinalizando(true);
     setError(null);
 
     try {
       const res = await api.post(`/api/turnos/${turnoFinalizar.id}/finalizar_admin/`);
       if (res?.data?.permitido === false) {
-        setError(String(res?.data?.motivo || "No se pudo finalizar el turno. Verifica permisos o estado del turno y vuelve a intentar."));
+        setError(String(res?.data?.motivo || "No se pudo finalizar el turno. Verifica permisos o estado e intenta de nuevo."));
         return;
       }
+
       setOpenFinalizar(false);
       setTurnoFinalizar(null);
       await cargarTurnos(page);
     } catch (e: any) {
-      setError(safeErrorMessage(e) || "No se pudo finalizar el turno. Revisa tu conexión e intenta nuevamente.");
+      setError(safeErrorMessage(e) || "No se pudo finalizar el turno. Revisa tu conexion e intenta nuevamente.");
       await cargarTurnos(page);
     } finally {
       setFinalizando(false);
@@ -268,6 +296,7 @@ export default function AdminTurnosPage() {
       firstFilterFetchRef.current = false;
       return;
     }
+
     setPage(1);
     cargarTurnos(1).catch((e) => setError(safeErrorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -278,24 +307,27 @@ export default function AdminTurnosPage() {
       firstPageFetchRef.current = false;
       return;
     }
+
     cargarTurnos(page).catch((e) => setError(safeErrorMessage(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   return (
-    <div className="space-y-7 pb-2">
+    <div className="space-y-4 pb-2">
       <PageHeader
-        breadcrumb="ADMIN > TURNOS"
+        breadcrumb="ADMIN / TURNOS"
         title="Turnos"
-        description="Control de turnos de guardas y finalización manual por administración."
+        description="Control de turnos de guardas y finalizacion manual por administracion."
         actions={
-          <Button onClick={refrescar} variant="secondary" disabled={reloading}>
-            {reloading ? "Recargando..." : "Recargar"}
-          </Button>
+          <div className="inline-flex flex-wrap items-center gap-1.5 rounded-[1.05rem] border border-[color:var(--surface-border)] bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface-subtle)_98%,white),color-mix(in_srgb,var(--surface-muted)_92%,transparent))] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+            <Button onClick={refrescar} variant="secondary" disabled={reloading} className="px-3 py-1.5 text-[13px]">
+              {reloading ? "Recargando..." : "Recargar"}
+            </Button>
+          </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
         {loading ? (
           <>
             <StatSkeleton />
@@ -304,9 +336,9 @@ export default function AdminTurnosPage() {
           </>
         ) : (
           <>
-            <StatCard label="Total" value={stats.total} />
-            <StatCard label="Activos" value={stats.activos} tone="success" />
-            <StatCard label="Finalizados" value={stats.finalizados} tone="neutral" />
+            <MetricCard label="Total" value={stats.total} detail="Turnos visibles con los filtros actuales." />
+            <MetricCard label="Activos" value={stats.activos} detail="Guardas con turno en curso." tone="success" />
+            <MetricCard label="Finalizados" value={stats.finalizados} detail="Turnos cerrados o sin actividad." />
           </>
         )}
       </div>
@@ -314,106 +346,109 @@ export default function AdminTurnosPage() {
       {loading ? (
         <FilterSkeleton />
       ) : (
-        <FilterBar
-          footer={
-            error ? <FormBanner type="error" message={error} /> : null
-          }
-        >
-          <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
-            value={sede}
-            onChange={(e) => setSede(e.target.value as any)}
-          >
-            <option value="">Sede</option>
-            {sedes.map((item) => (
-              <option key={item.id} value={item.code}>
-                {item.name}
-              </option>
-            ))}
-          </select>
+        <FilterBar footer={error ? <FormBanner type="error" message={error} /> : null}>
+          <label className="md:col-span-6 lg:col-span-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Sede</div>
+            <select className="command-noir-control h-10 w-full text-sm" value={sede} onChange={(event) => setSede(event.target.value)}>
+              <option value="">Todas</option>
+              {sedes.map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-3"
-            value={jornada}
-            onChange={(e) => setJornada(e.target.value as any)}
-          >
-            <option value="">Jornada</option>
-            {JORNADAS.map((j) => (
-              <option key={j} value={j}>
-                {normalizarJornada(j)}
-              </option>
-            ))}
-          </select>
+          <label className="md:col-span-6 lg:col-span-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Jornada</div>
+            <select
+              className="command-noir-control h-10 w-full text-sm"
+              value={jornada}
+              onChange={(event) => setJornada(event.target.value as "" | Turno["jornada"])}
+            >
+              <option value="">Todas</option>
+              {JORNADAS.map((item) => (
+                <option key={item} value={item}>
+                  {normalizarJornada(item)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
-            value={activo}
-            onChange={(e) => setActivo(e.target.value as any)}
-          >
-            <option value="">Estado de actividad</option>
-            <option value="true">Solo activos</option>
-            <option value="false">Solo finalizados</option>
-          </select>
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Estado</div>
+            <select className="command-noir-control h-10 w-full text-sm" value={activo} onChange={(event) => setActivo(event.target.value as "" | "true" | "false")}>
+              <option value="">Todos</option>
+              <option value="true">Activos</option>
+              <option value="false">Finalizados</option>
+            </select>
+          </label>
 
-          <select
-            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-6 lg:col-span-2"
-            value={guardaId}
-            onChange={(e) => setGuardaId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Guarda</option>
-            {guardas.map((g) => (
-              <option key={g.id} value={g.id}>
-                {nombreUsuario(g)}
-              </option>
-            ))}
-          </select>
+          <label className="md:col-span-6 lg:col-span-2">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Guarda</div>
+            <select
+              className="command-noir-control h-10 w-full text-sm"
+              value={guardaId}
+              onChange={(event) => setGuardaId(event.target.value ? Number(event.target.value) : "")}
+            >
+              <option value="">Todos</option>
+              {guardas.map((guarda) => (
+                <option key={guarda.id} value={guarda.id}>
+                  {nombreUsuario(guarda)}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <div className="flex items-center justify-end gap-2 md:col-span-6 lg:col-span-2">
+          <div className="flex items-end justify-end gap-2 md:col-span-6 lg:col-span-2">
             <Button
               onClick={() => {
                 setPage(1);
                 cargarTurnos(1).catch(() => setError("No se pudieron cargar los turnos."));
               }}
               variant="primary"
+              className="h-10 px-3 text-[13px]"
             >
               Aplicar
             </Button>
             <Button
               onClick={() => {
                 resetFiltros();
-                setTimeout(() => cargarTurnos(1).catch(() => {}), 0);
+                setTimeout(() => cargarTurnos(1).catch(() => undefined), 0);
               }}
               variant="secondary"
               disabled={!hasFilters}
+              className="h-10 px-3 text-[13px]"
             >
               Limpiar
             </Button>
           </div>
 
-          <div className="flex h-11 items-center justify-end md:col-span-12 lg:col-span-2">
-            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700 whitespace-nowrap">
-              {count} turnos
-            </span>
+          <div className="flex h-10 items-end justify-end md:col-span-12 lg:col-span-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--surface-border)] bg-[color:var(--surface-subtle)] px-2.5 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--primary)]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-soft)]">{count} turnos</span>
+            </div>
           </div>
         </FilterBar>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         <DataTable
           loading={loadingTable}
           skeleton={<TableSkeleton />}
-          hasRows={pagedRows.length > 0}
+          hasRows={turnos.length > 0}
           tableClassName="min-w-[980px]"
           headers={
-            <tr className="text-left">
-              <th className="px-4 py-3 font-semibold">ID</th>
-              <th className="px-4 py-3 font-semibold">Guarda</th>
-              <th className="px-4 py-3 font-semibold">Sede</th>
-              <th className="px-4 py-3 font-semibold">Jornada</th>
-              <th className="px-4 py-3 font-semibold">Inicio</th>
-              <th className="px-4 py-3 font-semibold">Fin</th>
-              <th className="px-4 py-3 font-semibold">Estado</th>
-              <th className="px-4 py-3 text-right font-semibold">Acciones</th>
+            <tr className="text-left text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">
+              <th className="px-4 py-3">ID</th>
+              <th className="px-4 py-3">Guarda</th>
+              <th className="px-4 py-3">Sede</th>
+              <th className="px-4 py-3">Jornada</th>
+              <th className="px-4 py-3">Inicio</th>
+              <th className="px-4 py-3">Fin</th>
+              <th className="px-4 py-3">Estado</th>
+              <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           }
           emptyState={
@@ -430,29 +465,38 @@ export default function AdminTurnosPage() {
             </tr>
           }
         >
-          {pagedRows.map((t) => {
-            const u = usuariosMap.get(t.guarda) ?? null;
-            const isActivo = t.activo && !t.fin;
+          {turnos.map((turno) => {
+            const usuario = usuariosMap.get(turno.guarda) ?? null;
+            const isActivo = turno.activo && !turno.fin;
 
             return (
-              <tr key={t.id} className="transition hover:bg-sky-50/35">
-                <td className="px-4 py-3 font-semibold text-gray-900">#{t.id}</td>
-                <td className="px-4 py-3 text-gray-800">{nombreUsuario(u)}</td>
-                <td className="px-4 py-3 text-gray-800">{sedesByCode.get(t.sede) || t.sede}</td>
-                <td className="px-4 py-3">
-                  <span className={badgeJornada(t.jornada)}>{normalizarJornada(t.jornada)}</span>
+              <tr key={turno.id} className="command-noir-table-row">
+                <td className="px-4 py-3.5">
+                  <div className="text-[0.9rem] font-semibold tracking-[-0.02em] text-[color:var(--color-text)]">#{turno.id}</div>
                 </td>
-                <td className="px-4 py-3 text-gray-800">{formatFecha(t.inicio)}</td>
-                <td className="px-4 py-3 text-gray-800">{formatFecha(t.fin)}</td>
-                <td className="px-4 py-3">
-                  <span className={badgeEstado(t)}>{isActivo ? "Activo" : "Finalizado"}</span>
+                <td className="px-4 py-3.5">
+                  <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(usuario)}</div>
+                  <div className="mt-0.5 text-[11.5px] leading-relaxed text-[color:var(--color-text-muted)]">{usuario?.username ?? "-"}</div>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3.5 text-[color:var(--color-text)]">{sedesByCode.get(turno.sede) || turno.sede}</td>
+                <td className="px-4 py-3.5">
+                  <BadgeChip tone={jornadaTone(turno.jornada)}>{normalizarJornada(turno.jornada)}</BadgeChip>
+                </td>
+                <td className="px-4 py-3.5">
+                  <div className="font-medium text-[color:var(--color-text)]">{formatFecha(turno.inicio)}</div>
+                </td>
+                <td className="px-4 py-3.5">
+                  <div className="text-[color:var(--color-text-soft)]">{formatFecha(turno.fin)}</div>
+                </td>
+                <td className="px-4 py-3.5">
+                  <BadgeChip tone={isActivo ? "success" : "neutral"}>{isActivo ? "Activo" : "Finalizado"}</BadgeChip>
+                </td>
+                <td className="px-4 py-3.5 text-right">
                   <Button
-                    onClick={() => abrirFinalizar(t)}
+                    onClick={() => abrirFinalizar(turno)}
                     disabled={!isActivo}
                     variant="secondary"
-                    className="px-3 py-1.5 text-xs"
+                    className="rounded-xl px-2.5 py-1.5 text-[11px] disabled:border-[color:var(--surface-border)] disabled:bg-[color:var(--surface-subtle)] disabled:text-[color:var(--color-text-faint)]"
                   >
                     Finalizar
                   </Button>
@@ -472,8 +516,8 @@ export default function AdminTurnosPage() {
             setPageSize(size);
             setPage(1);
           }}
-          onPrev={() => setPage((p) => Math.max(1, p - 1))}
-          onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          onPrev={() => setPage((current) => Math.max(1, current - 1))}
+          onNext={() => setPage((current) => Math.min(totalPages, current + 1))}
         />
       </div>
 
@@ -506,13 +550,12 @@ export default function AdminTurnosPage() {
                 <span className="font-semibold">{normalizarJornada(turnoFinalizar.jornada)}</span>
               </div>
               <div>
-                <span className="text-gray-500">Inicio:</span>{" "}
-                <span className="font-semibold">{formatFecha(turnoFinalizar.inicio)}</span>
+                <span className="text-gray-500">Inicio:</span> <span className="font-semibold">{formatFecha(turnoFinalizar.inicio)}</span>
               </div>
             </div>
 
             <div className="text-sm text-gray-700">
-              Esto finalizará el turno inmediatamente. Úsalo solo si el guarda olvidó cerrarlo.
+              Esto finalizara el turno inmediatamente. Usalo solo si el guarda olvido cerrarlo.
             </div>
 
             <div className="flex items-center justify-end gap-2">
@@ -529,7 +572,7 @@ export default function AdminTurnosPage() {
               </Button>
 
               <Button onClick={confirmarFinalizar} variant="primary" disabled={finalizando}>
-                {finalizando ? "Finalizando..." : "Sí, finalizar"}
+                {finalizando ? "Finalizando..." : "Si, finalizar"}
               </Button>
             </div>
           </div>

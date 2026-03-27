@@ -26,9 +26,9 @@
   --success: #42c79a;
   --warning: #f0b24d;
   --danger: #ff6b7a;
-  --role-admin: #7cc7ff;
-  --role-guard: #4fa3ff;
-  --role-aprendiz: #5fd1c4;
+  --role-admin: #3aa890;
+  --role-guard: #178c77;
+  --role-aprendiz: #5fb9a8;
   --shadow-soft: 0 18px 50px rgba(0, 0, 0, 0.22);
   --shadow-strong: 0 32px 72px rgba(0, 0, 0, 0.34);
   --app-glow-a: rgba(111, 211, 255, 0.12);
@@ -53,10 +53,19 @@
   --table-body-bg: rgba(8, 14, 21, 0.72);
   --table-row-hover: rgba(17, 29, 42, 0.82);
   --sidebar-bg: linear-gradient(180deg, rgba(6, 10, 16, 0.96), rgba(10, 16, 24, 0.92));
+  --legacy-surface-base: rgba(18, 26, 38, 0.9);
+  --legacy-surface-soft: rgba(22, 31, 44, 0.82);
+  --legacy-surface-muted: rgba(14, 21, 31, 0.9);
+  --legacy-surface-strong: rgba(24, 35, 49, 0.96);
+  --legacy-border-soft: rgba(255, 255, 255, 0.08);
+  --legacy-border-strong: rgba(255, 255, 255, 0.14);
+  --legacy-text-strong: rgba(241, 246, 252, 0.96);
+  --legacy-text-soft: rgba(201, 212, 226, 0.88);
+  --legacy-text-muted: rgba(156, 170, 188, 0.78);
   --font-body-fallback: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-display-fallback: "Space Grotesk", "Sora", "Inter", sans-serif;
-  --admin-shell-collapsed: 4.75rem;
-  --admin-shell-expanded: 14rem;
+  --admin-shell-collapsed: 5.5rem;
+  --admin-shell-expanded: 15.25rem;
 
   /* compatibility aliases */
   --color-border: var(--surface-border);
@@ -68,48 +77,57 @@
 
 [data-theme="light"] {
   color-scheme: light;
-  --color-primary: #0f9bd7;
-  --color-background: #edf3f8;
+  --color-primary: #0f8f7a;
+  --color-background: #eef3f0;
   --color-text: #0d1726;
   --color-surface: rgba(255, 255, 255, 0.92);
 
   --surface: rgba(255, 255, 255, 0.92);
   --surface-elevated: rgba(255, 255, 255, 0.98);
-  --surface-muted: rgba(244, 248, 252, 0.96);
-  --surface-subtle: rgba(237, 243, 248, 0.98);
-  --surface-border: rgba(137, 158, 183, 0.24);
-  --surface-border-strong: rgba(108, 131, 160, 0.34);
-  --primary: #0f9bd7;
-  --primary-strong: #03658f;
-  --primary-soft: rgba(15, 155, 215, 0.12);
+  --surface-muted: rgba(243, 248, 245, 0.98);
+  --surface-subtle: rgba(235, 242, 238, 0.98);
+  --surface-border: rgba(118, 139, 129, 0.2);
+  --surface-border-strong: rgba(92, 116, 105, 0.3);
+  --primary: #0f8f7a;
+  --primary-strong: #0b6857;
+  --primary-soft: rgba(15, 143, 122, 0.12);
   --primary-contrast: #ffffff;
   --text-soft: rgba(40, 56, 75, 0.88);
   --text-muted: rgba(76, 94, 117, 0.82);
   --text-faint: rgba(106, 123, 146, 0.72);
   --shadow-soft: 0 18px 44px rgba(15, 23, 42, 0.08);
   --shadow-strong: 0 28px 56px rgba(15, 23, 42, 0.12);
-  --app-glow-a: rgba(15, 155, 215, 0.09);
-  --app-glow-b: rgba(87, 186, 217, 0.08);
-  --app-grid: rgba(67, 95, 129, 0.05);
-  --body-gradient-top: #f6fbff;
-  --body-gradient-bottom: #e7eef5;
-  --shell-gradient-top: #f7fbfe;
-  --shell-gradient-bottom: #eef4f8;
+  --app-glow-a: rgba(15, 143, 122, 0.08);
+  --app-glow-b: rgba(101, 178, 166, 0.06);
+  --app-grid: rgba(67, 95, 129, 0.04);
+  --body-gradient-top: #f7fbf8;
+  --body-gradient-bottom: #e8efea;
+  --shell-gradient-top: #f8fbf9;
+  --shell-gradient-bottom: #edf3ef;
   --card-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 252, 255, 0.94));
-  --card-strong-gradient: radial-gradient(circle at top right, rgba(15, 155, 215, 0.08), transparent 36%), linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 253, 0.98));
-  --panel-bg: rgba(246, 250, 253, 0.96);
+  --card-strong-gradient: radial-gradient(circle at top right, rgba(15, 143, 122, 0.08), transparent 38%), linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 249, 246, 0.98));
+  --panel-bg: rgba(245, 249, 246, 0.96);
   --control-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 249, 253, 0.98));
   --chip-bg: rgba(241, 246, 251, 0.94);
   --chip-success-bg: rgba(227, 249, 240, 0.95);
   --chip-danger-bg: rgba(255, 236, 239, 0.95);
-  --chip-info-bg: rgba(228, 244, 252, 0.95);
+  --chip-info-bg: rgba(226, 244, 241, 0.95);
   --chip-warning-bg: rgba(255, 244, 223, 0.96);
-  --metric-bg: radial-gradient(circle at top right, rgba(15, 155, 215, 0.08), transparent 32%), linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 253, 0.96));
+  --metric-bg: radial-gradient(circle at top right, rgba(15, 143, 122, 0.08), transparent 32%), linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 250, 247, 0.96));
   --detail-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 252, 0.96));
-  --table-head-bg: linear-gradient(180deg, rgba(245, 249, 253, 0.98), rgba(236, 243, 249, 0.98));
+  --table-head-bg: linear-gradient(180deg, rgba(245, 249, 247, 0.99), rgba(237, 243, 240, 0.98));
   --table-body-bg: rgba(255, 255, 255, 0.84);
-  --table-row-hover: rgba(236, 244, 251, 0.96);
-  --sidebar-bg: linear-gradient(180deg, rgba(248, 251, 254, 0.98), rgba(238, 244, 249, 0.96));
+  --table-row-hover: rgba(240, 247, 244, 0.96);
+  --sidebar-bg: linear-gradient(180deg, rgba(249, 252, 250, 0.99), rgba(239, 245, 241, 0.97));
+  --legacy-surface-base: rgba(255, 255, 255, 0.92);
+  --legacy-surface-soft: rgba(248, 251, 249, 0.92);
+  --legacy-surface-muted: rgba(243, 247, 245, 0.96);
+  --legacy-surface-strong: rgba(255, 255, 255, 0.98);
+  --legacy-border-soft: rgba(118, 139, 129, 0.2);
+  --legacy-border-strong: rgba(92, 116, 105, 0.3);
+  --legacy-text-strong: rgba(13, 23, 38, 0.96);
+  --legacy-text-soft: rgba(48, 63, 82, 0.9);
+  --legacy-text-muted: rgba(92, 110, 133, 0.8);
 }
 
 [data-theme="dark"] {
@@ -251,15 +269,16 @@ h6 {
 }
 
 .sadi-nav-active {
-  background: color-mix(in srgb, var(--surface-elevated) 92%, transparent);
-  border-color: color-mix(in srgb, var(--primary) 34%, var(--surface-border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 98%, transparent), color-mix(in srgb, var(--surface-muted) 96%, transparent));
+  border-color: color-mix(in srgb, var(--primary) 26%, var(--surface-border));
   color: var(--foreground);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--foreground) 5%, transparent), 0 18px 32px color-mix(in srgb, var(--background) 20%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 45%, transparent), 0 12px 22px color-mix(in srgb, var(--primary) 8%, transparent);
 }
 
 .sadi-nav-active .sadi-nav-icon {
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface-subtle));
-  color: var(--primary-strong);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 16%, white), color-mix(in srgb, var(--primary) 10%, var(--surface-subtle)));
+  color: color-mix(in srgb, var(--primary-strong) 92%, black);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 45%, transparent), 0 8px 18px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 .sadi-nav-idle {
@@ -270,21 +289,22 @@ h6 {
 .sadi-nav-idle:hover {
   border-color: color-mix(in srgb, var(--primary) 12%, var(--surface-border));
   color: var(--foreground);
-  background: color-mix(in srgb, var(--surface-muted) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-muted) 90%, transparent);
 }
 
 .sadi-nav-icon {
   background: color-mix(in srgb, var(--surface-muted) 92%, rgba(255, 255, 255, 0.04));
   color: var(--text-muted);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 28%, transparent);
 }
 
 .command-noir-control {
-  height: 2.5rem;
+  height: 2.75rem;
   width: 100%;
-  border-radius: 0.85rem;
+  border-radius: 1rem;
   border: 1px solid var(--surface-border);
   background: var(--control-bg);
-  padding: 0.52rem 0.75rem;
+  padding: 0.6rem 0.9rem;
   font-size: 0.875rem;
   color: var(--foreground);
   outline: none;
@@ -311,13 +331,14 @@ h6 {
   gap: 0.45rem;
   border-radius: 999px;
   border: 1px solid var(--surface-border);
-  padding: 0.24rem 0.58rem;
-  font-size: 0.67rem;
+  padding: 0.28rem 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   background: var(--chip-bg);
   color: var(--text-soft);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 30%, transparent);
 }
 
 .command-noir-chip[data-tone="success"] {
@@ -335,7 +356,7 @@ h6 {
 .command-noir-chip[data-tone="info"] {
   border-color: color-mix(in srgb, var(--primary) 28%, var(--surface-border));
   background: var(--chip-info-bg);
-  color: color-mix(in srgb, var(--primary-strong) 78%, var(--foreground));
+  color: color-mix(in srgb, var(--primary-strong) 84%, var(--foreground));
 }
 
 .command-noir-chip[data-tone="warning"] {
@@ -354,38 +375,35 @@ h6 {
   position: relative;
   overflow: hidden;
   min-width: 0;
-  border-radius: 1.1rem;
+  border-radius: 1.35rem;
   border: 1px solid var(--surface-border);
   background: var(--metric-bg);
-  padding: 0.78rem 0.82rem;
-  box-shadow: var(--shadow-soft);
+  padding: 1rem 1.05rem;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
 }
 
 .command-noir-metric::before {
   content: "";
   position: absolute;
-  left: 0.9rem;
-  top: 0;
-  height: 3px;
-  width: 3rem;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 35%, white));
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 0%, transparent), color-mix(in srgb, var(--primary) 46%, white), color-mix(in srgb, var(--primary) 0%, transparent));
 }
 
 .command-noir-metric[data-tone="success"]::before {
-  background: linear-gradient(90deg, #42c79a, #8de9c0);
+  background: linear-gradient(90deg, transparent, #42c79a, transparent);
 }
 
 .command-noir-metric[data-tone="danger"]::before {
-  background: linear-gradient(90deg, #ff6b7a, #ffacb5);
+  background: linear-gradient(90deg, transparent, #ff6b7a, transparent);
 }
 
 .command-noir-metric[data-tone="warning"]::before {
-  background: linear-gradient(90deg, #f0b24d, #ffd18a);
+  background: linear-gradient(90deg, transparent, #f0b24d, transparent);
 }
 
 .command-noir-metric[data-tone="info"]::before {
-  background: linear-gradient(90deg, #6fd3ff, #b7ecff);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--primary) 70%, white), transparent);
 }
 
 .command-noir-detail-card {
@@ -397,17 +415,140 @@ h6 {
 }
 
 .command-noir-table-row {
-  transition: background-color 180ms ease, transform 180ms ease;
+  transition: background-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
 .command-noir-table-row:hover {
   background: var(--table-row-hover);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 60%, transparent), inset 0 -1px 0 color-mix(in srgb, white 30%, transparent);
 }
 
 .command-noir-table-cell {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.sadi-inline-panel {
+  border: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-subtle) 92%, transparent);
+  border-radius: 1rem;
+}
+
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-white\/90,
+[data-theme="dark"] .bg-white\/95,
+[data-theme="dark"] .bg-white\/88,
+[data-theme="dark"] .bg-white\/75,
+[data-theme="dark"] .bg-white\/80 {
+  background-color: var(--legacy-surface-base) !important;
+}
+
+[data-theme="dark"] .bg-zinc-50,
+[data-theme="dark"] .bg-zinc-50\/80,
+[data-theme="dark"] .bg-zinc-50\/85,
+[data-theme="dark"] .bg-gray-100 {
+  background-color: var(--legacy-surface-muted) !important;
+}
+
+[data-theme="dark"] .bg-zinc-100,
+[data-theme="dark"] .bg-slate-100 {
+  background-color: var(--legacy-surface-soft) !important;
+}
+
+[data-theme="dark"] .border-white,
+[data-theme="dark"] .border-white\/90,
+[data-theme="dark"] .border-white\/80,
+[data-theme="dark"] .border-white\/70,
+[data-theme="dark"] .border-zinc-300,
+[data-theme="dark"] .border-zinc-200,
+[data-theme="dark"] .border-zinc-200\/80,
+[data-theme="dark"] .border-zinc-100 {
+  border-color: var(--legacy-border-soft) !important;
+}
+
+[data-theme="dark"] .text-zinc-900,
+[data-theme="dark"] .text-gray-900 {
+  color: var(--legacy-text-strong) !important;
+}
+
+[data-theme="dark"] .text-zinc-700,
+[data-theme="dark"] .text-gray-700,
+[data-theme="dark"] .text-zinc-600,
+[data-theme="dark"] .text-gray-600,
+[data-theme="dark"] .text-zinc-500,
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-zinc-400 {
+  color: var(--legacy-text-soft) !important;
+}
+
+[data-theme="dark"] .placeholder\:text-zinc-400::placeholder,
+[data-theme="dark"] .placeholder\:text-zinc-500::placeholder,
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--legacy-text-muted) !important;
+}
+
+[data-theme="dark"] .shadow-sm,
+[data-theme="dark"] .shadow-xl,
+[data-theme="dark"] .shadow-2xl,
+[data-theme="dark"] .shadow-\[0_8px_24px_rgba\(2\,6\,23\,0\.05\)\],
+[data-theme="dark"] .shadow-\[0_10px_30px_rgba\(2\,6\,23\,0\.08\)\],
+[data-theme="dark"] .shadow-\[0_10px_30px_rgba\(2\,6\,23\,0\.06\)\],
+[data-theme="dark"] .shadow-\[0_14px_34px_rgba\(2\,6\,23\,0\.06\)\] {
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.28) !important;
+}
+
+[data-theme="dark"] .hover\:bg-zinc-50:hover,
+[data-theme="dark"] .hover\:bg-zinc-100:hover,
+[data-theme="dark"] .hover\:bg-gray-50:hover {
+  background-color: var(--legacy-surface-soft) !important;
+}
+
+[data-theme="dark"] .bg-black\/10 {
+  background-color: rgba(8, 13, 20, 0.3) !important;
+}
+
+[data-theme="dark"] .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme="dark"] .bg-white\/15 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="dark"] .bg-emerald-50,
+[data-theme="dark"] .bg-emerald-50\/85,
+[data-theme="dark"] .bg-sky-100,
+[data-theme="dark"] .bg-cyan-100,
+[data-theme="dark"] .bg-amber-100,
+[data-theme="dark"] .bg-red-100,
+[data-theme="dark"] .bg-fuchsia-100 {
+  background-color: color-mix(in srgb, var(--legacy-surface-soft) 78%, var(--primary) 22%) !important;
+}
+
+[data-theme="dark"] .bg-emerald-100 {
+  background-color: rgba(9, 48, 36, 0.92) !important;
+}
+
+[data-theme="dark"] .bg-gray-50 {
+  background-color: var(--legacy-surface-muted) !important;
+}
+
+[data-theme="dark"] .text-emerald-700,
+[data-theme="dark"] .text-sky-700,
+[data-theme="dark"] .text-cyan-700,
+[data-theme="dark"] .text-amber-700,
+[data-theme="dark"] .text-red-700,
+[data-theme="dark"] .text-fuchsia-700 {
+  color: var(--primary-strong) !important;
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  color: var(--foreground);
+}
+
 
 @media (max-width: 1366px) {
   .sadi-shell::before {
@@ -435,4 +576,3 @@ h6 {
   background-size: 400% 100%;
   animation: sadi-shimmer 1.2s ease-in-out infinite;
 }
-
