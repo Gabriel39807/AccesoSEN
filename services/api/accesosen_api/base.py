@@ -14,6 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
 
@@ -447,6 +448,7 @@ RESEND_TIMEOUT_SEC = env_int("RESEND_TIMEOUT_SEC", EMAIL_TIMEOUT, min_value=1)
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", False)
 CORS_ALLOW_CREDENTIALS = env_bool("CORS_ALLOW_CREDENTIALS", True)
+CORS_ALLOW_HEADERS = (*default_headers, "x-control-panel-session", "x-control-panel-reason")
 
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", default=[])
 
