@@ -186,8 +186,6 @@ export default function SuperadminControlCenterPage() {
   const [busy, setBusy] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
   const [controlPanelSession, setControlPanelSession] = useState<ControlPanelSessionState>({ active: false, session: null });
-  const [otpRequestId, setOtpRequestId] = useState("");
-  const [otpCode, setOtpCode] = useState("");
   const [actionReason, setActionReason] = useState("");
 
   const [sedes, setSedes] = useState<SedeRow[]>([]);
@@ -429,46 +427,6 @@ export default function SuperadminControlCenterPage() {
     );
   }
 
-  async function requestControlPanelOtp() {
-    clearErrors();
-    setBusy(true);
-    try {
-      const response = await api.post<{ request_id: string }>("/api/control-panel/session/request-otp/", {});
-      setOtpRequestId(response.data.request_id || "");
-      setOtpCode("");
-    } catch (error) {
-      setApiErrors(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function verifyControlPanelOtp() {
-    clearErrors();
-    if (!otpRequestId || !otpCode.trim()) {
-      setFormErrors(["Solicita el código e ingrésalo para abrir la sesión reforzada."]);
-      return;
-    }
-    setBusy(true);
-    try {
-      const response = await api.post<ControlPanelSessionState>(
-        "/api/control-panel/session/verify-otp/",
-        { request_id: otpRequestId, otp: otpCode.trim() },
-      );
-      setControlPanelSession({
-        active: Boolean(response.data?.active),
-        session: response.data?.session ?? null,
-      });
-      setOtpRequestId("");
-      setOtpCode("");
-      await loadControlCenter();
-    } catch (error) {
-      setApiErrors(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function openControlPanelWithPasskey() {
     clearErrors();
     if (!passkeySupported) {
@@ -519,6 +477,17 @@ export default function SuperadminControlCenterPage() {
       setBusy(false);
     }
   }
+
+  const secureSessionRequiredLabels: Record<SectionKey, string> = {
+    branding: "identidad visual y cuotas",
+    sedes: "gestion de sedes",
+    programas: "catalogo de programas",
+    roles: "roles y permisos",
+    permisos: "permisos del sistema",
+    asignaciones: "asignaciones RBAC",
+    dominios: "reglas de dominio",
+    auditoria: "auditoria del panel",
+  };
 
   async function closeControlPanelSession() {
     clearErrors();
@@ -915,16 +884,11 @@ export default function SuperadminControlCenterPage() {
         active={controlPanelSession.active}
         busy={busy}
         passkeySupported={passkeySupported}
-        otpRequestId={otpRequestId}
-        otpCode={otpCode}
         sessionId={controlPanelSession.session?.id}
         expiresAtLabel={formatDate(controlPanelSession.session?.expires_at)}
         actionReason={actionReason}
-        onOtpCodeChange={setOtpCode}
         onActionReasonChange={setActionReason}
-        onRequestOtp={requestControlPanelOtp}
         onOpenPasskey={openControlPanelWithPasskey}
-        onVerifyOtp={verifyControlPanelOtp}
         onCloseSession={closeControlPanelSession}
       />
 
@@ -961,7 +925,38 @@ export default function SuperadminControlCenterPage() {
         </aside>
 
         <section className="space-y-4 sadi-card rounded-3xl p-4 sm:p-5">
-          {activeSection === "branding" ? (
+          {!controlPanelSession.active ? (
+            <div className="rounded-3xl border border-dashed border-primary/30 bg-primary/5 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <span className="inline-flex rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-primary shadow-sm">
+                    Sesión reforzada requerida
+                  </span>
+                  <div>
+                    <h2 className="text-lg font-semibold text-text">Abre el panel con passkey para continuar</h2>
+                    <p className="mt-1 max-w-2xl text-sm text-text/75">
+                      La vista de {secureSessionRequiredLabels[activeSection]} queda protegida para la demo. El flujo OTP del panel se retiró de esta interfaz porque no estaba siendo confiable en producción.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={openControlPanelWithPasskey}
+                  disabled={busy || !passkeySupported}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {busy ? "Abriendo..." : "Abrir sesión con passkey"}
+                </button>
+              </div>
+              {!passkeySupported ? (
+                <p className="mt-3 text-sm text-amber-800">
+                  Este navegador no expone WebAuthn/Passkeys. Para presentar el panel usa un navegador compatible y vuelve a intentar.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {controlPanelSession.active && activeSection === "branding" ? (
             <BrandingSection
               busy={busy}
               sessionActive={controlPanelSession.active}
@@ -973,7 +968,7 @@ export default function SuperadminControlCenterPage() {
             />
           ) : null}
 
-          {activeSection === "sedes" ? (
+          {controlPanelSession.active && activeSection === "sedes" ? (
             <SedesSection
               busy={busy}
               sedes={sedes}
@@ -999,7 +994,7 @@ export default function SuperadminControlCenterPage() {
             />
           ) : null}
 
-          {activeSection === "programas" ? (
+          {controlPanelSession.active && activeSection === "programas" ? (
             <ProgramasSection
               busy={busy}
               programas={programas}
@@ -1018,7 +1013,7 @@ export default function SuperadminControlCenterPage() {
             />
           ) : null}
 
-          {activeSection === "roles" ? (
+          {controlPanelSession.active && activeSection === "roles" ? (
             <RolesSection
               busy={busy}
               roles={roles}
@@ -1030,7 +1025,7 @@ export default function SuperadminControlCenterPage() {
             />
           ) : null}
 
-          {activeSection === "permisos" ? (
+          {controlPanelSession.active && activeSection === "permisos" ? (
             <PermissionsSection
               busy={busy}
               permissions={permissions}
@@ -1044,7 +1039,7 @@ export default function SuperadminControlCenterPage() {
             />
           ) : null}
 
-          {activeSection === "asignaciones" ? (
+          {controlPanelSession.active && activeSection === "asignaciones" ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <select
@@ -1124,7 +1119,7 @@ export default function SuperadminControlCenterPage() {
             </>
           ) : null}
 
-          {activeSection === "dominios" ? (
+          {controlPanelSession.active && activeSection === "dominios" ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
                 Las reglas de dominio activas se aplican en todo el producto.
@@ -1347,7 +1342,7 @@ export default function SuperadminControlCenterPage() {
             </div>
           ) : null}
 
-          {activeSection === "auditoria" ? (
+          {controlPanelSession.active && activeSection === "auditoria" ? (
             <div className="space-y-3">
               <button
                 type="button"

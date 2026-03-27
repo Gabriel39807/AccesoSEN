@@ -79,6 +79,25 @@ function brandingConfigPayload(state: MockState) {
 }
 
 async function installApiMocks(page: Page, state: MockState) {
+  await page.addInitScript(() => {
+    class MockPublicKeyCredential {}
+
+    Object.defineProperty(window, "PublicKeyCredential", {
+      configurable: true,
+      writable: true,
+      value: MockPublicKeyCredential,
+    });
+
+    Object.defineProperty(navigator, "credentials", {
+      configurable: true,
+      value: {
+        get: async () => ({
+          rawId: new Uint8Array([1, 2, 3, 4]).buffer,
+        }),
+      },
+    });
+  });
+
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -150,7 +169,7 @@ async function installApiMocks(page: Page, state: MockState) {
           session: state.controlPanelActive
             ? {
                 id: "cp-session-12345678",
-                verified_by: "otp",
+                verified_by: "passkey",
                 expires_at: "2030-01-01T11:00:00Z",
               }
             : null,
@@ -158,21 +177,27 @@ async function installApiMocks(page: Page, state: MockState) {
       });
     }
 
-    if (path === "/api/control-panel/session/request-otp/" && method === "POST") {
+    if (path === "/api/control-panel/session/request-passkey/" && method === "POST") {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ request_id: "otp-request-1" }),
+        body: JSON.stringify({
+          request_id: "passkey-request-1",
+          challenge: "panel-passkey-challenge",
+          rp_id: "localhost",
+          timeout: 60000,
+          allow_credentials: [{ credential_id: "cred-1", transports: ["internal"] }],
+        }),
       });
     }
 
-    if (path === "/api/control-panel/session/verify-otp/" && method === "POST") {
-      const body = (request.postDataJSON() || {}) as { request_id?: string; otp?: string };
-      if (body.request_id !== "otp-request-1" || body.otp !== "654321") {
+    if (path === "/api/control-panel/session/verify-passkey/" && method === "POST") {
+      const body = (request.postDataJSON() || {}) as { request_id?: string; challenge?: string; credential_id?: string };
+      if (body.request_id !== "passkey-request-1" || body.challenge !== "panel-passkey-challenge" || !body.credential_id) {
         return route.fulfill({
           status: 400,
           contentType: "application/json",
-          body: JSON.stringify({ detail: "OTP invalido" }),
+          body: JSON.stringify({ detail: "Passkey invalida" }),
         });
       }
       state.controlPanelActive = true;
@@ -183,7 +208,7 @@ async function installApiMocks(page: Page, state: MockState) {
           active: true,
           session: {
             id: "cp-session-12345678",
-            verified_by: "otp",
+            verified_by: "passkey",
             expires_at: "2030-01-01T11:00:00Z",
           },
         }),
@@ -314,7 +339,7 @@ test("admin web login submits expected auth payload", async ({ page }) => {
   await expect.poll(() => state.meCalls || 0, { timeout: 10_000 }).toBeGreaterThan(0);
 });
 
-test("superadmin opens OTP session and applies branding preset with control headers", async ({ page }) => {
+test("superadmin opens passkey session and applies branding preset with control headers", async ({ page }) => {
   const state: MockState = {
     meRole: "superadmin",
     meUsername: "superadmin",
@@ -327,16 +352,16 @@ test("superadmin opens OTP session and applies branding preset with control head
 
   await expect(page.getByRole("heading", { name: "Superadmin / Centro de control" })).toBeVisible();
   await expect(page.getByText("Cerrada")).toBeVisible();
+  await expect(page.getByText("OTP del panel deshabilitado")).toBeVisible();
+  await expect(page.getByText(/solo el acceso con passkey/i)).toBeVisible();
+  await expect(page.getByText(/sesión reforzada requerida/i)).toBeVisible();
+  await expect(page.getByPlaceholder("Ej: Activar identidad visual del cliente para campus norte")).toBeDisabled();
 
-  await page.getByRole("button", { name: "Enviar código" }).click();
-  await expect(page.getByRole("button", { name: "Reenviar código" })).toBeVisible();
-  const otpInput = page.getByRole("textbox", { name: "Código de verificación del panel" });
-  await expect(otpInput).toBeEnabled();
-  await otpInput.fill("654321");
-  await page.getByRole("button", { name: "Verificar" }).click();
+  await page.getByRole("button", { name: "Abrir con passkey" }).click();
 
   await expect(page.getByText("Activa", { exact: true })).toBeVisible();
   await expect(page.getByText(/Sesión:\s+cp-sessi/i)).toBeVisible();
+  await expect(page.getByPlaceholder("Ej: Activar identidad visual del cliente para campus norte")).toBeEnabled();
 
   await page
     .getByPlaceholder("Ej: Activar identidad visual del cliente para campus norte")
