@@ -148,9 +148,30 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
         self.assertEqual(request.full_url, "https://api.resend.com/emails")
         self.assertEqual(request.get_method(), "POST")
         self.assertEqual(request.headers["Authorization"], "Bearer resend_test_key")
+        self.assertIn("Mozilla/5.0", request.headers["User-agent"])
+        self.assertIn("SADI-OTP/1.0", request.headers["User-agent"])
         self.assertIn('"from": "SADI <no-reply@sadi.test>"', request.data.decode("utf-8"))
         self.assertIn(self.user.email, request.data.decode("utf-8"))
         self.assertIn("12345", request.data.decode("utf-8"))
+
+    @override_settings(
+        OTP_EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="resend_test_key",
+        RESEND_API_URL="https://api.resend.com/emails",
+        RESEND_USER_AGENT="SADI-Test-Agent/2.0",
+        DEFAULT_FROM_EMAIL="SADI <no-reply@sadi.test>",
+    )
+    def test_password_reset_email_allows_resend_user_agent_override(self):
+        response_mock = MagicMock()
+        response_mock.status = 202
+        response_mock.__enter__.return_value = response_mock
+        response_mock.__exit__.return_value = False
+
+        with patch("accesos.otp_services.urllib_request.urlopen", return_value=response_mock) as urlopen_mock:
+            send_password_reset_email(self.user.email, "12345")
+
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(request.headers["User-agent"], "SADI-Test-Agent/2.0")
 
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",

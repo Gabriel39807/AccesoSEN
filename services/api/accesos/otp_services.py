@@ -42,6 +42,9 @@ logger = logging.getLogger(__name__)
 
 OTP_EMAIL_PROVIDER_SMTP = "smtp"
 OTP_EMAIL_PROVIDER_RESEND = "resend"
+DEFAULT_RESEND_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 SADI-OTP/1.0"
+)
 
 
 def _mask_email(value: str) -> str:
@@ -151,6 +154,19 @@ def _build_resend_payload(
     return json.dumps(payload).encode("utf-8")
 
 
+def _build_resend_headers(api_key: str) -> dict[str, str]:
+    user_agent = str(getattr(settings, "RESEND_USER_AGENT", DEFAULT_RESEND_USER_AGENT) or "").strip()
+    if not user_agent:
+        user_agent = DEFAULT_RESEND_USER_AGENT
+
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": user_agent,
+    }
+
+
 def _send_via_resend(*, to_email: str, from_email: str, subject: str, text_body: str, html_body: str | None) -> None:
     api_key = str(getattr(settings, "RESEND_API_KEY", "") or "").strip()
     api_url = str(getattr(settings, "RESEND_API_URL", "https://api.resend.com/emails") or "").strip()
@@ -172,11 +188,7 @@ def _send_via_resend(*, to_email: str, from_email: str, subject: str, text_body:
             text_body=text_body,
             html_body=html_body,
         ),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
+        headers=_build_resend_headers(api_key),
         method="POST",
     )
 

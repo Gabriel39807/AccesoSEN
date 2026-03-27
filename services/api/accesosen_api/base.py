@@ -434,6 +434,14 @@ RESEND_API_KEY = str(os.getenv("RESEND_API_KEY", "") or "").strip()
 RESEND_API_URL = str(
     os.getenv("RESEND_API_URL", "https://api.resend.com/emails") or "https://api.resend.com/emails"
 ).strip()
+RESEND_USER_AGENT = str(
+    os.getenv(
+        "RESEND_USER_AGENT",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 SADI-OTP/1.0",
+    )
+    or ""
+).strip()
 RESEND_TIMEOUT_SEC = env_int("RESEND_TIMEOUT_SEC", EMAIL_TIMEOUT, min_value=1)
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
