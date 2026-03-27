@@ -137,6 +137,115 @@ function ModalFrame({
   );
 }
 
+function ImportMetricCard({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+}) {
+  const toneClasses =
+    tone === "success"
+      ? "border-[color:rgba(66,199,154,0.28)] bg-[linear-gradient(135deg,rgba(66,199,154,0.14),rgba(255,255,255,0.04))]"
+      : tone === "warning"
+        ? "border-[color:rgba(240,178,77,0.28)] bg-[linear-gradient(135deg,rgba(240,178,77,0.14),rgba(255,255,255,0.04))]"
+        : tone === "danger"
+          ? "border-[color:rgba(255,107,122,0.28)] bg-[linear-gradient(135deg,rgba(255,107,122,0.12),rgba(255,255,255,0.04))]"
+          : tone === "info"
+            ? "border-[color:rgba(111,211,255,0.26)] bg-[linear-gradient(135deg,rgba(111,211,255,0.14),rgba(255,255,255,0.04))]"
+            : "border-[color:var(--color-border)] bg-[color:var(--surface-subtle)]";
+
+  return (
+    <div className={cx("rounded-2xl border p-4", toneClasses)}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value}</div>
+      {hint ? <div className="mt-2 text-xs leading-5 text-[color:var(--color-text-soft)]">{hint}</div> : null}
+    </div>
+  );
+}
+
+function ImportStageStep({
+  step,
+  title,
+  active,
+  complete,
+}: {
+  step: number;
+  title: string;
+  active?: boolean;
+  complete?: boolean;
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-2xl border px-3 py-3 transition",
+        active
+          ? "border-[color:rgba(111,211,255,0.34)] bg-[linear-gradient(135deg,rgba(111,211,255,0.16),rgba(255,255,255,0.05))]"
+          : complete
+            ? "border-[color:rgba(66,199,154,0.28)] bg-[linear-gradient(135deg,rgba(66,199,154,0.12),rgba(255,255,255,0.04))]"
+            : "border-[color:var(--color-border)] bg-[color:var(--surface-subtle)]",
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className={cx(
+            "inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold",
+            active
+              ? "border-[color:rgba(111,211,255,0.4)] bg-[rgba(111,211,255,0.14)] text-[color:var(--color-text)]"
+              : complete
+                ? "border-[color:rgba(66,199,154,0.35)] bg-[rgba(66,199,154,0.14)] text-[color:var(--success)]"
+                : "border-[color:var(--color-border)] bg-[color:var(--surface)] text-[color:var(--color-text-muted)]",
+          )}
+        >
+          {step}
+        </span>
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Paso {step}</div>
+          <div className="text-sm font-medium text-[color:var(--color-text)]">{title}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImportPanel({
+  title,
+  description,
+  badge,
+  children,
+  tone = "neutral",
+}: {
+  title: string;
+  description?: string;
+  badge?: ReactNode;
+  children: ReactNode;
+  tone?: "neutral" | "warning" | "danger";
+}) {
+  const toneClasses =
+    tone === "warning"
+      ? "border-[color:rgba(240,178,77,0.28)]"
+      : tone === "danger"
+        ? "border-[color:rgba(255,107,122,0.26)]"
+        : "border-[color:var(--color-border)]";
+
+  return (
+    <section className={cx("overflow-hidden rounded-[1.35rem] border bg-[color:var(--surface-subtle)]", toneClasses)}>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-3">
+        <div>
+          <div className="text-sm font-semibold text-[color:var(--color-text)]">{title}</div>
+          {description ? <div className="mt-1 text-xs leading-5 text-[color:var(--color-text-soft)]">{description}</div> : null}
+        </div>
+        {badge ? <div className="shrink-0">{badge}</div> : null}
+      </div>
+      <div>{children}</div>
+    </section>
+  );
+}
+
 function useDebounced<T>(value: T, delay = 450) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -496,6 +605,19 @@ export default function AdminUsuariosPage() {
     if (activeProgramNames.length <= 6) return activeProgramNames.join(", ");
     return `${activeProgramNames.slice(0, 6).join(", ")} y ${activeProgramNames.length - 6} mas.`;
   }, [activeProgramNames]);
+
+  const importCanStart = Boolean(importId) && !confirmandoImport && !validandoImport && (duplicatesInFile.length === 0 || allowSkipFileDuplicates);
+  const importFailedRetryCount = useMemo(
+    () => importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length,
+    [importRowResults],
+  );
+  const importDocumentConflictsCount = useMemo(
+    () => importRowResults.filter((row) => row.code === "DOCUMENT_EXISTS").length,
+    [importRowResults],
+  );
+  const importReadyRows = importResumen?.validos ?? 0;
+  const importProgressPercent = importProgress.total > 0 ? Math.round((importProgress.processed / importProgress.total) * 100) : 0;
+  const importSelectedFileLabel = importFile ? `${importFile.name} - ${formatFileSize(importFile.size)}` : `Ningun archivo seleccionado. Usa ${importFormatsLabel}.`;
 
   async function cargar(p = page) {
     if (loadingMe) return;
@@ -2245,170 +2367,235 @@ export default function AdminUsuariosPage() {
           maxWidthClassName="max-w-5xl"
           closeDisabled={validandoImport || confirmandoImport}
         >
-          <ModalFrame className="space-y-4">
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3 text-sm text-[color:var(--color-text-soft)]">
-              <div className="font-medium text-[color:var(--color-text)]">Solo importa aprendices.</div>
-              <div className="mt-1">Formatos soportados: {importFormatsLabel}. Flujo: 1) descarga la plantilla, 2) completa el archivo, 3) valida, 4) importa.</div>
-              <div className="mt-1">Campos obligatorios: {importRequiredColumnsLabel}. Telefono y Correo son opcionales.</div>
-              <div className="mt-1">Columnas visibles en plantilla: {importTemplateColumns.join(", ")}.</div>
-              <div className="mt-1">Jornada usa valores tecnicos exactos: {APRENDIZ_IMPORT_JORNADAS.join(", ")}.</div>
-              <div className="mt-1">
-                {isScopedAdminSede
-                  ? `No incluyas columna Sede; la importacion queda fijada a tu sede activa (${actorSede ?? "sin sede"}).`
-                  : "Si cargas Sede, usa el codigo tecnico exacto de una sede activa."}
+          <ModalFrame className="space-y-5">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.95fr)]">
+              <div className="rounded-[1.5rem] border border-[color:rgba(111,211,255,0.22)] bg-[linear-gradient(135deg,rgba(111,211,255,0.16),rgba(12,18,28,0.1))] px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="command-noir-chip" data-tone="info">Importacion guiada</span>
+                  <span className="text-xs text-[color:var(--color-text-soft)]">Sin cambiar el contrato backend</span>
+                </div>
+                <h3 className="mt-3 text-lg font-semibold text-[color:var(--color-text)]">Carga aprendices con una revision clara antes de confirmar.</h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--color-text-soft)]">
+                  Descarga la plantilla vigente, completa solo las columnas esperadas y valida antes de importar. El flujo conserva preflight, restricciones por rol/sede, programas activos y reportes descargables.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(8,14,21,0.34)] px-4 py-3 text-sm text-[color:var(--color-text-soft)]">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Checklist rapido</div>
+                    <ul className="mt-2 space-y-1.5 leading-5">
+                      <li>Formatos soportados: {importFormatsLabel}.</li>
+                      <li>Campos obligatorios: {importRequiredColumnsLabel}.</li>
+                      <li>Telefono y Correo siguen siendo opcionales.</li>
+                      <li>Tamano maximo recomendado: {importMaxFileSizeLabel}.</li>
+                    </ul>
+                  </div>
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(8,14,21,0.34)] px-4 py-3 text-sm text-[color:var(--color-text-soft)]">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Reglas activas</div>
+                    <ul className="mt-2 space-y-1.5 leading-5">
+                      <li>Jornada usa estos valores exactos: {APRENDIZ_IMPORT_JORNADAS.join(", ")}.</li>
+                      <li>Programa debe coincidir exactamente con un programa activo.</li>
+                      <li>
+                        {isScopedAdminSede
+                          ? `La sede queda fija a ${actorSede ?? "sin sede"}; no agregues la columna Sede.`
+                          : "Si usas la columna Sede, escribe el codigo tecnico exacto de una sede activa."}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:rgba(8,14,21,0.3)] px-4 py-3 text-xs leading-5 text-[color:var(--color-text-soft)]">
+                  <span className="font-semibold text-[color:var(--color-text)]">Programas aceptados ahora:</span> {acceptedProgramsLabel}
+                </div>
               </div>
-              <div className="mt-1">Tamano maximo recomendado por archivo: {importMaxFileSizeLabel}.</div>
-              <div className="mt-1">Programa debe coincidir exactamente con un programa activo configurado en el Centro de control.</div>
-              <div className="mt-1">Programas aceptados ahora: {acceptedProgramsLabel}</div>
-            </div>
 
-            {importBanner ? (
-              <FormBanner type={importBanner.type} message={importBanner.message} />
-            ) : null}
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto_auto] xl:items-end">
-              <div className="min-w-0 xl:col-span-2">
-                <input
-                  ref={importFileInputRef}
-                  type="file"
-                  accept={importAccept}
-                  onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
-                  className="sr-only"
-                  aria-describedby="import-file-help"
-                />
-                <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={() => importFileInputRef.current?.click()}
-                    disabled={validandoImport || confirmandoImport}
-                    className="rounded-lg border border-[color:var(--color-border)] bg-[color:var(--surface)] px-3 py-1.5 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {importFile ? "Cambiar archivo" : "Seleccionar archivo"}
-                  </button>
-                  <div className="min-w-0 flex-1 text-sm text-[color:var(--color-text-soft)]">
-                    <span className="block truncate">
-                      {importFile ? `${importFile.name} - ${formatFileSize(importFile.size)}` : `Ningun archivo seleccionado. Usa ${importFormatsLabel}.`}
-                    </span>
+              <div className="rounded-[1.5rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Estado actual</div>
+                    <div className="mt-1 text-lg font-semibold text-[color:var(--color-text)]">{importStageLabel}</div>
+                  </div>
+                  <span className="command-noir-chip" data-tone={importCanStart ? "success" : "neutral"}>
+                    {importCanStart ? "Listo para importar" : "Pendiente"}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <ImportMetricCard
+                    label="Archivo"
+                    value={importFile ? "Adjunto" : "Sin carga"}
+                    hint={importSelectedFileLabel}
+                    tone={importFile ? "info" : "neutral"}
+                  />
+                  <ImportMetricCard
+                    label="Filas listas"
+                    value={importReadyRows}
+                    hint={importResumen ? `De ${importResumen.total} filas revisadas en preflight.` : "Valida el archivo para ver el resumen."}
+                    tone={importReadyRows > 0 ? "success" : "neutral"}
+                  />
+                </div>
+                <div className="mt-4 rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 text-xs text-[color:var(--color-text-muted)]">
+                    <span>Progreso</span>
+                    <span>{importProgress.processed}/{importProgress.total || 0} filas</span>
+                  </div>
+                  <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-[color:rgba(255,255,255,0.06)]">
+                    <div
+                      className="h-full bg-[linear-gradient(90deg,rgba(111,211,255,0.92),rgba(79,163,255,0.62))] transition-all"
+                      style={{ width: `${importProgressPercent}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 text-xs text-[color:var(--color-text-soft)]">
+                    {importProgress.total > 0 ? `${importProgressPercent}% procesado.` : "El progreso aparecera cuando haya filas listas para importar."}
                   </div>
                 </div>
               </div>
-              <div id="import-file-help" className="text-xs text-[color:var(--color-text-muted)] xl:col-span-2">
-                Si reemplazas el archivo, la validacion anterior se limpia para evitar importar datos obsoletos.
-              </div>
-              <button
-                type="button"
-                onClick={downloadImportTemplateXlsx}
-                disabled={loadingMe}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Descargar plantilla (.xlsx)
-              </button>
-              <button
-                type="button"
-                onClick={downloadImportTemplateCsv}
-                disabled={loadingMe}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Descargar CSV alternativo
-              </button>
-              <button
-                type="button"
-                onClick={validarImportacion}
-                disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl border border-[color:rgba(111,211,255,0.24)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {validandoImport ? "Validando..." : "Validar archivo"}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleImportFileChange(null)}
-                disabled={!importFile || validandoImport || confirmandoImport}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Limpiar archivo
-              </button>
-              <button
-                type="button"
-                onClick={confirmarImportacion}
-                disabled={!importId || confirmandoImport || validandoImport || (duplicatesInFile.length > 0 && !allowSkipFileDuplicates)}
-                className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[linear-gradient(135deg,rgba(66,199,154,0.16),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:rgba(66,199,154,0.38)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {confirmandoImport ? "Importando..." : "Importar"}
-              </button>
-              <button
-                type="button"
-                onClick={reintentarFallidos}
-                disabled={confirmandoImport || validandoImport || importRowResults.filter((row) => row.status === "failed" && row.code !== "DOCUMENT_EXISTS").length === 0}
-                className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Reintentar fallidos
-              </button>
             </div>
 
-            {importFile ? (
-              <InlineNotice
-                type="info"
-                message={`Archivo listo para validar: ${importFile.name} - ${formatFileSize(importFile.size)}. Si descargas una nueva plantilla, vuelve a adjuntarla antes de validar.`}
-              />
-            ) : null}
+            {importBanner ? <FormBanner type={importBanner.type} message={importBanner.message} className="rounded-2xl px-4 py-3" /> : null}
+
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <ImportPanel
+                title="1. Archivo y plantillas"
+                description="Empieza con la plantilla vigente para evitar columnas faltantes o nombres fuera del catalogo."
+                badge={<span className="command-noir-chip">{importFormatsLabel}</span>}
+              >
+                <div className="space-y-4 px-4 py-4">
+                  <input
+                    ref={importFileInputRef}
+                    type="file"
+                    accept={importAccept}
+                    onChange={(e) => handleImportFileChange(e.target.files?.[0] ?? null)}
+                    className="sr-only"
+                    aria-describedby="import-file-help"
+                  />
+                  <div className="rounded-[1.35rem] border border-dashed border-[color:rgba(111,211,255,0.32)] bg-[linear-gradient(135deg,rgba(111,211,255,0.08),rgba(255,255,255,0.03))] p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-[color:var(--color-text)]">{importFile ? "Archivo listo para revisar" : "Adjunta el archivo de aprendices"}</div>
+                        <div className="mt-1 text-sm leading-6 text-[color:var(--color-text-soft)]">{importSelectedFileLabel}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => importFileInputRef.current?.click()}
+                        disabled={validandoImport || confirmandoImport}
+                        className="inline-flex shrink-0 items-center justify-center rounded-xl border border-[color:rgba(111,211,255,0.3)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.44)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {importFile ? "Cambiar archivo" : "Seleccionar archivo"}
+                      </button>
+                    </div>
+                    <div id="import-file-help" className="mt-3 text-xs leading-5 text-[color:var(--color-text-muted)]">
+                      Si reemplazas el archivo, la validacion anterior se limpia para evitar importar datos obsoletos.
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={downloadImportTemplateXlsx}
+                      disabled={loadingMe}
+                      className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-left text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="block">Descargar plantilla principal (.xlsx)</span>
+                      <span className="mt-1 block text-xs font-normal text-[color:var(--color-text-soft)]">Incluye el orden de columnas esperado para el flujo actual.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={downloadImportTemplateCsv}
+                      disabled={loadingMe}
+                      className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-left text-sm font-medium text-[color:var(--color-text)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="block">Descargar CSV alternativo</span>
+                      <span className="mt-1 block text-xs font-normal text-[color:var(--color-text-soft)]">Util cuando preparas datos fuera de Excel antes de la validacion.</span>
+                    </button>
+                  </div>
+
+                  {importFile ? (
+                    <InlineNotice
+                      type="info"
+                      message={`Archivo listo para validar: ${importFile.name} - ${formatFileSize(importFile.size)}. Si descargas una nueva plantilla, vuelve a adjuntarla antes de validar.`}
+                      className="text-xs leading-5"
+                    />
+                  ) : null}
+                </div>
+              </ImportPanel>
+
+              <ImportPanel
+                title="2. Validacion e importacion"
+                description="Primero corre el preflight. Solo cuando no haya bloqueos podras confirmar la carga."
+                badge={<span className="command-noir-chip" data-tone={importCanStart ? "success" : "neutral"}>{importStageLabel}</span>}
+              >
+                <div className="space-y-3 px-4 py-4">
+                  <button
+                    type="button"
+                    onClick={validarImportacion}
+                    disabled={!importFile || validandoImport || confirmandoImport}
+                    className="w-full rounded-xl border border-[color:rgba(111,211,255,0.24)] bg-[linear-gradient(135deg,rgba(111,211,255,0.18),rgba(255,255,255,0.04))] px-4 py-3 text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:rgba(111,211,255,0.4)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {validandoImport ? "Validando..." : "Validar archivo"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmarImportacion}
+                    disabled={!importCanStart}
+                    className="w-full rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[linear-gradient(135deg,rgba(66,199,154,0.16),rgba(255,255,255,0.04))] px-4 py-3 text-sm font-semibold text-[color:var(--color-text)] transition hover:border-[color:rgba(66,199,154,0.38)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {confirmandoImport ? "Importando..." : "Importar aprendices"}
+                  </button>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <button
+                      type="button"
+                      onClick={reintentarFallidos}
+                      disabled={confirmandoImport || validandoImport || importFailedRetryCount === 0}
+                      className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Reintentar fallidos ({importFailedRetryCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleImportFileChange(null)}
+                      disabled={!importFile || validandoImport || confirmandoImport}
+                      className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-sm font-medium text-[color:var(--color-text-soft)] transition hover:border-[color:var(--color-border-strong)] hover:bg-[color:var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Limpiar archivo
+                    </button>
+                  </div>
+                  <div className="rounded-2xl border border-[color:var(--color-border)] bg-[color:var(--surface)] px-4 py-3 text-xs leading-5 text-[color:var(--color-text-soft)]">
+                    <div><span className="font-semibold text-[color:var(--color-text)]">Columnas visibles en plantilla:</span> {importTemplateColumns.join(", ")}.</div>
+                    <div className="mt-1"><span className="font-semibold text-[color:var(--color-text)]">Conflictos detectados:</span> {duplicatesInFile.length} duplicados en archivo, {importDocumentConflictsCount} documentos ya existentes.</div>
+                  </div>
+                </div>
+              </ImportPanel>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <ImportStageStep step={1} title="Descargar plantilla" complete={Boolean(importFile) || Boolean(importResumen)} />
+              <ImportStageStep step={2} title="Adjuntar archivo" active={Boolean(importFile) && !importResumen && importStage === "parsing"} complete={Boolean(importResumen) || importStage !== "parsing"} />
+              <ImportStageStep step={3} title="Validar preflight" active={importStage === "ready"} complete={importStage === "importing" || importStage === "done"} />
+              <ImportStageStep step={4} title="Confirmar importacion" active={importStage === "importing" || importStage === "done"} complete={importStage === "done"} />
+            </div>
 
             {importResumen ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
-                  <div className="text-xs text-[color:var(--color-text-muted)]">Total</div>
-                  <div className="text-xl font-semibold text-[color:var(--color-text)]">{importResumen.total}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[rgba(66,199,154,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--success)]">VÃ¡lidos</div>
-                  <div className="text-xl font-semibold text-[color:var(--success)]">{importResumen.validos}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--danger)]">Errores</div>
-                  <div className="text-xl font-semibold text-[color:var(--danger)]">{importResumen.errores}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--warning)]">Duplicados en archivo</div>
-                  <div className="text-xl font-semibold text-[color:var(--warning)]">{duplicatesInFile.length}</div>
-                </div>
+                <ImportMetricCard label="Total revisado" value={importResumen.total} hint="Filas leidas en el preflight del archivo." />
+                <ImportMetricCard label="Listas para importar" value={importResumen.validos} hint="Filas sin bloqueos segun la validacion actual." tone="success" />
+                <ImportMetricCard label="Con errores" value={importResumen.errores} hint="Filas que requieren correccion antes de importarse." tone="danger" />
+                <ImportMetricCard label="Duplicados en archivo" value={duplicatesInFile.length} hint={allowSkipFileDuplicates ? "Se omitirán en esta ejecucion." : "Debes decidir si los corriges o los omites."} tone="warning" />
               </div>
             ) : null}
 
-            <div className="rounded-xl border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
-              <div className="mb-2 flex items-center justify-between text-xs text-[color:var(--color-text-muted)]">
-                <span>Estado: {importStageLabel}</span>
-                <span>Progreso: {importProgress.processed}/{importProgress.total}</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-[color:rgba(255,255,255,0.06)]">
-                <div
-                  className="h-full bg-[linear-gradient(90deg,rgba(111,211,255,0.92),rgba(79,163,255,0.62))] transition-all"
-                  style={{ width: `${importProgress.total > 0 ? (importProgress.processed / importProgress.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-
             {(importStage === "done" || importRowResults.length > 0) && importProgress.total > 0 ? (
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-[color:rgba(66,199,154,0.25)] bg-[rgba(66,199,154,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--success)]">Creados</div>
-                  <div className="text-xl font-semibold text-[color:var(--success)]">{importResultSummary.created}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--warning)]">Omitidos</div>
-                  <div className="text-xl font-semibold text-[color:var(--warning)]">{importResultSummary.skipped}</div>
-                </div>
-                <div className="rounded-xl border border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] p-3">
-                  <div className="text-xs text-[color:var(--danger)]">Fallidos</div>
-                  <div className="text-xl font-semibold text-[color:var(--danger)]">{importResultSummary.failed}</div>
-                </div>
+                <ImportMetricCard label="Creados" value={importResultSummary.created} hint="Usuarios creados correctamente en esta corrida." tone="success" />
+                <ImportMetricCard label="Omitidos" value={importResultSummary.skipped} hint="Incluye duplicados o filas descartadas de forma segura." tone="warning" />
+                <ImportMetricCard label="Fallidos" value={importResultSummary.failed} hint="Filas que siguen necesitando correccion o reintento." tone="danger" />
               </div>
             ) : null}
 
             {duplicatesInFile.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-[color:rgba(240,178,77,0.28)]">
-                <div className="border-b border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-2 text-sm font-semibold text-[color:var(--warning)]">
-                  Duplicados en el archivo
-                </div>
-                <div className="max-h-48 overflow-auto bg-[color:var(--surface-subtle)]">
+              <ImportPanel
+                title="Duplicados dentro del archivo"
+                description="Estas filas repiten el mismo documento en la carga actual. Puedes corregir el archivo o continuar omitiendolas."
+                tone="warning"
+                badge={<span className="command-noir-chip" data-tone="warning">{duplicatesInFile.length} filas</span>}
+              >
+                <div className="max-h-52 overflow-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
@@ -2428,37 +2615,40 @@ export default function AdminUsuariosPage() {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 border-t border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setAllowSkipFileDuplicates(true)}
-                    className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.16)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[rgba(240,178,77,0.22)]"
-                  >
-                    Omitir duplicados del archivo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAllowSkipFileDuplicates(false);
-                      setImportBanner({ type: "error", message: "Corrige el archivo y vuelve a validar para continuar." });
-                    }}
-                    className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[color:var(--surface-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--warning)] hover:bg-[rgba(240,178,77,0.12)]"
-                  >
-                    Cancelar y corregir archivo
-                  </button>
-                  <span className="text-xs text-[color:var(--warning)]">
-                    Estado: {allowSkipFileDuplicates ? "Omision de duplicados confirmada" : "Decision pendiente"}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.08)] px-4 py-3">
+                  <div className="text-xs leading-5 text-[color:var(--warning)]">
+                    Estado: {allowSkipFileDuplicates ? "omision confirmada" : "decision pendiente antes de importar"}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAllowSkipFileDuplicates(true)}
+                      className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[rgba(240,178,77,0.16)] px-3 py-1.5 text-xs font-medium text-[color:var(--color-text)] hover:bg-[rgba(240,178,77,0.22)]"
+                    >
+                      Omitir duplicados del archivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAllowSkipFileDuplicates(false);
+                        setImportBanner({ type: "error", message: "Corrige el archivo y vuelve a validar para continuar." });
+                      }}
+                      className="rounded-lg border border-[color:rgba(240,178,77,0.28)] bg-[color:var(--surface-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--warning)] hover:bg-[rgba(240,178,77,0.12)]"
+                    >
+                      Corregir archivo primero
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </ImportPanel>
             ) : null}
 
             {importPreviewRows.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
-                <div className="border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-2 text-sm font-semibold text-[color:var(--color-text)]">
-                  Vista previa de filas validas ({importPreviewRows.length} de {importProgress.total})
-                </div>
-                <div className="max-h-56 overflow-auto bg-[color:var(--surface-subtle)]">
+              <ImportPanel
+                title="Vista previa de filas validas"
+                description="Muestra una muestra operativa de las filas que pasarán al paso final de importacion."
+                badge={<span className="command-noir-chip">{importPreviewRows.length} de {importProgress.total || importPreviewRows.length}</span>}
+              >
+                <div className="max-h-56 overflow-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
@@ -2488,13 +2678,14 @@ export default function AdminUsuariosPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </ImportPanel>
             ) : null}
 
             {importRowResults.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-[color:var(--color-border)]">
-                <div className="flex items-center justify-between border-b border-[color:var(--color-border)] bg-[color:var(--surface-muted)] px-4 py-2">
-                  <div className="text-sm font-semibold text-[color:var(--color-text)]">Resultados por fila</div>
+              <ImportPanel
+                title="Resultados por fila"
+                description="Resume lo que ya se creo, lo que se omitio por seguridad y lo que requiere reintento."
+                badge={
                   <button
                     type="button"
                     onClick={downloadImportErrorsCsv}
@@ -2502,8 +2693,9 @@ export default function AdminUsuariosPage() {
                   >
                     Descargar errores (CSV)
                   </button>
-                </div>
-                <div className="max-h-64 overflow-auto bg-[color:var(--surface-subtle)]">
+                }
+              >
+                <div className="max-h-64 overflow-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
@@ -2538,13 +2730,15 @@ export default function AdminUsuariosPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </ImportPanel>
             ) : null}
 
             {importErrores.length > 0 ? (
-              <div className="overflow-hidden rounded-2xl border border-[color:rgba(255,107,122,0.26)]">
-                <div className="flex items-center justify-between border-b border-[color:rgba(255,107,122,0.26)] bg-[rgba(255,107,122,0.08)] px-4 py-2">
-                  <div className="text-sm font-semibold text-[color:var(--danger)]">Errores por fila</div>
+              <ImportPanel
+                title="Errores de validacion"
+                description="Usa este detalle para corregir el archivo antes de una nueva validacion o para exportar el reporte."
+                tone="danger"
+                badge={
                   <button
                     type="button"
                     onClick={downloadImportErrorsCsv}
@@ -2552,8 +2746,9 @@ export default function AdminUsuariosPage() {
                   >
                     Descargar errores (CSV)
                   </button>
-                </div>
-                <div className="max-h-64 overflow-auto bg-[color:var(--surface-subtle)]">
+                }
+              >
+                <div className="max-h-64 overflow-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-[color:var(--surface-muted)] text-left text-[color:var(--color-text-muted)]">
                       <tr>
@@ -2575,7 +2770,7 @@ export default function AdminUsuariosPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </ImportPanel>
             ) : null}
           </ModalFrame>
         </Modal>
