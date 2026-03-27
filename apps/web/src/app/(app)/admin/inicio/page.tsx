@@ -184,6 +184,13 @@ function relativeTime(iso?: string | null) {
   return rtf.format(Math.round(diffHours / 24), "day");
 }
 
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("es-CO", {
+    notation: "compact",
+    maximumFractionDigits: value >= 100 ? 0 : 1,
+  }).format(value);
+}
+
 function buildTrend(rows: Acceso[], period: PeriodFilter, range: { start: Date; end: Date }): TrendBar[] {
   const currentYear = new Date().getFullYear();
   let buckets: Array<{ label: string; start: Date; end: Date; value: number }> = [];
@@ -473,17 +480,6 @@ export default function AdminInicioPage() {
       }).format(lastUpdatedAt)
     : "Pendiente";
 
-  const fallbackActivity = {
-    id: 0,
-    title: dashboardLoading ? "Cargando actividad..." : "Sin actividad reciente",
-    meta: dashboardLoading ? "Consultando accesos del sistema" : "Aun no hay eventos para mostrar",
-    context: "Trazabilidad institucional",
-    status: dashboardLoading ? "Actualizando" : "Sin datos",
-    tone: "sky" as const,
-  };
-
-  const visibleActivity = activity.length ? activity : [fallbackActivity];
-
   const priorityItems = [
     {
       title: isSuperadmin ? "Sedes bajo supervision" : "Sede activa",
@@ -528,6 +524,46 @@ export default function AdminInicioPage() {
     },
   ];
 
+  const recommendedFocus =
+    stats.pendingEquipos > 0
+      ? {
+          title: "Despeja aprobaciones pendientes",
+          detail: `${stats.pendingEquipos} solicitudes requieren validacion para evitar cuellos de botella.`,
+          href: "/admin/equipos",
+          cta: "Ir a equipos",
+        }
+      : stats.turnosActivos === 0
+        ? {
+            title: "Valida la cobertura actual",
+            detail: "No hay turnos activos visibles. Confirma si el estado operativo es el esperado.",
+            href: "/admin/turnos",
+            cta: "Revisar turnos",
+          }
+        : {
+            title: "Audita el flujo del periodo",
+            detail: `${stats.accesosTotal.toLocaleString("es-CO")} accesos visibles en ${selectedPeriod.toLowerCase()}. Usa esta lectura para detectar desbalances.`,
+            href: "/admin/accesos",
+            cta: "Abrir accesos",
+          };
+
+  const pulseItems = [
+    {
+      label: "Cobertura",
+      value: `${stats.turnosActivos}`,
+      detail: stats.turnosActivos > 0 ? "turnos en curso" : "sin turnos activos",
+    },
+    {
+      label: "Trazabilidad",
+      value: `${formatCompactNumber(stats.accesosConEquipos)}`,
+      detail: stats.accesosConEquipos > 0 ? "accesos con equipo" : "sin enlaces a equipos",
+    },
+    {
+      label: "Usuarios",
+      value: `${formatCompactNumber(stats.usersActive)}`,
+      detail: `${stats.usersTotal.toLocaleString("es-CO")} visibles`,
+    },
+  ];
+
   return (
     <div className="min-w-0 space-y-4 2xl:space-y-5">
       <section className="sadi-card-strong rounded-[1.75rem] p-5 xl:p-6">
@@ -553,7 +589,21 @@ export default function AdminInicioPage() {
             </div>
           </div>
 
-          <div className="grid w-full gap-2.5 sm:grid-cols-2 xl:max-w-[300px]">
+          <div className="grid w-full gap-2.5 xl:max-w-[336px]">
+            <Link
+              href={recommendedFocus.href}
+              className="rounded-[1.3rem] border border-[color:var(--color-border-strong)] bg-[linear-gradient(180deg,rgba(111,211,255,0.12),rgba(255,255,255,0.02))] px-4 py-3.5 transition hover:border-[color:var(--color-primary)] hover:bg-[linear-gradient(180deg,rgba(111,211,255,0.16),rgba(255,255,255,0.03))]"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Siguiente foco</p>
+              <p className="mt-1.5 text-base font-semibold text-[color:var(--color-text)]">{recommendedFocus.title}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-[color:var(--color-text-soft)]">{recommendedFocus.detail}</p>
+              <div className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--color-text)]">
+                {recommendedFocus.cta}
+                <IconArrowRight className="h-4 w-4" />
+              </div>
+            </Link>
+
+            <div className="grid gap-2.5 sm:grid-cols-2">
             <div className="rounded-[1.2rem] border border-[color:var(--color-border-strong)] bg-[color:var(--surface-subtle)] px-3.5 py-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Periodo activo</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{formatRangeLabel(periodRange.start, periodRange.end)}</p>
@@ -563,6 +613,16 @@ export default function AdminInicioPage() {
               <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Hoy</p>
               <p className="mt-1 text-sm font-semibold text-[color:var(--color-text)]">{currentDateLabel()}</p>
               <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">Vista pensada para supervision y respuesta.</p>
+            </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {pulseItems.map((item) => (
+                <div key={item.label} className="rounded-[1.1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-3 py-2.5">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">{item.label}</p>
+                  <p className="mt-1 text-lg font-semibold text-[color:var(--color-text)]">{item.value}</p>
+                  <p className="mt-1 text-xs text-[color:var(--color-text-muted)]">{item.detail}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -680,8 +740,22 @@ export default function AdminInicioPage() {
               <span>Contexto</span>
               <span>Estado</span>
             </div>
-            <div className="divide-y divide-[color:var(--color-border)]">
-              {visibleActivity.map((item) => (
+            {dashboardLoading ? (
+              <div className="divide-y divide-[color:var(--color-border)]">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="grid grid-cols-1 gap-2.5 px-3 py-3 md:grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)]">
+                    <div className="space-y-2">
+                      <div className="h-4 w-40 animate-pulse rounded-full bg-[color:rgba(255,255,255,0.08)]" />
+                      <div className="h-3 w-52 animate-pulse rounded-full bg-[color:rgba(255,255,255,0.06)]" />
+                    </div>
+                    <div className="h-3 w-28 animate-pulse rounded-full bg-[color:rgba(255,255,255,0.06)]" />
+                    <div className="h-6 w-20 animate-pulse rounded-full bg-[color:rgba(255,255,255,0.07)]" />
+                  </div>
+                ))}
+              </div>
+            ) : activity.length ? (
+              <div className="divide-y divide-[color:var(--color-border)]">
+              {activity.map((item) => (
                 <div key={`${item.id}-${item.title}`} className="grid grid-cols-1 items-start gap-2.5 px-3 py-3 md:grid-cols-[minmax(0,1.15fr),minmax(140px,0.45fr),minmax(120px,0.35fr)] md:items-center">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-[color:var(--color-text)]">{item.title}</p>
@@ -693,7 +767,19 @@ export default function AdminInicioPage() {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            ) : (
+              <div className="grid min-h-[220px] place-items-center p-6 text-center">
+                <div className="max-w-sm">
+                  <p className="text-sm font-semibold text-[color:var(--color-text)]">Todavia no hay eventos recientes en este rango</p>
+                  <p className="mt-2 text-sm text-[color:var(--color-text-muted)]">Amplia el periodo o cambia la sede para revisar si hay actividad historica que requiera seguimiento.</p>
+                  <Link href="/admin/accesos" className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--color-text)]">
+                    Ir al modulo de accesos
+                    <IconArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </SectionCard>
       </section>
@@ -715,7 +801,19 @@ export default function AdminInicioPage() {
               </span>
             </div>
 
-            {trend.length ? (
+            {dashboardLoading ? (
+              <div className={cx("grid items-end gap-3", selectedPeriod === "Anio" ? "grid-cols-6" : "grid-cols-5")}>
+                {Array.from({ length: selectedPeriod === "Anio" ? 6 : 5 }).map((_, index) => (
+                  <div key={index} className="flex flex-col items-center gap-1.5">
+                    <div className="flex h-28 w-full items-end justify-center rounded-[1.1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-2.5 py-2.5">
+                      <div className="w-10 animate-pulse rounded-full bg-[color:rgba(111,211,255,0.18)]" style={{ height: `${40 + index * 10}px` }} />
+                    </div>
+                    <div className="h-3 w-10 animate-pulse rounded-full bg-[color:rgba(255,255,255,0.06)]" />
+                    <div className="h-3 w-6 animate-pulse rounded-full bg-[color:rgba(255,255,255,0.05)]" />
+                  </div>
+                ))}
+              </div>
+            ) : trend.length ? (
               <div className={cx("grid items-end gap-3", trend.length <= 5 ? "grid-cols-5" : "grid-cols-6")}>
                 {trend.map((item) => (
                   <div key={item.label} className="flex flex-col items-center gap-1.5">
@@ -789,4 +887,3 @@ export default function AdminInicioPage() {
     </div>
   );
 }
-

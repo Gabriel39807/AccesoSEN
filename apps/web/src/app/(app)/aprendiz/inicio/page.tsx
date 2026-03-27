@@ -5,11 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import EmptyState from "@/components/aprendiz/dashboard/EmptyState";
 import {
+  IconArrowRight,
   IconBell,
   IconClock,
   IconHelp,
   IconHistory,
   IconLaptop,
+  IconQr,
   IconShield,
 } from "@/components/aprendiz/dashboard/DashboardIcons";
 import QuickActionCard from "@/components/aprendiz/dashboard/QuickActionCard";
@@ -79,6 +81,12 @@ function ubicacionPorAccesos(equipoId: number, accesos: Acceso[]): "DENTRO" | "F
   return "SIN_REGISTROS";
 }
 
+function estadoLabel(estado?: EstadoResponse["estado"]) {
+  if (estado === "DENTRO") return "Dentro de la sede";
+  if (estado === "FUERA") return "Fuera de la sede";
+  return "Sin registros recientes";
+}
+
 export default function AprendizInicioPage() {
   const { me, loadingMe } = useMe();
 
@@ -137,6 +145,31 @@ export default function AprendizInicioPage() {
 
   const equiposPreview = useMemo(() => equipos.slice(0, 4), [equipos]);
   const accesosPreview = useMemo(() => accesos.slice(0, 5), [accesos]);
+  const equiposLimitLeft = Math.max(0, 4 - stats.total);
+  const equiposUsagePct = Math.min(100, (stats.total / 4) * 100);
+  const latestAccess = accesosPreview[0] ?? null;
+
+  const recommendedAction =
+    stats.pendientes > 0
+      ? {
+          title: "Haz seguimiento a tus registros pendientes",
+          description: `${stats.pendientes} equipo${stats.pendientes === 1 ? "" : "s"} sigue${stats.pendientes === 1 ? "" : "n"} en validacion. Revisa el estado y completa datos si hace falta.`,
+          href: "/aprendiz/equipos",
+          cta: "Revisar equipos",
+        }
+      : stats.total === 0
+        ? {
+            title: "Registra tu primer equipo",
+            description: "Carga marca, modelo y serial para dejar listo tu acceso con trazabilidad completa.",
+            href: "/aprendiz/equipos/nuevo",
+            cta: "Registrar equipo",
+          }
+        : {
+            title: "Mantén tu QR listo para el ingreso",
+            description: "Abre tu QR dinamico antes de llegar al punto de control y evita retrasos en el acceso.",
+            href: "/aprendiz/mi-qr",
+            cta: "Ver mi QR",
+          };
 
   const nombreBonito =
     me?.first_name || me?.last_name
@@ -156,6 +189,14 @@ export default function AprendizInicioPage() {
               {me?.programa_formacion ?? ""}
               {me?.sede_principal ? ` - ${me.sede_principal}` : ""}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                {estadoLabel(estado?.estado)}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-white/80 bg-white/80 px-3 py-1 text-xs font-semibold text-zinc-600">
+                Cupos de equipos: {stats.total}/4
+              </span>
+            </div>
           </div>
           <div className="flex flex-col items-start gap-2 sm:items-end">
             <StatusChip status={estado?.estado} labelPrefix="Estado actual" />
@@ -181,6 +222,46 @@ export default function AprendizInicioPage() {
             </button>
           </div>
         ) : null}
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr),minmax(280px,0.85fr)]">
+          <Link
+            href={recommendedAction.href}
+            className="rounded-3xl border border-sky-200/80 bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 p-4 text-white shadow-[0_18px_36px_rgba(14,116,144,0.26)] transition hover:-translate-y-0.5 hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
+          >
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/75">Siguiente paso</p>
+            <p className="mt-2 text-lg font-extrabold tracking-tight">{recommendedAction.title}</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/88">{recommendedAction.description}</p>
+            <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white">
+              {recommendedAction.cta}
+              <IconArrowRight className="h-4 w-4" />
+            </div>
+          </Link>
+
+          <div className="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-[0_10px_24px_rgba(2,6,23,0.05)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Capacidad de equipos</p>
+                <p className="mt-1 text-lg font-extrabold tracking-tight text-zinc-900">{equiposLimitLeft > 0 ? `${equiposLimitLeft} cupos disponibles` : "Limite alcanzado"}</p>
+              </div>
+              <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">Maximo 4</span>
+            </div>
+            <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-sky-100/80">
+              <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-500" style={{ width: `${equiposUsagePct}%` }} />
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/80 bg-slate-50/80 px-3 py-2.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Ultimo movimiento</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-900">{latestAccess ? (latestAccess.tipo === "ingreso" ? "Ingreso" : "Salida") : "Sin registros"}</p>
+                <p className="mt-1 text-xs text-zinc-500">{latestAccess ? fmt(latestAccess.fecha) : "Cuando registres un acceso aparecerá aquí."}</p>
+              </div>
+              <div className="rounded-2xl border border-white/80 bg-slate-50/80 px-3 py-2.5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Trazabilidad</p>
+                <p className="mt-1 text-sm font-semibold text-zinc-900">{stats.aprobados} equipo{stats.aprobados === 1 ? "" : "s"} aprobado{stats.aprobados === 1 ? "" : "s"}</p>
+                <p className="mt-1 text-xs text-zinc-500">Mantén actualizados serial y estado para agilizar el ingreso.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -198,6 +279,12 @@ export default function AprendizInicioPage() {
             description="Carga marca, modelo y serial para iniciar validación."
             icon={<IconLaptop className="h-5 w-5" />}
             featured
+          />
+          <QuickActionCard
+            href="/aprendiz/mi-qr"
+            title="Abrir mi QR"
+            description="Ten listo tu código dinámico antes de pasar por control."
+            icon={<IconQr className="h-5 w-5" />}
           />
           <QuickActionCard
             href="/aprendiz/accesos"
@@ -314,12 +401,17 @@ export default function AprendizInicioPage() {
                     className="rounded-2xl border border-white/90 bg-white/90 p-4 shadow-[0_6px_16px_rgba(2,6,23,0.04)]"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-zinc-900">
-                        {a.tipo === "ingreso" ? "Ingreso registrado" : "Salida registrada"}
+                      <div>
+                        <div className="text-sm font-semibold text-zinc-900">
+                          {a.tipo === "ingreso" ? "Ingreso registrado" : "Salida registrada"}
+                        </div>
+                        <div className="mt-1 text-xs text-zinc-500">{a.sede ? `Sede: ${a.sede}` : "Sede sin registrar"}</div>
                       </div>
-                      <div className="text-xs text-zinc-500">{fmt(a.fecha)}</div>
+                      <div className="text-right">
+                        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">{a.tipo}</div>
+                        <div className="mt-1 text-xs text-zinc-500">{fmt(a.fecha)}</div>
+                      </div>
                     </div>
-                    <div className="mt-1 text-xs text-zinc-600">{a.sede ? `Sede: ${a.sede}` : "Sede sin registrar"}</div>
                   </div>
                 ))}
 

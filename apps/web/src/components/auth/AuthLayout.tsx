@@ -1,74 +1,60 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
-import { motion } from "framer-motion";
-import { MoonStar, SunMedium } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useMemo, useRef, useState } from "react";
 import HeroVisual from "./HeroVisual";
 import type { AuthRole } from "./RoleSwitch";
 import styles from "./auth.module.css";
 
 type Props = {
   role: AuthRole;
+  title: string;
+  subtitle: string;
+  badge: string;
   children: ReactNode;
 };
 
-export default function AuthLayout({ role, children }: Props) {
+export default function AuthLayout({ role, title, subtitle, badge, children }: Props) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [move, setMove] = useState({ x: 0, y: 0 });
+
   const classByRole = role === "admin" ? styles.layoutAdmin : styles.layoutAprendiz;
-  const { resolvedTheme, setTheme } = useTheme();
-  const activeTheme = resolvedTheme === "dark" ? "dark" : "light";
+  const tilt = useMemo(() => ({ tx: move.x * 14, ty: move.y * 14 }), [move.x, move.y]);
+
+  function onMove(event: React.MouseEvent) {
+    const el = wrapperRef.current;
+    if (!el || typeof window === "undefined" || window.innerWidth < 1024) return;
+    const rect = el.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    setMove({ x: (x - 0.5) * 2, y: (y - 0.5) * 2 });
+  }
+
+  function onLeave() {
+    setMove({ x: 0, y: 0 });
+  }
 
   return (
-    <main className={`${styles.layout} ${classByRole}`}>
-      <div className={`${styles.shell} grid min-h-[100dvh] xl:grid-cols-[0.94fr_1.06fr]`}>
-        <motion.section
-          initial={{ opacity: 0, x: -34 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.55, ease: "easeOut" }}
-          className={styles.leftPane}
-        >
-          <HeroVisual role={role} />
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, x: 28 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.55, ease: "easeOut", delay: 0.08 }}
-          className={`${styles.rightPane} flex min-h-full flex-col`}
-        >
-          <div className="flex justify-end px-5 pt-5 md:px-7 md:pt-6 xl:px-8 xl:pt-7">
-            <div className={styles.themeToggle} aria-label="Cambiar tema">
-              <button
-                type="button"
-                className={`${styles.themeButton} ${activeTheme === "light" ? styles.themeButtonActive : ""}`}
-                onClick={() => setTheme("light")}
-                aria-pressed={activeTheme === "light"}
-                aria-label="Activar modo claro"
-              >
-                <SunMedium className="h-4 w-4" strokeWidth={2.2} />
-              </button>
-              <button
-                type="button"
-                className={`${styles.themeButton} ${activeTheme === "dark" ? styles.themeButtonActive : ""}`}
-                onClick={() => setTheme("dark")}
-                aria-pressed={activeTheme === "dark"}
-                aria-label="Activar modo oscuro"
-              >
-                <MoonStar className="h-4 w-4" strokeWidth={2.2} />
-              </button>
-            </div>
-          </div>
-
-          <div className={`${styles.rightContent} mx-auto flex flex-1 flex-col justify-center px-5 py-4 md:px-7 md:py-5 xl:px-8 xl:py-6`}>
-            {children}
-          </div>
-
-          <div className="px-5 pb-5 text-center md:px-7 md:pb-6 xl:px-8 xl:pb-7 xl:text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--text-faint)]">
-              Asegurado por S.A.D.I. · 2026
+    <main className={`${styles.layout} ${classByRole} px-4 py-8 md:px-8 md:py-10`}>
+      <div
+        ref={wrapperRef}
+        onMouseMove={onMove}
+        onMouseLeave={onLeave}
+        className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1.08fr_0.92fr]"
+      >
+        <section className="order-2 lg:order-1">
+          <HeroVisual role={role} tx={tilt.tx} ty={tilt.ty} />
+        </section>
+        <section className="order-1 lg:order-2 flex items-center">
+          <div className="w-full">
+            <p className="mb-2 inline-flex rounded-full border border-slate-200/70 bg-white/70 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em] text-slate-600">
+              {badge}
             </p>
+            <h1 className={`text-3xl font-extrabold leading-tight md:text-4xl ${styles.textStrong}`}>{title}</h1>
+            <p className={`mt-2 text-sm leading-relaxed md:text-base ${styles.textSoft}`}>{subtitle}</p>
+            <div className="mt-5">{children}</div>
           </div>
-        </motion.section>
+        </section>
       </div>
     </main>
   );
