@@ -1165,6 +1165,8 @@ class MeView(APIView):
 
     def get(self, request):
         data = UsuarioSerializer(request.user).data
+        data["rol"] = AuthorizationService.runtime_role_for_user(request.user)
+        data["sede_principal"] = AuthorizationService.default_sede_code(request.user, role_code=data["rol"]) or None
         data["requires_password_reset"] = bool(getattr(request.user, "force_password_reset", False))
         return ok_response({"usuario": data})
 

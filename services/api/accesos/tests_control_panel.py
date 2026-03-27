@@ -4,8 +4,16 @@ from django.core.cache import cache
 from django.test import override_settings
 from rest_framework import status
 
+from .jwt_views import issue_tokens_for_user
 from .control_panel_support import control_panel_otp_cache_key
-from .models import ControlPanelAuditEvent, ControlPanelQuotaCounter, ProgramaFormacion, TenantBrandingConfig, Usuario
+from .models import (
+    ControlPanelAuditEvent,
+    ControlPanelQuotaCounter,
+    ProgramaFormacion,
+    TenantBrandingConfig,
+    UserMembership,
+    Usuario,
+)
 from .tests_support import BaseApiTest
 from .views import ProgramaFormacionViewSet
 
@@ -152,6 +160,35 @@ class ControlPanelSessionStepUpTests(BaseApiTest):
         )
         self.assertEqual(verified.status_code, status.HTTP_400_BAD_REQUEST, verified.data)
         self.assertEqual(verified.data.get("code"), "INVALID_CREDENTIALS")
+
+    def test_legacy_superadmin_session_self_heals_membership_and_recovers_control_panel_access(self):
+        tokens = issue_tokens_for_user(self.superadmin, device_id="legacy-superadmin-device", role_code="superadmin")
+        UserMembership.objects.filter(user=self.superadmin).delete()
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+
+        me = self.client.get("/api/me/")
+        self.assertEqual(me.status_code, status.HTTP_200_OK, me.data)
+        self.assertEqual(me.data["usuario"]["rol"], "superadmin")
+        self.assertTrue(
+            UserMembership.objects.filter(user=self.superadmin, role__code="superadmin", is_active=True).exists()
+        )
+
+        verified = self.client.post(
+            "/api/control-panel/session/verify-password/",
+            {"password": "Passw0rd!"},
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_200_OK, verified.data)
+        session_id = verified.data["session"]["id"]
+
+        created = self.client.post(
+            "/api/sedes/",
+            {"code": "legacy-fix", "name": "Legacy Fix"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Reparar membresia legacy"),
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
 
     @override_settings(WEBAUTHN_MOCK=False)
     def test_control_panel_passkey_step_up_is_disabled_without_real_webauthn(self):
