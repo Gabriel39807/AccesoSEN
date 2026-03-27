@@ -422,6 +422,7 @@ export default function AdminUsuariosPage() {
   const { me, loadingMe } = useMe();
   const { sedes } = useSedes();
   const { emailPlaceholder } = useInstitution();
+  const sedesByCode = useMemo(() => new Map(sedes.map((item) => [item.code, item.name])), [sedes]);
   const actorRole = me?.rol;
   const actorSede = me?.sede_principal ?? null;
   const importAccept = APRENDIZ_IMPORT_FORMATS.join(",");
@@ -761,6 +762,11 @@ export default function AdminUsuariosPage() {
     rolFilter !== "todos" ||
     estadoFilter !== "todos" ||
     sedeFilter !== "todos";
+  const activeFilterCount =
+    (q.trim() ? 1 : 0) +
+    (rolFilter !== "todos" ? 1 : 0) +
+    (estadoFilter !== "todos" ? 1 : 0) +
+    (sedeFilter !== "todos" ? 1 : 0);
 
   const pageItems = useMemo(() => {
     if (serverPaginated) return usuariosVisibles;
@@ -880,6 +886,11 @@ export default function AdminUsuariosPage() {
     () => pageItems.filter(isUserDeletable),
     [pageItems, isUserDeletable],
   );
+  const currentResultLabel = useMemo(() => {
+    if (!pageItems.length) return "Sin resultados en esta página";
+    if (serverPaginated) return `${pageItems.length} visibles en la página actual`;
+    return `${pageItems.length} visibles tras aplicar filtros`;
+  }, [pageItems.length, serverPaginated]);
   const allVisibleSelected =
     visibleDeletableUsers.length > 0 &&
     visibleDeletableUsers.every((user) => selectedIds.includes(user.id));
@@ -906,6 +917,14 @@ export default function AdminUsuariosPage() {
     setSedeFilter(isScopedAdminSede ? actorSede ?? "todos" : "todos");
     setRolFilter(next.rol ?? "todos");
     setEstadoFilter(next.estado ?? "todos");
+    setPage(1);
+  }
+
+  function resetFilters() {
+    setQ("");
+    setRolFilter("todos");
+    setEstadoFilter("todos");
+    setSedeFilter(isScopedAdminSede ? actorSede ?? "todos" : "todos");
     setPage(1);
   }
 
@@ -1536,60 +1555,96 @@ export default function AdminUsuariosPage() {
             ) : null
           }
         >
-            <div className="relative w-full md:col-span-12 lg:col-span-4">
-              <input
-                className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
-              placeholder="Buscar: username, email, documento, nombre..."
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
+          <div className="md:col-span-12">
+            <div className="flex flex-col gap-3 rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">
+                  Vista de usuarios
+                </p>
+                <p className="mt-1 text-sm text-[color:var(--color-text)]">
+                  {currentResultLabel}. {selectedIds.length > 0 ? `${selectedIds.length} seleccionados para acciones masivas.` : "Usa filtros y acciones rápidas sin salir de la tabla."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="command-noir-chip whitespace-nowrap" data-tone={hasFilters ? "info" : "neutral"}>
+                  {activeFilterCount} filtro(s)
+                </span>
+                <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
+                  {totalCount} usuarios
+                </span>
+                <span className="command-noir-chip whitespace-nowrap" data-tone={visibleDeletableUsers.length > 0 ? "warning" : "neutral"}>
+                  {visibleDeletableUsers.length} eliminables en vista
+                </span>
+              </div>
+            </div>
           </div>
 
-          <select
-            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
-            value={rolFilter}
-            onChange={(e) => setRolFilter(e.target.value as UserFilterRole)}
-          >
-            <option value="todos">Rol: Todos</option>
-            {roleFilterOptions.map((role) => (
-              <option key={role} value={role}>
-                {`Rol: ${role}`}
-              </option>
-            ))}
-          </select>
+          <div className="relative w-full md:col-span-12 lg:col-span-4">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+              Buscar usuario
+            </label>
+              <input
+                className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              placeholder="Username, correo, documento o nombre"
+               value={q}
+               onChange={(e) => setQ(e.target.value)}
+             />
+          </div>
 
-          <select
-            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
-            value={estadoFilter}
-            onChange={(e) => setEstadoFilter(e.target.value as UserStateFilter)}
-          >
-            <option value="todos">Estado: Todos</option>
-            <option value="activo">Estado: activo</option>
-            <option value="bloqueado">Estado: bloqueado</option>
-          </select>
+          <div className="md:col-span-4 lg:col-span-2">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+              Rol
+            </label>
+            <select
+              className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              value={rolFilter}
+              onChange={(e) => setRolFilter(e.target.value as UserFilterRole)}
+            >
+              <option value="todos">Todos los roles</option>
+              {roleFilterOptions.map((role) => (
+                <option key={role} value={role}>
+                  {getRoleBadgeLabel(role)}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <select
-            className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition md:col-span-4 lg:col-span-2"
-            value={sedeFilter}
-            onChange={(e) => setSedeFilter(e.target.value)}
-            disabled={isScopedAdminSede}
-          >
-            <option value="todos">{isScopedAdminSede ? "Sede: fija por sesión" : "Sede: Todas"}</option>
-            {sedes.map((item) => (
-              <option key={item.id} value={item.code}>
-                {item.code}
-              </option>
-            ))}
-          </select>
+          <div className="md:col-span-4 lg:col-span-2">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+              Estado
+            </label>
+            <select
+              className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              value={estadoFilter}
+              onChange={(e) => setEstadoFilter(e.target.value as UserStateFilter)}
+            >
+              <option value="todos">Todos los estados</option>
+              <option value="activo">Activo</option>
+              <option value="bloqueado">Bloqueado</option>
+            </select>
+          </div>
+
+          <div className="md:col-span-4 lg:col-span-2">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">
+              Sede
+            </label>
+            <select
+              className="command-noir-control h-10 w-full px-3 py-2 text-sm outline-none transition"
+              value={sedeFilter}
+              onChange={(e) => setSedeFilter(e.target.value)}
+              disabled={isScopedAdminSede}
+            >
+              <option value="todos">{isScopedAdminSede ? "Fija por sesión" : "Todas las sedes"}</option>
+              {sedes.map((item) => (
+                <option key={item.id} value={item.code}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <Button
-            onClick={() => {
-              setQ("");
-              setRolFilter("todos");
-              setEstadoFilter("todos");
-              setSedeFilter(isScopedAdminSede ? actorSede ?? "todos" : "todos");
-              setPage(1);
-            }}
+            onClick={resetFilters}
             className="h-10 md:col-span-6 lg:col-span-1"
             variant="secondary"
             disabled={!hasFilters}
@@ -1598,8 +1653,8 @@ export default function AdminUsuariosPage() {
           </Button>
 
           <div className="flex h-10 items-center justify-end md:col-span-6 lg:col-span-1">
-            <span className="command-noir-chip whitespace-nowrap">
-              {totalCount} usuarios
+            <span className="command-noir-chip whitespace-nowrap" data-tone={serverPaginated ? "info" : "neutral"}>
+              {serverPaginated ? `Página ${page}` : "Vista local"}
             </span>
           </div>
         </FilterBar>
@@ -1676,7 +1731,14 @@ export default function AdminUsuariosPage() {
                 <div className="mx-auto max-w-md">
                   <EmptyState
                     title="No hay usuarios para mostrar"
-                    description="Prueba limpiando o ajustando los filtros activos."
+                    description={hasFilters ? "Prueba limpiando o ajustando los filtros activos." : "Todavía no hay usuarios cargados en esta vista."}
+                    action={
+                      hasFilters ? (
+                        <Button onClick={resetFilters} variant="secondary">
+                          Limpiar filtros
+                        </Button>
+                      ) : null
+                    }
                   />
                 </div>
               </td>
@@ -1706,6 +1768,10 @@ export default function AdminUsuariosPage() {
               <td className="command-noir-table-cell px-2.5 py-2">
                 <div className="truncate font-semibold text-[color:var(--color-text)]">{u.username}</div>
                 {u.email ? <div className="truncate text-[12px] text-[color:var(--color-text-muted)]">{u.email}</div> : null}
+                <div className="mt-1 space-y-1 text-[11px] text-[color:var(--color-text-muted)] lg:hidden">
+                  <div>{`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "Sin nombre registrado"}</div>
+                  <div>{u.documento ? `Doc. ${u.documento}` : "Sin documento"}</div>
+                </div>
               </td>
 
               <td className="command-noir-table-cell hidden px-2.5 py-2 lg:table-cell">
@@ -1752,7 +1818,7 @@ export default function AdminUsuariosPage() {
 
               <td className="command-noir-table-cell hidden px-2.5 py-2 xl:table-cell"><div className="truncate">{u.documento ?? "-"}</div></td>
               <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell">
-                <div className="truncate">{u.sede_principal ?? "-"}</div>
+                <div className="truncate">{u.sede_principal ? sedesByCode.get(u.sede_principal) || u.sede_principal : "-"}</div>
               </td>
               <td className="command-noir-table-cell hidden px-2.5 py-2 2xl:table-cell"><div className="truncate">{u.programa_formacion ?? "-"}</div></td>
 

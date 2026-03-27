@@ -250,6 +250,14 @@ export default function AdminAccesosPage() {
     guardaId !== "" ||
     dateFrom !== "" ||
     dateTo !== "";
+  const activeFilterCount =
+    (q.trim() ? 1 : 0) +
+    (tipo !== "" ? 1 : 0) +
+    (sede !== "" ? 1 : 0) +
+    (aprendizId !== "" ? 1 : 0) +
+    (guardaId !== "" ? 1 : 0) +
+    (dateFrom !== "" ? 1 : 0) +
+    (dateTo !== "" ? 1 : 0);
 
   async function cargarUsuarios() {
     const res = await api.get<Usuario[] | Paginated<Usuario>>("/api/usuarios/");
@@ -361,6 +369,8 @@ export default function AdminAccesosPage() {
   }, [page]);
 
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
+  const selectedAprendiz = aprendizId === "" ? null : usuariosMap.get(aprendizId);
+  const selectedGuarda = guardaId === "" ? null : usuariosMap.get(guardaId);
 
   return (
     <div className="space-y-4 pb-2">
@@ -403,9 +413,33 @@ export default function AdminAccesosPage() {
             error ? <div className="rounded-2xl border border-[color:rgba(255,107,122,0.28)] bg-[color:color-mix(in_srgb,var(--danger)_10%,var(--surface-subtle))] p-3 text-sm text-[color:var(--danger)]">{error}</div> : null
           }
         >
+          <div className="md:col-span-12">
+            <div className="flex flex-col gap-3 rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Lectura operativa</p>
+                <p className="mt-1 text-sm text-[color:var(--color-text)]">
+                  {accesos.length
+                    ? `${accesos.length} accesos visibles en la página actual.${selectedAprendiz ? ` Aprendiz enfocado: ${nombreUsuario(selectedAprendiz)}.` : ""}${selectedGuarda ? ` Guarda: ${nombreUsuario(selectedGuarda)}.` : ""}`
+                    : "Combina filtros para auditar ingresos, salidas y movimientos con equipos asociados."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="command-noir-chip whitespace-nowrap" data-tone={hasFilters ? "info" : "neutral"}>
+                  {activeFilterCount} filtro(s)
+                </span>
+                <span className="command-noir-chip whitespace-nowrap" data-tone={stats.conEquipos > 0 ? "warning" : "neutral"}>
+                  {stats.conEquipos} con equipos
+                </span>
+                <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
+                  {count} accesos
+                </span>
+              </div>
+            </div>
+          </div>
+
           <input
             className="command-noir-control h-10 w-full md:col-span-12 lg:col-span-4"
-            placeholder="Buscar por documento o username..."
+            placeholder="Documento, username o referencia rápida"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -515,9 +549,16 @@ export default function AdminAccesosPage() {
               <td colSpan={7} className="px-4 py-10 text-center">
                 <div className="mx-auto max-w-md">
                   <EmptyState
-                    title="Sin registros con estos filtros"
-                    description="Ajusta los filtros para continuar."
+                    title="Sin accesos en esta vista"
+                    description={hasFilters ? "Ajusta o limpia filtros para recuperar movimientos." : "Todavía no hay movimientos registrados en este listado."}
                     icon={<IconHistory className="h-5 w-5" />}
+                    action={
+                      hasFilters ? (
+                        <Button onClick={resetFiltros} variant="secondary">
+                          Limpiar filtros
+                        </Button>
+                      ) : null
+                    }
                   />
                 </div>
               </td>
@@ -531,7 +572,10 @@ export default function AdminAccesosPage() {
 
             return (
               <tr key={a.id} className="command-noir-table-row">
-                <td className="command-noir-table-cell px-2.5 py-2 text-[color:var(--color-text-soft)]">{formatFecha(a.fecha)}</td>
+                <td className="command-noir-table-cell px-2.5 py-2 text-[color:var(--color-text-soft)]">
+                  <div>{formatFecha(a.fecha)}</div>
+                  <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">Acceso #{a.id}</div>
+                </td>
                 <td className="command-noir-table-cell px-2.5 py-2">
                   {a.tipo === "ingreso" ? <Badge variant="green" label="Ingreso" /> : <Badge variant="red" label="Salida" />}
                 </td>
@@ -545,10 +589,26 @@ export default function AdminAccesosPage() {
                 <td className="command-noir-table-cell px-2.5 py-2">
                   <div className="font-semibold text-[color:var(--color-text)]">{nombreUsuario(aprendiz)}</div>
                   <div className="text-xs text-[color:var(--color-text-muted)]">{aprendiz?.documento ?? "â€”"}</div>
+                  <div className="mt-1 space-y-1 text-[11px] text-[color:var(--color-text-muted)] lg:hidden">
+                    <div>{registrado ? `Registró: ${nombreUsuario(registrado)}` : "Sin guarda asociado"}</div>
+                    <div>
+                      {equiposCount ? `${equiposCount} equipo(s) asociado(s)` : "Sin equipos asociados"}
+                    </div>
+                  </div>
                 </td>
-                <td className="command-noir-table-cell hidden px-2.5 py-2 text-[color:var(--color-text-soft)] lg:table-cell">{registrado ? nombreUsuario(registrado) : "â€”"}</td>
+                <td className="command-noir-table-cell hidden px-2.5 py-2 text-[color:var(--color-text-soft)] lg:table-cell">
+                  <div>{registrado ? nombreUsuario(registrado) : "â€”"}</div>
+                  <div className="mt-1 text-[11px] text-[color:var(--color-text-muted)]">Turno y contexto ampliado en el detalle</div>
+                </td>
                 <td className="command-noir-table-cell hidden px-2.5 py-2 md:table-cell">
-                  {equiposCount ? <Badge variant="amber" label={`${equiposCount} equipo(s)`} /> : "â€”"}
+                  {equiposCount ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Badge variant="amber" label={`${equiposCount} equipo(s)`} />
+                      <span className="text-[11px] text-[color:var(--color-text-muted)]">Incluidos en la trazabilidad del evento</span>
+                    </div>
+                  ) : (
+                    "â€”"
+                  )}
                 </td>
                 <td className="px-2.5 py-2 text-right">
                   <Button onClick={() => abrirDetalle(a)} variant="secondary" className="min-h-8 px-3 py-1 text-xs">
@@ -636,6 +696,29 @@ export default function AdminAccesosPage() {
               </div>
             </div>
 
+            {selected.turno ? (
+              <div className="command-noir-detail-card">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-bold text-[color:var(--color-text)]">Contexto del turno</div>
+                  {loadingDetalle ? <div className="text-xs text-[color:var(--color-text-muted)]">Cargando...</div> : null}
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Jornada</div>
+                    <div className="mt-1 font-semibold text-[color:var(--color-text)]">{detalleTurno?.jornada ?? "Pendiente de cargar"}</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Inicio</div>
+                    <div className="mt-1 font-semibold text-[color:var(--color-text)]">{detalleTurno ? formatFecha(detalleTurno.inicio) : "Pendiente de cargar"}</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--color-text-muted)]">Cierre</div>
+                    <div className="mt-1 font-semibold text-[color:var(--color-text)]">{detalleTurno ? formatFecha(detalleTurno.fin) : "Pendiente de cargar"}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="command-noir-detail-card">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-bold text-[color:var(--color-text)]">Equipos</div>
@@ -688,4 +771,3 @@ export default function AdminAccesosPage() {
     </div>
   );
 }
-

@@ -5,7 +5,6 @@ import { api } from "@/lib/api";
 import BadgeChip from "@/components/admin/BadgeChip";
 import FilterBar from "@/components/admin/FilterBar";
 import PageHeader from "@/components/admin/PageHeader";
-import StatCard from "@/components/admin/StatCard";
 import AdminTableSkeleton from "@/components/dashboard/shared/AdminTableSkeleton";
 import DataTable from "@/components/dashboard/shared/DataTable";
 import EmptyState from "@/components/dashboard/shared/EmptyState";
@@ -71,6 +70,13 @@ function nombreUsuario(u?: Usuario | null) {
   return full || u.username;
 }
 
+function formatEquipoEstado(estado: Equipo["estado"]) {
+  const normalized = String(estado).toLowerCase();
+  if (normalized === "aprobado") return { label: "Aprobado", tone: "success" as const };
+  if (normalized === "rechazado") return { label: "Rechazado", tone: "danger" as const };
+  return { label: "Pendiente", tone: "warning" as const };
+}
+
 function StatSkeleton() {
   return <div className="rounded-2xl border bg-white shadow-sm p-4 animate-pulse h-[92px]" />;
 }
@@ -83,6 +89,53 @@ function FilterSkeleton() {
         <div className="sadi-skeleton h-11 rounded-xl md:col-span-2" />
       </div>
     </section>
+  );
+}
+
+function MetricPanel({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+  onClick,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--color-text-muted)]">{label}</p>
+          <p className="mt-1.5 text-[1.45rem] font-semibold tracking-[-0.03em] text-[color:var(--color-text)]">{value.toLocaleString("es-CO")}</p>
+        </div>
+        <span className="command-noir-chip" data-tone={tone}>{detail}</span>
+      </div>
+      <p className="mt-3 text-sm text-[color:var(--color-text-soft)]">
+        {label === "Total"
+          ? "Inventario visible en la consulta actual."
+          : label === "Pendientes"
+            ? "Equipos que requieren decisión administrativa."
+            : label === "Aprobados"
+              ? "Registros habilitados para circular sin observaciones."
+              : "Casos con rechazo documentado para seguimiento."}
+      </p>
+    </>
+  );
+
+  if (!onClick) return <article className="command-noir-metric">{content}</article>;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="command-noir-metric text-left transition hover:-translate-y-0.5 hover:border-[color:var(--color-border-strong)] hover:bg-[color:rgba(255,255,255,0.05)]"
+    >
+      {content}
+    </button>
   );
 }
 function TableSkeleton({ rows = 7 }: { rows?: number }) {
@@ -142,6 +195,10 @@ export default function AdminEquiposPage() {
     const rechazados = equipos.filter((e) => String(e.estado).toLowerCase() === "rechazado").length;
     return { total, pendientes, aprobados, rechazados };
   }, [equipos, count]);
+  const pendingItems = useMemo(
+    () => equipos.filter((item) => String(item.estado).toLowerCase() === "pendiente"),
+    [equipos],
+  );
 
   async function cargarUsuarios() {
     const res = await api.get<Usuario[] | Paginated<Usuario>>("/api/usuarios/");
@@ -196,6 +253,11 @@ export default function AdminEquiposPage() {
   function resetFiltros() {
     setQ("");
     setEstado("");
+    setPage(1);
+  }
+
+  function aplicarEstado(nextEstado: "" | "pendiente" | "aprobado" | "rechazado") {
+    setEstado(nextEstado);
     setPage(1);
   }
 
@@ -258,6 +320,8 @@ export default function AdminEquiposPage() {
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   const hasFilters = q.trim().length > 0 || estado !== "";
+  const activeFilterCount = (q.trim() ? 1 : 0) + (estado !== "" ? 1 : 0);
+  const pendingPreview = pendingItems.slice(0, 3).map((item) => item.serial).join(", ");
 
   return (
     <div className="space-y-6 pb-2">
@@ -284,10 +348,10 @@ export default function AdminEquiposPage() {
           </>
         ) : (
           <>
-            <StatCard label="Total" value={stats.total} />
-            <StatCard label="Pendientes" value={stats.pendientes} tone="warning" />
-            <StatCard label="Aprobados" value={stats.aprobados} tone="success" />
-            <StatCard label="Rechazados" value={stats.rechazados} tone="danger" />
+            <MetricPanel label="Total" value={stats.total} detail={`${count} registros`} onClick={() => aplicarEstado("")} />
+            <MetricPanel label="Pendientes" value={stats.pendientes} detail="por revisar" tone="warning" onClick={() => aplicarEstado("pendiente")} />
+            <MetricPanel label="Aprobados" value={stats.aprobados} detail="listos" tone="success" onClick={() => aplicarEstado("aprobado")} />
+            <MetricPanel label="Rechazados" value={stats.rechazados} detail="observados" tone="danger" onClick={() => aplicarEstado("rechazado")} />
           </>
         )}
       </div>
@@ -300,9 +364,33 @@ export default function AdminEquiposPage() {
             error ? <FormBanner type="error" message={error} /> : null
           }
         >
+          <div className="md:col-span-12">
+            <div className="flex flex-col gap-3 rounded-[1.2rem] border border-[color:var(--color-border)] bg-[color:var(--surface-subtle)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--color-text-muted)]">Bandeja de revisión</p>
+                <p className="mt-1 text-sm text-[color:var(--color-text)]">
+                  {equipos.length
+                    ? `${equipos.length} equipos visibles en esta página. ${pendingItems.length ? `Pendientes destacados: ${pendingPreview}${pendingItems.length > 3 ? "..." : ""}.` : "No hay pendientes inmediatos en la vista actual."}`
+                    : "Usa la búsqueda para ubicar seriales, propietarios o estados con rapidez."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="command-noir-chip whitespace-nowrap" data-tone={hasFilters ? "info" : "neutral"}>
+                  {activeFilterCount} filtro(s)
+                </span>
+                <span className="command-noir-chip whitespace-nowrap" data-tone={pendingItems.length ? "warning" : "neutral"}>
+                  {pendingItems.length} pendientes en página
+                </span>
+                <span className="command-noir-chip whitespace-nowrap" data-tone="neutral">
+                  {count} equipos
+                </span>
+              </div>
+            </div>
+          </div>
+
           <input
             className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm md:col-span-7"
-            placeholder="Buscar por serial, marca, modelo, documento o username..."
+            placeholder="Serial, marca, modelo, documento o username"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -349,7 +437,17 @@ export default function AdminEquiposPage() {
             <tr>
               <td colSpan={6} className="px-4 py-10 text-center">
                 <div className="mx-auto max-w-md">
-                  <EmptyState title="Sin registros con estos filtros" description="Ajusta los filtros para continuar." />
+                  <EmptyState
+                    title="Sin equipos en esta vista"
+                    description={hasFilters ? "Ajusta o limpia los filtros para recuperar resultados." : "Todavía no hay equipos cargados para revisión."}
+                    action={
+                      hasFilters ? (
+                        <Button onClick={resetFiltros} variant="secondary">
+                          Limpiar filtros
+                        </Button>
+                      ) : null
+                    }
+                  />
                 </div>
               </td>
             </tr>
@@ -357,29 +455,51 @@ export default function AdminEquiposPage() {
         >
           {equipos.map((e) => {
             const owner = usuariosMap.get(e.propietario);
-            const st = String(e.estado).toLowerCase();
+            const status = formatEquipoEstado(e.estado);
 
             return (
               <tr key={e.id} className="border-b transition hover:bg-sky-50/35">
-                <td className="px-4 py-3 font-semibold text-gray-900">{e.serial}</td>
+                <td className="px-4 py-3 text-gray-900">
+                  <div className="font-semibold">{e.serial}</div>
+                  <div className="mt-1 text-xs text-gray-500">Equipo #{e.id}</div>
+                </td>
                 <td className="px-4 py-3 text-gray-800">
                   <div className="font-medium">{e.marca}</div>
                   <div className="text-xs text-gray-500">{e.modelo}</div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-gray-900">{nombreUsuario(owner)}</div>
-                  <div className="text-xs text-gray-500">{owner?.documento ?? "—"}</div>
+                  <div className="text-xs text-gray-500">
+                    {owner?.documento ?? "Sin documento"}
+                    {owner?.username ? ` · @${owner.username}` : ""}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
-                  <BadgeChip tone={st === "aprobado" ? "success" : st === "rechazado" ? "danger" : "warning"}>
-                    {st === "aprobado" ? "Aprobado" : st === "rechazado" ? "Rechazado" : "Pendiente"}
-                  </BadgeChip>
+                  <div className="flex flex-col gap-1.5">
+                    <BadgeChip tone={status.tone}>{status.label}</BadgeChip>
+                    <span className="text-xs text-gray-500">
+                      {status.label === "Pendiente"
+                        ? "Esperando revisión administrativa"
+                        : status.label === "Aprobado"
+                          ? "Validado para circulación"
+                          : "Requiere corrección antes de aprobar"}
+                    </span>
+                  </div>
                 </td>
-                <td className="px-4 py-3 text-gray-700">{st === "rechazado" ? e.motivo_rechazo || "—" : "—"}</td>
+                <td className="px-4 py-3 text-gray-700">
+                  <div className="max-w-[18rem] text-sm leading-6 text-gray-700">
+                    {status.label === "Rechazado" ? e.motivo_rechazo || "Sin motivo registrado" : "—"}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-right">
-                  <Button onClick={() => abrirRevisar(e)} variant="secondary" className="px-3 py-1.5 text-xs">
-                    Revisar
-                  </Button>
+                  <div className="flex flex-col items-end gap-2">
+                    <Button onClick={() => abrirRevisar(e)} variant="secondary" className="px-3 py-1.5 text-xs">
+                      Revisar
+                    </Button>
+                    <span className="text-[11px] text-gray-500">
+                      {status.label === "Pendiente" ? "Sin decisión" : `Estado actual: ${status.label.toLowerCase()}`}
+                    </span>
+                  </div>
                 </td>
               </tr>
             );
@@ -412,8 +532,19 @@ export default function AdminEquiposPage() {
           }}
         >
           <div className="space-y-4">
-            <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
-              Selecciona aprobar o rechazar. Si rechazas, debes poner un motivo.
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Serial</div>
+                <div className="mt-1 font-semibold text-gray-900">{equipoSel?.serial ?? "—"}</div>
+              </div>
+              <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Equipo</div>
+                <div className="mt-1 font-semibold text-gray-900">{equipoSel ? `${equipoSel.marca} ${equipoSel.modelo}` : "—"}</div>
+              </div>
+              <div className="rounded-xl border bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Contexto</div>
+                <div className="mt-1 text-gray-700">Aprobar habilita el registro; rechazar exige motivo visible para auditoría.</div>
+              </div>
             </div>
             {reviewBanner ? <FormBanner type="error" message={reviewBanner} /> : null}
 
