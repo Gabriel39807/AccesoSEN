@@ -25,14 +25,6 @@ type ControlPanelSessionState = {
   active: boolean;
   session: { id: string; verified_by?: string; expires_at?: string } | null;
 };
-type ControlPanelPasskeyOptionsResponse = {
-  request_id: string;
-  challenge: string;
-  rp_id: string;
-  timeout: number;
-  allow_credentials: Array<{ credential_id: string; transports?: string[] }>;
-  mock?: boolean;
-};
 
 type SedeRow = {
   id: number;
@@ -168,25 +160,14 @@ function formatDate(value?: string | null): string {
   }).format(date);
 }
 
-function stringToBytes(value: string) {
-  return new TextEncoder().encode(value);
-}
-
-function toBase64Url(buffer: ArrayBuffer) {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i += 1) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
 export default function SuperadminControlCenterPage() {
   const { me, loadingMe } = useMe();
   const [activeSection, setActiveSection] = useState<SectionKey>("branding");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [passkeySupported, setPasskeySupported] = useState(false);
   const [controlPanelSession, setControlPanelSession] = useState<ControlPanelSessionState>({ active: false, session: null });
   const [actionReason, setActionReason] = useState("");
+  const [reauthPassword, setReauthPassword] = useState("");
 
   const [sedes, setSedes] = useState<SedeRow[]>([]);
   const [roles, setRoles] = useState<RoleRow[]>([]);
@@ -198,10 +179,6 @@ export default function SuperadminControlCenterPage() {
   const [brandingPresets, setBrandingPresets] = useState<BrandingPresetRow[]>([]);
   const [brandingConfig, setBrandingConfig] = useState<BrandingConfigRow | null>(null);
   const [quotaRows, setQuotaRows] = useState<QuotaRow[]>([]);
-
-  useEffect(() => {
-    setPasskeySupported(typeof window !== "undefined" && "PublicKeyCredential" in window && !!navigator.credentials);
-  }, []);
 
   const [createSedeCode, setCreateSedeCode] = useState("");
   const [createSedeName, setCreateSedeName] = useState("");
@@ -254,6 +231,14 @@ export default function SuperadminControlCenterPage() {
 
   function fieldError(field: string): string | null {
     return fieldErrors[field]?.[0] ?? null;
+  }
+
+  function updateReauthPassword(value: string) {
+    setReauthPassword(value);
+    setFieldErrors((prev) => {
+      if (!prev.password?.length) return prev;
+      return { ...prev, password: [] };
+    });
   }
 
   function controlPanelHeaders(reason?: string) {
@@ -427,49 +412,25 @@ export default function SuperadminControlCenterPage() {
     );
   }
 
-  async function openControlPanelWithPasskey() {
+  async function openControlPanelWithPassword() {
     clearErrors();
-    if (!passkeySupported) {
-      setFormErrors(["Tu navegador no soporta Passkeys/WebAuthn para abrir la sesión reforzada."]);
+    if (!reauthPassword.trim()) {
+      setFormErrors(["Debes volver a ingresar tu clave para continuar."]);
       return;
     }
     setBusy(true);
     try {
-      const optionsResponse = await api.post<ControlPanelPasskeyOptionsResponse>(
-        "/api/control-panel/session/request-passkey/",
-        {},
-      );
-      const options = optionsResponse.data;
-      const publicKey: PublicKeyCredentialRequestOptions = {
-        challenge: stringToBytes(options.challenge),
-        rpId: options.rp_id,
-        timeout: options.timeout || 60000,
-        userVerification: "preferred",
-        allowCredentials: (options.allow_credentials || []).map((credential) => ({
-          type: "public-key",
-          id: stringToBytes(credential.credential_id),
-          transports: credential.transports as AuthenticatorTransport[] | undefined,
-        })),
-      };
-
-      const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
-      if (!assertion) {
-        throw new Error("No fue posible obtener una credencial passkey para el panel.");
-      }
-      const credentialId = toBase64Url(assertion.rawId);
-
       const verifyResponse = await api.post<ControlPanelSessionState>(
-        "/api/control-panel/session/verify-passkey/",
+        "/api/control-panel/session/verify-password/",
         {
-          request_id: options.request_id,
-          challenge: options.challenge,
-          credential_id: credentialId,
+          password: reauthPassword,
         },
       );
       setControlPanelSession({
         active: Boolean(verifyResponse.data?.active),
         session: verifyResponse.data?.session ?? null,
       });
+      setReauthPassword("");
       await loadControlCenter();
     } catch (error) {
       setApiErrors(error);
@@ -883,12 +844,15 @@ export default function SuperadminControlCenterPage() {
       <ControlPanelAccessCard
         active={controlPanelSession.active}
         busy={busy}
-        passkeySupported={passkeySupported}
         sessionId={controlPanelSession.session?.id}
         expiresAtLabel={formatDate(controlPanelSession.session?.expires_at)}
         actionReason={actionReason}
+        reauthPassword={reauthPassword}
+        reauthError={fieldError("password")}
+        reauthMode="real"
         onActionReasonChange={setActionReason}
-        onOpenPasskey={openControlPanelWithPasskey}
+        onReauthPasswordChange={updateReauthPassword}
+        onOpenWithPassword={openControlPanelWithPassword}
         onCloseSession={closeControlPanelSession}
       />
 
@@ -933,26 +897,35 @@ export default function SuperadminControlCenterPage() {
                     Sesión reforzada requerida
                   </span>
                   <div>
-                    <h2 className="text-lg font-semibold text-text">Abre el panel con passkey para continuar</h2>
+                    <h2 className="text-lg font-semibold text-text">Confirma tu clave para continuar</h2>
                     <p className="mt-1 max-w-2xl text-sm text-text/75">
-                      La vista de {secureSessionRequiredLabels[activeSection]} queda protegida para la demo. El flujo OTP del panel se retiró de esta interfaz porque no estaba siendo confiable en producción.
+                      La vista de {secureSessionRequiredLabels[activeSection]} queda protegida para la demo. El flujo OTP del panel ya se retiró de esta interfaz y ahora pedimos volver a ingresar la clave del usuario autenticado para abrir la sesión reforzada.
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={openControlPanelWithPasskey}
-                  disabled={busy || !passkeySupported}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {busy ? "Abriendo..." : "Abrir sesión con passkey"}
-                </button>
+                <div className="w-full max-w-sm space-y-3">
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={reauthPassword}
+                    onChange={(event) => updateReauthPassword(event.target.value)}
+                    placeholder="Vuelve a poner tu clave"
+                    className="w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
+                  />
+                  {fieldError("password") ? <p className="text-xs text-rose-600">{fieldError("password")}</p> : null}
+                  <button
+                    type="button"
+                    onClick={openControlPanelWithPassword}
+                    disabled={busy || !reauthPassword.trim()}
+                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    {busy ? "Verificando..." : "Abrir sesión reforzada"}
+                  </button>
+                </div>
               </div>
-              {!passkeySupported ? (
-                <p className="mt-3 text-sm text-amber-800">
-                  Este navegador no expone WebAuthn/Passkeys. Para presentar el panel usa un navegador compatible y vuelve a intentar.
-                </p>
-              ) : null}
+              <p className="mt-3 text-sm text-text/70">
+                Esta reautenticacion valida la clave del usuario autenticado antes de abrir la sesion reforzada del panel. No reactiva OTP ni depende de passkeys para la demo.
+              </p>
             </div>
           ) : null}
 

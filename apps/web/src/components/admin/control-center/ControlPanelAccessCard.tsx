@@ -1,29 +1,35 @@
 type ControlPanelAccessCardProps = {
   active: boolean;
   busy: boolean;
-  passkeySupported: boolean;
   sessionId?: string | null;
   expiresAtLabel?: string | null;
   actionReason: string;
+  reauthPassword: string;
+  reauthError?: string | null;
+  reauthMode: "real" | "presentation";
   onActionReasonChange: (value: string) => void;
-  onOpenPasskey: () => void;
+  onReauthPasswordChange: (value: string) => void;
+  onOpenWithPassword: () => void;
   onCloseSession: () => void;
 };
 
 export default function ControlPanelAccessCard({
   active,
   busy,
-  passkeySupported,
   sessionId,
   expiresAtLabel,
   actionReason,
+  reauthPassword,
+  reauthError,
+  reauthMode,
   onActionReasonChange,
-  onOpenPasskey,
+  onReauthPasswordChange,
+  onOpenWithPassword,
   onCloseSession,
 }: ControlPanelAccessCardProps) {
   const reasonHelper = active
     ? "Se envía en cada mutación del panel y queda registrado en auditoría."
-    : "Se habilita cuando abras la sesión reforzada con passkey. Así evitamos pasos muertos en la demo.";
+    : "Se habilita cuando confirmes tu clave otra vez para abrir la sesión reforzada del panel.";
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1.35fr,0.95fr]">
@@ -47,19 +53,35 @@ export default function ControlPanelAccessCard({
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={onOpenPasskey}
-                disabled={busy || !passkeySupported}
+                onClick={onOpenWithPassword}
+                disabled={busy || !reauthPassword.trim()}
                 className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
               >
-                {busy ? "Abriendo..." : "Abrir con passkey"}
+                {busy ? "Verificando..." : "Continuar con mi clave"}
               </button>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                OTP del panel deshabilitado
+              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
+                Reautenticacion con clave
               </span>
             </div>
+            <div>
+              <label htmlFor="control-panel-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-text/70">
+                Reingresa tu clave
+              </label>
+              <input
+                id="control-panel-password"
+                type="password"
+                autoComplete="current-password"
+                value={reauthPassword}
+                onChange={(event) => onReauthPasswordChange(event.target.value)}
+                placeholder="Vuelve a poner tu clave"
+                className="mt-2 w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+              />
+              {reauthError ? <p className="mt-2 text-xs text-rose-600">{reauthError}</p> : null}
+            </div>
             <p className="rounded-2xl border border-surface-border bg-surface-muted/70 px-3 py-3 text-sm text-text/75">
-              Para la presentacion dejamos disponible solo el acceso con passkey en este panel. Asi evitamos que los usuarios entren en un flujo OTP inestable en produccion.
-              {!passkeySupported ? " Usa un navegador compatible con WebAuthn para abrir la sesion reforzada." : ""}
+              {reauthMode === "real"
+                ? "El panel valida la clave actual del usuario autenticado antes de abrir la sesion reforzada. Asi mantenemos la presentacion estable sin depender de OTP ni passkeys."
+                : "Para la demo el panel usa una confirmacion visual de clave antes de habilitar cambios sensibles. Esto estabiliza la presentacion sin afirmar una proteccion backend adicional distinta a la sesion actual."}
             </p>
           </div>
         ) : (

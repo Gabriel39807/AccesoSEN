@@ -898,6 +898,13 @@ class ControlPanelSessionPasskeyVerifySerializer(serializers.Serializer):
         return value.strip()
 
 
+class ControlPanelSessionPasswordVerifySerializer(serializers.Serializer):
+    password = serializers.CharField(min_length=1, max_length=128, trim_whitespace=False)
+
+    def validate_password(self, value):
+        return value
+
+
 class GeminiStubSerializer(serializers.Serializer):
     prompt = serializers.CharField(min_length=1, max_length=3000)
     temperature = serializers.FloatField(required=False, min_value=0.0, max_value=2.0, default=0.2)

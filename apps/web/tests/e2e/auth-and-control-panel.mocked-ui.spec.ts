@@ -79,25 +79,6 @@ function brandingConfigPayload(state: MockState) {
 }
 
 async function installApiMocks(page: Page, state: MockState) {
-  await page.addInitScript(() => {
-    class MockPublicKeyCredential {}
-
-    Object.defineProperty(window, "PublicKeyCredential", {
-      configurable: true,
-      writable: true,
-      value: MockPublicKeyCredential,
-    });
-
-    Object.defineProperty(navigator, "credentials", {
-      configurable: true,
-      value: {
-        get: async () => ({
-          rawId: new Uint8Array([1, 2, 3, 4]).buffer,
-        }),
-      },
-    });
-  });
-
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -169,7 +150,7 @@ async function installApiMocks(page: Page, state: MockState) {
           session: state.controlPanelActive
             ? {
                 id: "cp-session-12345678",
-                verified_by: "passkey",
+                verified_by: "password",
                 expires_at: "2030-01-01T11:00:00Z",
               }
             : null,
@@ -177,27 +158,13 @@ async function installApiMocks(page: Page, state: MockState) {
       });
     }
 
-    if (path === "/api/control-panel/session/request-passkey/" && method === "POST") {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          request_id: "passkey-request-1",
-          challenge: "panel-passkey-challenge",
-          rp_id: "localhost",
-          timeout: 60000,
-          allow_credentials: [{ credential_id: "cred-1", transports: ["internal"] }],
-        }),
-      });
-    }
-
-    if (path === "/api/control-panel/session/verify-passkey/" && method === "POST") {
-      const body = (request.postDataJSON() || {}) as { request_id?: string; challenge?: string; credential_id?: string };
-      if (body.request_id !== "passkey-request-1" || body.challenge !== "panel-passkey-challenge" || !body.credential_id) {
+    if (path === "/api/control-panel/session/verify-password/" && method === "POST") {
+      const body = (request.postDataJSON() || {}) as { password?: string };
+      if (body.password !== "Segura123") {
         return route.fulfill({
           status: 400,
           contentType: "application/json",
-          body: JSON.stringify({ detail: "Passkey invalida" }),
+          body: JSON.stringify({ code: "INVALID_CREDENTIALS", password: ["La contraseña no es correcta."] }),
         });
       }
       state.controlPanelActive = true;
@@ -208,7 +175,7 @@ async function installApiMocks(page: Page, state: MockState) {
           active: true,
           session: {
             id: "cp-session-12345678",
-            verified_by: "passkey",
+            verified_by: "password",
             expires_at: "2030-01-01T11:00:00Z",
           },
         }),
@@ -339,7 +306,7 @@ test("admin web login submits expected auth payload", async ({ page }) => {
   await expect.poll(() => state.meCalls || 0, { timeout: 10_000 }).toBeGreaterThan(0);
 });
 
-test("superadmin opens passkey session and applies branding preset with control headers", async ({ page }) => {
+test("superadmin reauthenticates with password and applies branding preset with control headers", async ({ page }) => {
   const state: MockState = {
     meRole: "superadmin",
     meUsername: "superadmin",
@@ -352,12 +319,13 @@ test("superadmin opens passkey session and applies branding preset with control 
 
   await expect(page.getByRole("heading", { name: "Superadmin / Centro de control" })).toBeVisible();
   await expect(page.getByText("Cerrada")).toBeVisible();
-  await expect(page.getByText("OTP del panel deshabilitado")).toBeVisible();
-  await expect(page.getByText(/solo el acceso con passkey/i)).toBeVisible();
+  await expect(page.getByText("Reautenticacion con clave")).toBeVisible();
+  await expect(page.getByText(/valida la clave actual del usuario autenticado/i)).toBeVisible();
   await expect(page.getByText(/sesión reforzada requerida/i)).toBeVisible();
   await expect(page.getByPlaceholder("Ej: Activar identidad visual del cliente para campus norte")).toBeDisabled();
 
-  await page.getByRole("button", { name: "Abrir con passkey" }).click();
+  await page.getByPlaceholder("Vuelve a poner tu clave").first().fill("Segura123");
+  await page.getByRole("button", { name: "Abrir sesión reforzada" }).click();
 
   await expect(page.getByText("Activa", { exact: true })).toBeVisible();
   await expect(page.getByText(/Sesión:\s+cp-sessi/i)).toBeVisible();

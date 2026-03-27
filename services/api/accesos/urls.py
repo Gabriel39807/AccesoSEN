@@ -34,6 +34,7 @@ from accesos.api.viewsets.auth import (
     ControlPanelBrandingPresetListView,
     ControlPanelSessionCloseView,
     ControlPanelSessionRequestOtpView,
+    ControlPanelSessionVerifyPasswordView,
     ControlPanelSessionRequestPasskeyView,
     ControlPanelSessionStatusView,
     ControlPanelSessionVerifyOtpView,
@@ -109,6 +110,11 @@ urlpatterns = [
         "control-panel/session/verify-otp/",
         ControlPanelSessionVerifyOtpView.as_view(),
         name="control-panel-session-verify-otp",
+    ),
+    path(
+        "control-panel/session/verify-password/",
+        ControlPanelSessionVerifyPasswordView.as_view(),
+        name="control-panel-session-verify-password",
     ),
     path(
         "control-panel/session/request-passkey/",

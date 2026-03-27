@@ -756,6 +756,7 @@ class RefreshSession(models.Model):
 class ControlPanelSession(models.Model):
     class VerifiedBy(models.TextChoices):
         OTP = "otp", "OTP"
+        PASSWORD = "password", "Password"
         PASSKEY = "passkey", "Passkey"
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)

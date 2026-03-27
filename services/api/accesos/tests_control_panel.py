@@ -129,6 +129,29 @@ class ControlPanelSessionStepUpTests(BaseApiTest):
         self.assertEqual(blocked.status_code, status.HTTP_429_TOO_MANY_REQUESTS, blocked.data)
         self.assertEqual(blocked.data.get("code"), "OTP_TOO_MANY_ATTEMPTS")
 
+    def test_control_panel_password_reauth_opens_session(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+
+        verified = self.client.post(
+            "/api/control-panel/session/verify-password/",
+            {"password": "Passw0rd!"},
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_200_OK, verified.data)
+        self.assertTrue(verified.data.get("active"))
+        self.assertEqual(verified.data["session"]["verified_by"], "password")
+
+    def test_control_panel_password_reauth_rejects_invalid_password(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+
+        verified = self.client.post(
+            "/api/control-panel/session/verify-password/",
+            {"password": "incorrecta"},
+            format="json",
+        )
+        self.assertEqual(verified.status_code, status.HTTP_400_BAD_REQUEST, verified.data)
+        self.assertEqual(verified.data.get("code"), "INVALID_CREDENTIALS")
+
     @override_settings(WEBAUTHN_MOCK=False)
     def test_control_panel_passkey_step_up_is_disabled_without_real_webauthn(self):
         self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")

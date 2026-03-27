@@ -117,6 +117,7 @@ from .serializers import (
     ChangeInitialPasswordSerializer,
     ConfiguracionSistemaSerializer,
     ControlPanelSessionOtpVerifySerializer,
+    ControlPanelSessionPasswordVerifySerializer,
     ControlPanelSessionPasskeyVerifySerializer,
     EquipoRevisionSerializer,
     EquipoSerializer,
@@ -962,6 +963,44 @@ class ControlPanelSessionVerifyOtpView(APIView):
             request,
             user,
             verified_by=ControlPanelSession.VerifiedBy.OTP,
+            session_ttl_sec=CONTROL_PANEL_SESSION_TTL_SEC,
+        )
+        return ok_response(
+            {
+                **active_control_panel_session_payload(session),
+                "mensaje": "Sesion del panel abierta correctamente.",
+            }
+        )
+
+
+class ControlPanelSessionVerifyPasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user: Usuario = request.user
+        denied = _require_permission_response(
+            user,
+            "control_panel.session.open",
+            message="No tienes permisos para abrir una sesion del panel de control.",
+        )
+        if denied:
+            return denied
+
+        serializer = ControlPanelSessionPasswordVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        if not user.check_password(serializer.validated_data["password"]):
+            return error_response(
+                code=ErrorCode.INVALID_CREDENTIALS,
+                message="La contraseña no es correcta.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="password",
+            )
+
+        session = create_control_panel_session(
+            request,
+            user,
+            verified_by=ControlPanelSession.VerifiedBy.PASSWORD,
             session_ttl_sec=CONTROL_PANEL_SESSION_TTL_SEC,
         )
         return ok_response(
