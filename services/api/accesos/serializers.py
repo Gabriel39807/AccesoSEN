@@ -16,6 +16,7 @@ from .models import (
     Equipo,
     Notificacion,
     Permission as RbacPermission,
+    ProgramaFormacion,
     Role,
     RolePermission,
     Sede,
@@ -23,6 +24,7 @@ from .models import (
     TenantBrandingConfig,
     Turno,
     Usuario,
+    normalize_program_name,
 )
 
 
@@ -218,6 +220,70 @@ class AllowedEmailDomainSerializer(serializers.ModelSerializer):
         return getattr(obj, "scope", AllowedEmailDomain.Scope.GLOBAL)
 
 
+class ProgramaFormacionSerializer(serializers.ModelSerializer):
+    created_by = serializers.CharField(source="created_by.username", read_only=True, allow_null=True)
+    updated_by = serializers.CharField(source="updated_by.username", read_only=True, allow_null=True)
+    active_users_count = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProgramaFormacion
+        fields = [
+            "id",
+            "name",
+            "is_active",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+            "active_users_count",
+            "can_delete",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+            "active_users_count",
+            "can_delete",
+        ]
+
+    def validate_name(self, value):
+        clean = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not clean:
+            raise serializers.ValidationError("Debes indicar el nombre del programa.")
+        normalized = normalize_program_name(clean)
+        qs = ProgramaFormacion.objects.filter(normalized_name=normalized)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Ya existe un programa con ese nombre.")
+        return clean
+
+    def get_active_users_count(self, obj):
+        annotated = getattr(obj, "active_users_count", None)
+        if annotated is not None:
+            return int(annotated)
+        return Usuario.objects.filter(programa_formacion__iexact=obj.name).count()
+
+    def get_can_delete(self, obj):
+        return self.get_active_users_count(obj) == 0
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and getattr(request, "user", None) and request.user.is_authenticated:
+            validated_data.setdefault("created_by", request.user)
+            validated_data.setdefault("updated_by", request.user)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        if request and getattr(request, "user", None) and request.user.is_authenticated:
+            validated_data["updated_by"] = request.user
+        return super().update(instance, validated_data)
+
+
 class SedePolicySerializer(serializers.ModelSerializer):
     sede = serializers.SlugRelatedField(slug_field="code", queryset=Sede.objects.all())
     sede_name = serializers.CharField(source="sede.name", read_only=True)
@@ -388,6 +454,18 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
     def validate_telefono(self, value):
         return validatePhone10(value, required=False)
+
+    def validate_programa_formacion(self, value):
+        clean = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not clean:
+            return ""
+        normalized = normalize_program_name(clean)
+        program = ProgramaFormacion.objects.filter(normalized_name=normalized, is_active=True).first()
+        if program is None:
+            raise serializers.ValidationError(
+                "Programa invalido. Usa un programa activo configurado en el panel de control."
+            )
+        return program.name
 
     def validate(self, attrs):
         role_code = attrs.get("rol") or getattr(self.instance, "rol", None) or Usuario.Rol.APRENDIZ

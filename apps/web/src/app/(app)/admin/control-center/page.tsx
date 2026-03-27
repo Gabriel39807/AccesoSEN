@@ -7,6 +7,7 @@ import {
   BrandingSection,
   ControlPanelAccessCard,
   PermissionsSection,
+  ProgramasSection,
   RolesSection,
   SedesSection,
 } from "@/components/admin/control-center";
@@ -19,7 +20,7 @@ import {
 import { normalizeApiErrors } from "@/lib/errors";
 import { useMe } from "@/hooks/useMe";
 
-type SectionKey = "branding" | "sedes" | "roles" | "permisos" | "asignaciones" | "dominios" | "auditoria";
+type SectionKey = "branding" | "sedes" | "programas" | "roles" | "permisos" | "asignaciones" | "dominios" | "auditoria";
 type ControlPanelSessionState = {
   active: boolean;
   session: { id: string; verified_by?: string; expires_at?: string } | null;
@@ -80,6 +81,18 @@ type DomainRuleRow = {
   created_by?: string | null;
 };
 
+type ProgramRow = {
+  id: number;
+  name: string;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  active_users_count?: number;
+  can_delete?: boolean;
+};
+
 type AuditRow = {
   id: string;
   type: string;
@@ -130,6 +143,7 @@ type AuditResponse = {
 const sections: Array<{ key: SectionKey; label: string }> = [
   { key: "branding", label: "Identidad visual" },
   { key: "sedes", label: "Sedes" },
+  { key: "programas", label: "Programas" },
   { key: "roles", label: "Roles" },
   { key: "permisos", label: "Permisos" },
   { key: "asignaciones", label: "Asignaciones" },
@@ -181,6 +195,7 @@ export default function SuperadminControlCenterPage() {
   const [permissions, setPermissions] = useState<PermissionRow[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [domains, setDomains] = useState<DomainRuleRow[]>([]);
+  const [programas, setProgramas] = useState<ProgramRow[]>([]);
   const [auditRows, setAuditRows] = useState<AuditRow[]>([]);
   const [brandingPresets, setBrandingPresets] = useState<BrandingPresetRow[]>([]);
   const [brandingConfig, setBrandingConfig] = useState<BrandingConfigRow | null>(null);
@@ -196,6 +211,10 @@ export default function SuperadminControlCenterPage() {
   const [editingSedeCode, setEditingSedeCode] = useState("");
   const [editingSedeName, setEditingSedeName] = useState("");
   const [editingSedeActive, setEditingSedeActive] = useState(true);
+
+  const [programFormId, setProgramFormId] = useState<number | null>(null);
+  const [programFormName, setProgramFormName] = useState("");
+  const [programFormActive, setProgramFormActive] = useState(true);
 
   const [roleCode, setRoleCode] = useState("");
   const [roleName, setRoleName] = useState("");
@@ -305,6 +324,14 @@ export default function SuperadminControlCenterPage() {
     setDomains(toRows(response.data));
   }
 
+  async function loadPrograms() {
+    const response = await api.get<ProgramRow[] | Paginated<ProgramRow>>("/api/programas-formacion/", {
+      params: { include_inactive: "true" },
+      headers: controlPanelHeaders(),
+    });
+    setProgramas(toRows(response.data));
+  }
+
   async function loadAudit() {
     const response = await api.get<AuditResponse>("/api/auditoria/eventos/", {
       headers: controlPanelHeaders(),
@@ -345,7 +372,7 @@ export default function SuperadminControlCenterPage() {
     try {
       await loadSedes();
       if (controlPanelSession.active && controlPanelSession.session?.id) {
-        await Promise.all([loadBranding(), loadRoles(), loadPermissions(), loadAssignments(), loadDomains(), loadAudit()]);
+        await Promise.all([loadBranding(), loadRoles(), loadPermissions(), loadAssignments(), loadDomains(), loadPrograms(), loadAudit()]);
       }
     } catch (error) {
       setApiErrors(error);
@@ -506,6 +533,7 @@ export default function SuperadminControlCenterPage() {
       setPermissions([]);
       setAssignments([]);
       setDomains([]);
+      setProgramas([]);
       setAuditRows([]);
     } catch (error) {
       setApiErrors(error);
@@ -801,12 +829,85 @@ export default function SuperadminControlCenterPage() {
     }
   }
 
+  function resetProgramForm() {
+    setProgramFormId(null);
+    setProgramFormName("");
+    setProgramFormActive(true);
+  }
+
+  function openEditProgram(row: ProgramRow) {
+    clearErrors();
+    setProgramFormId(row.id);
+    setProgramFormName(row.name);
+    setProgramFormActive(row.is_active);
+  }
+
+  async function submitProgram() {
+    clearErrors();
+    if (!programFormName.trim()) {
+      setFormErrors(["Debes indicar el nombre del programa."]);
+      return;
+    }
+    if (!ensureReason()) return;
+
+    setBusy(true);
+    try {
+      const payload = { name: programFormName.trim(), is_active: programFormActive };
+      if (programFormId) {
+        await api.patch(`/api/programas-formacion/${programFormId}/`, payload, { headers: controlPanelHeaders() });
+      } else {
+        await api.post("/api/programas-formacion/", payload, { headers: controlPanelHeaders() });
+      }
+      resetProgramForm();
+      await loadPrograms();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleProgram(row: ProgramRow) {
+    clearErrors();
+    if (!ensureReason()) return;
+    setBusy(true);
+    try {
+      await api.patch(
+        `/api/programas-formacion/${row.id}/`,
+        { is_active: !row.is_active },
+        { headers: controlPanelHeaders() },
+      );
+      await loadPrograms();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteProgram(row: ProgramRow) {
+    clearErrors();
+    if (!ensureReason()) return;
+    setBusy(true);
+    try {
+      await api.delete(`/api/programas-formacion/${row.id}/`, { headers: controlPanelHeaders() });
+      if (programFormId === row.id) {
+        resetProgramForm();
+      }
+      await loadPrograms();
+    } catch (error) {
+      setApiErrors(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="sadi-card rounded-3xl p-4 sm:p-5">
         <h1 className="text-2xl font-bold text-primary">Superadmin / Centro de control</h1>
         <p className="sadi-text-soft text-sm">
-          Gestión centralizada de sedes, RBAC y visibilidad de auditoría.
+          Gestión centralizada de sedes, programas aceptados, RBAC y visibilidad de auditoría.
         </p>
       </div>
 
@@ -895,6 +996,25 @@ export default function SuperadminControlCenterPage() {
               submitEditSede={submitEditSede}
               openEditSede={openEditSede}
               deactivateSede={deactivateSede}
+            />
+          ) : null}
+
+          {activeSection === "programas" ? (
+            <ProgramasSection
+              busy={busy}
+              programas={programas}
+              programFormId={programFormId}
+              programFormName={programFormName}
+              programFormActive={programFormActive}
+              fieldError={fieldError}
+              formatDate={formatDate}
+              setProgramFormName={setProgramFormName}
+              setProgramFormActive={setProgramFormActive}
+              resetProgramForm={resetProgramForm}
+              openEditProgram={openEditProgram}
+              submitProgram={submitProgram}
+              toggleProgram={toggleProgram}
+              deleteProgram={deleteProgram}
             />
           ) : null}
 

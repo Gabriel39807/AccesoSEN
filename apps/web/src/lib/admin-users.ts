@@ -17,6 +17,7 @@ export type UserDeleteTarget = {
 
 type AprendizImportTemplateInput = {
   actorRole: UserReadRole;
+  programas?: string[];
 };
 
 type AprendizImportTemplateFormat = "csv" | "xlsx";
@@ -191,6 +192,14 @@ export function buildAprendizImportTemplateWorkbook(input: AprendizImportTemplat
 
   const workbook = utils.book_new();
   utils.book_append_sheet(workbook, worksheet, APRENDIZ_IMPORT_TEMPLATE_SHEET_NAME);
+
+  const programas = Array.isArray(input.programas) ? input.programas.map((item) => item.trim()).filter(Boolean) : [];
+  if (programas.length > 0) {
+    const catalogRows = [["Programas aceptados"], ...programas.map((programa) => [programa])];
+    const catalogSheet = utils.aoa_to_sheet(catalogRows);
+    catalogSheet["!cols"] = [{ wch: 48 }];
+    utils.book_append_sheet(workbook, catalogSheet, "Programas");
+  }
 
   return write(workbook, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
 }

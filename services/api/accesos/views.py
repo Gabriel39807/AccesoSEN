@@ -81,6 +81,7 @@ from .models import (
     Notificacion,
     Permission as RbacPermission,
     PasswordResetOTP,
+    ProgramaFormacion,
     RefreshSession,
     Role,
     RolePermission,
@@ -131,6 +132,7 @@ from .serializers import (
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     PasswordResetVerifySerializer,
+    ProgramaFormacionSerializer,
     RegistrarAccesoContingenciaSerializer,
     RegistrarAccesoDocumentoSerializer,
     RolePermissionSerializer,
@@ -1973,6 +1975,79 @@ class AllowedEmailDomainViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet
         serializer.save(created_by=self.request.user)
 
 
+class ProgramaFormacionViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet):
+    serializer_class = ProgramaFormacionSerializer
+    queryset = ProgramaFormacion.objects.all().order_by("name")
+    permission_classes = [IsAuthenticated, RequiresPermission]
+    control_panel_category = ControlPanelQuotaCounter.Category.PROGRAMS
+    control_panel_target_type = "programa_formacion"
+    permission_map = {
+        "list": "sede.read",
+        "retrieve": "sede.read",
+        "create": "control_panel.programs.update",
+        "update": "control_panel.programs.update",
+        "partial_update": "control_panel.programs.update",
+        "destroy": "control_panel.programs.update",
+    }
+
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [IsAuthenticated(), RequiresPermission()]
+        return [IsAuthenticated(), RequiresPermission(), RequiresControlPanelSession()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        include_inactive = str(self.request.query_params.get("include_inactive", "") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if include_inactive:
+            return qs
+        return qs.filter(is_active=True)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        previous_name = getattr(serializer.instance, "name", "")
+        program = serializer.save(updated_by=self.request.user)
+        if previous_name and previous_name.lower() != program.name.lower():
+            Usuario.objects.filter(programa_formacion__iexact=previous_name).update(programa_formacion=program.name)
+
+    def destroy(self, request, *args, **kwargs):
+        program = self.get_object()
+        denied = self._preflight_control_panel_mutation(request)
+        if denied:
+            return denied
+        before_json = self._control_panel_snapshot(program)
+        if Usuario.objects.filter(programa_formacion__iexact=program.name).exists():
+            return error_response(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="No se puede eliminar un programa que ya esta asignado a usuarios. Desactivalo en su lugar.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                field="name",
+            )
+        target_id = program.id
+        program.delete()
+        finalized = self._finalize_control_panel_mutation(
+            request,
+            action=ControlPanelAuditEvent.Action.DELETE,
+            target_id=target_id,
+            before_json=before_json,
+            after_json=None,
+        )
+        if finalized:
+            return finalized
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class AuditEventsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -2091,6 +2166,7 @@ class ControlPanelQuotaStatusView(APIView):
                 ControlPanelQuotaCounter.Category.DOMAINS,
                 ControlPanelQuotaCounter.Category.POLICIES,
                 ControlPanelQuotaCounter.Category.PERMISSIONS,
+                ControlPanelQuotaCounter.Category.PROGRAMS,
                 ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT,
             ]
         ]

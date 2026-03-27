@@ -14,6 +14,7 @@ from accesos.api.viewsets import (
     EquipoViewSet,
     NotificacionViewSet,
     PermissionViewSet,
+    ProgramaFormacionViewSet,
     RolePermissionViewSet,
     RoleViewSet,
     SedePolicyViewSet,
@@ -57,6 +58,7 @@ router.register(r"sedes", SedeViewSet, basename="sedes")
 router.register(r"usuarios", UsuarioViewSet, basename="usuarios")
 router.register(r"roles", RoleViewSet, basename="roles")
 router.register(r"permisos", PermissionViewSet, basename="permisos")
+router.register(r"programas-formacion", ProgramaFormacionViewSet, basename="programas-formacion")
 router.register(r"asignaciones", RolePermissionViewSet, basename="asignaciones")
 router.register(r"politicas-sede", SedePolicyViewSet, basename="politicas-sede")
 router.register(r"dominios-email", AllowedEmailDomainViewSet, basename="dominios-email")
@@ -69,8 +71,14 @@ urlpatterns = [
     path("health/", HealthCheckView.as_view(), name="api-health"),
     path("public/sedes/", PublicSedeListView.as_view(), name="public-sedes"),
     path("configuracion/", ConfiguracionSistemaView.as_view(), name="configuracion-sistema"),
-    path("control-panel/branding/presets/", ControlPanelBrandingPresetListView.as_view(), name="control-panel-branding-presets"),
-    path("control-panel/branding/config/", ControlPanelBrandingConfigView.as_view(), name="control-panel-branding-config"),
+    path(
+        "control-panel/branding/presets/",
+        ControlPanelBrandingPresetListView.as_view(),
+        name="control-panel-branding-presets",
+    ),
+    path(
+        "control-panel/branding/config/", ControlPanelBrandingConfigView.as_view(), name="control-panel-branding-config"
+    ),
     path("auth/login/", SadiTokenObtainPairView.as_view(), name="auth-login"),
     path("auth/refresh/", SadiTokenRefreshView.as_view(), name="auth-refresh"),
     path("auth/logout/", SadiLogoutView.as_view(), name="auth-logout"),

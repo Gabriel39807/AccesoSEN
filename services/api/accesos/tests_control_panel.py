@@ -5,7 +5,7 @@ from django.test import override_settings
 from rest_framework import status
 
 from .control_panel_support import control_panel_otp_cache_key
-from .models import ControlPanelAuditEvent, ControlPanelQuotaCounter, TenantBrandingConfig
+from .models import ControlPanelAuditEvent, ControlPanelQuotaCounter, ProgramaFormacion, TenantBrandingConfig, Usuario
 from .tests_support import BaseApiTest
 
 
@@ -40,9 +40,11 @@ class ControlPanelSessionStepUpTests(BaseApiTest):
 
         quotas = self.client.get("/api/control-panel/quotas/", **self.control_panel_headers(session_id=session_id))
         self.assertEqual(quotas.status_code, status.HTTP_200_OK, quotas.data)
-        self.assertEqual(quotas.data.get("count"), 5)
+        self.assertEqual(quotas.data.get("count"), 6)
 
-        closed = self.client.post("/api/control-panel/session/close/", {}, format="json", HTTP_X_CONTROL_PANEL_SESSION=session_id)
+        closed = self.client.post(
+            "/api/control-panel/session/close/", {}, format="json", HTTP_X_CONTROL_PANEL_SESSION=session_id
+        )
         self.assertEqual(closed.status_code, status.HTTP_200_OK, closed.data)
         self.assertFalse(closed.data.get("active"))
 
@@ -241,3 +243,102 @@ class ControlPanelGovernanceTests(BaseApiTest):
         self.assertEqual(public_config.status_code, status.HTTP_200_OK, public_config.data)
         self.assertEqual(public_config.data["configuracion"]["branding_preset"], "forest-campus")
         self.assertEqual(public_config.data["configuracion"]["color_aprendiz_light"], "#22C55E")
+
+
+class ControlPanelProgramsTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        self.superadmin = self.create_user(
+            username="cp_programs_super",
+            password="Passw0rd!",
+            rol="superadmin",
+            email="cp.programs.super@sadi.test",
+            is_staff=True,
+            is_superuser=True,
+            sede_principal=None,
+        )
+
+    def test_programs_can_be_created_updated_and_deleted_from_control_panel(self):
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        created = self.client.post(
+            "/api/programas-formacion/",
+            {"name": "Analisis de Datos", "is_active": True},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Crear catalogo inicial de programas"),
+        )
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
+        program_id = created.data["id"]
+
+        updated = self.client.patch(
+            f"/api/programas-formacion/{program_id}/",
+            {"name": "Analitica de Datos", "is_active": False},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Renombrar programa legado"),
+        )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK, updated.data)
+        self.assertEqual(updated.data["name"], "Analitica de Datos")
+        self.assertFalse(updated.data["is_active"])
+
+        listed = self.client.get(
+            "/api/programas-formacion/?include_inactive=true",
+            **self.control_panel_headers(session_id=session_id),
+        )
+        self.assertEqual(listed.status_code, status.HTTP_200_OK, listed.data)
+        self.assertEqual(len(listed.data.get("results", [])), 1)
+
+        deleted = self.client.delete(
+            f"/api/programas-formacion/{program_id}/",
+            **self.control_panel_headers(session_id=session_id, reason="Eliminar programa no usado"),
+        )
+        self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT, deleted.data)
+        self.assertFalse(ProgramaFormacion.objects.filter(id=program_id).exists())
+
+    def test_program_delete_is_blocked_when_users_still_reference_program(self):
+        program = ProgramaFormacion.objects.create(name="ADSO")
+        Usuario.objects.create_user(
+            username="aprendiz_programa",
+            password="Passw0rd!",
+            rol="aprendiz",
+            email="aprendiz.programa@sadi.test",
+            documento="4455667788",
+            programa_formacion="ADSO",
+            sede_principal=self.sede("sede-1"),
+        )
+
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        denied = self.client.delete(
+            f"/api/programas-formacion/{program.id}/",
+            **self.control_panel_headers(session_id=session_id, reason="Intento eliminar programa en uso"),
+        )
+        self.assertEqual(denied.status_code, status.HTTP_400_BAD_REQUEST, denied.data)
+        self.assertIn("Desactivalo", denied.data.get("message", ""))
+
+    def test_program_rename_updates_existing_users(self):
+        program = ProgramaFormacion.objects.create(name="ADSO")
+        learner = Usuario.objects.create_user(
+            username="aprendiz_programa_rename",
+            password="Passw0rd!",
+            rol="aprendiz",
+            email="aprendiz.programa.rename@sadi.test",
+            documento="1122334455",
+            programa_formacion="ADSO",
+            sede_principal=self.sede("sede-1"),
+        )
+
+        self.auth(self.superadmin.username, "Passw0rd!", expected_role="admin")
+        session_id = self.start_control_panel_session()
+
+        updated = self.client.patch(
+            f"/api/programas-formacion/{program.id}/",
+            {"name": "Analisis y Desarrollo de Software"},
+            format="json",
+            **self.control_panel_headers(session_id=session_id, reason="Renombrar programa homologado"),
+        )
+        self.assertEqual(updated.status_code, status.HTTP_200_OK, updated.data)
+
+        learner.refresh_from_db()
+        self.assertEqual(learner.programa_formacion, "Analisis y Desarrollo de Software")

@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import io
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -16,7 +15,14 @@ from rest_framework import status
 
 from accesos.domain.services.email_domain_service import EmailDomainService
 from .error_codes import ErrorCode
-from .models import AprendizImportAudit, Sede, Usuario, sync_primary_membership
+from .models import (
+    AprendizImportAudit,
+    ProgramaFormacion,
+    Sede,
+    Usuario,
+    normalize_program_name,
+    sync_primary_membership,
+)
 
 EXPECTED_COLUMNS_BASE = [
     "Nombres",
@@ -91,8 +97,7 @@ def _normalize_cell(value) -> str:
 
 
 def _ascii_token(value: str) -> str:
-    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
-    return text.strip().lower()
+    return normalize_program_name(value)
 
 
 def _header_token(value: str) -> str:
@@ -100,8 +105,7 @@ def _header_token(value: str) -> str:
 
 
 def _normalize_program_token(value: str) -> str:
-    token = re.sub(r"\s+", " ", _ascii_token(value))
-    return token.strip()
+    return _ascii_token(value)
 
 
 def _normalize_phone(phone: str) -> str:
@@ -199,16 +203,10 @@ def _normalize_jornada(value: str) -> str:
 
 def _build_program_lookup() -> dict[str, str]:
     out: dict[str, str] = {}
-    programs = (
-        Usuario.objects.exclude(programa_formacion__isnull=True)
-        .exclude(programa_formacion__exact="")
-        .values_list("programa_formacion", flat=True)
-        .distinct()
-    )
-    for value in programs:
-        normalized = _normalize_program_token(str(value))
+    for program in ProgramaFormacion.objects.filter(is_active=True).only("name", "normalized_name"):
+        normalized = _normalize_program_token(program.normalized_name or program.name)
         if normalized:
-            out[normalized] = str(value).strip()
+            out[normalized] = str(program.name).strip()
     return out
 
 
@@ -362,7 +360,19 @@ def validate_excel(
             )
 
     program_lookup = _build_program_lookup()
-    has_program_catalog = bool(program_lookup)
+    if not program_lookup:
+        return ImportValidationResult(
+            rows=[],
+            errors=[
+                {
+                    "row": 1,
+                    "code": "NO_ACTIVE_PROGRAMS",
+                    "field": "Programa",
+                    "message": "No hay programas activos configurados. Cargalos en el Centro de control antes de importar aprendices.",
+                }
+            ],
+            total_rows=max(len(table_rows) - 1, 0),
+        )
     valid_jornadas = {choice for choice, _label in Usuario.Jornada.choices}
 
     rows: list[dict] = []
@@ -466,7 +476,7 @@ def validate_excel(
                     "message": "Programa es obligatorio.",
                 }
             )
-        elif has_program_catalog and programa_norm not in program_lookup:
+        elif programa_norm not in program_lookup:
             row_errors.append(
                 {
                     "row": row_num,

@@ -29,6 +29,7 @@ from .models import (
     Notificacion,
     PasswordResetOTP,
     Permission as RbacPermission,
+    ProgramaFormacion,
     RefreshSession,
     Role,
     Sede,
@@ -1708,6 +1709,10 @@ class ImportAtomicityTests(BaseApiTest):
 
 
 class ImportValidationServiceTests(BaseApiTest):
+    def setUp(self):
+        super().setUp()
+        ProgramaFormacion.objects.create(name="ADSO")
+
     def make_csv(self, content: str):
         file_obj = io.BytesIO(content.encode("utf-8"))
         file_obj.name = "aprendices.csv"
@@ -1740,10 +1745,23 @@ class ImportValidationServiceTests(BaseApiTest):
         self.assertEqual(result.errors, [])
         self.assertEqual(result.rows[0]["sede_principal"], "sede-1")
 
+    def test_validate_excel_requires_configured_active_programs(self):
+        ProgramaFormacion.objects.all().delete()
+        csv_file = self.make_csv(
+            "Nombres,Apellidos,Documento,Telefono,Correo,Jornada,Programa,Sede\n"
+            "Ana,Importa,1234567890,3001234567,,TARDE,ADSO,sede-1\n"
+        )
+
+        result = validate_excel(csv_file, require_sede=True)
+
+        self.assertEqual(result.rows, [])
+        self.assertEqual(result.errors[0]["code"], "NO_ACTIVE_PROGRAMS")
+
 
 class ImportValidationApiTests(BaseApiTest):
     def setUp(self):
         super().setUp()
+        ProgramaFormacion.objects.create(name="ADSO")
         self.superadmin = self.create_user(
             username="import_api_superadmin",
             password="Passw0rd!",

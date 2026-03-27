@@ -100,6 +100,12 @@ type ImportRowResult = {
   existing_sede?: string | null;
 };
 
+type ProgramRow = {
+  id: number;
+  name: string;
+  is_active: boolean;
+};
+
 type BannerState = {
   type: "error" | "success" | "warning" | "info";
   message: string;
@@ -310,14 +316,16 @@ export default function AdminUsuariosPage() {
   const actorRole = me?.rol;
   const actorSede = me?.sede_principal ?? null;
   const importAccept = APRENDIZ_IMPORT_FORMATS.join(",");
+  const [programCatalog, setProgramCatalog] = useState<ProgramRow[]>([]);
+  const activeProgramNames = useMemo(() => programCatalog.filter((item) => item.is_active).map((item) => item.name), [programCatalog]);
   const importTemplateColumns = useMemo(() => getAprendizImportTemplateColumns(actorRole), [actorRole]);
   const importTemplateCsv = useMemo(
-    () => buildAprendizImportTemplateCsv({ actorRole }),
-    [actorRole],
+    () => buildAprendizImportTemplateCsv({ actorRole, programas: activeProgramNames }),
+    [activeProgramNames, actorRole],
   );
   const importTemplateWorkbook = useMemo(
-    () => buildAprendizImportTemplateWorkbook({ actorRole }),
-    [actorRole],
+    () => buildAprendizImportTemplateWorkbook({ actorRole, programas: activeProgramNames }),
+    [activeProgramNames, actorRole],
   );
   const importFormatsLabel = useMemo(() => APRENDIZ_IMPORT_FORMATS.map((item) => item.replace(".", "")).join(", ").toUpperCase(), []);
   const importTemplateXlsxFilename = useMemo(
@@ -483,6 +491,12 @@ export default function AdminUsuariosPage() {
     return requiredColumns.join(", ");
   }, [importTemplateColumns]);
 
+  const acceptedProgramsLabel = useMemo(() => {
+    if (activeProgramNames.length === 0) return "No hay programas activos configurados todavia.";
+    if (activeProgramNames.length <= 6) return activeProgramNames.join(", ");
+    return `${activeProgramNames.slice(0, 6).join(", ")} y ${activeProgramNames.length - 6} mas.`;
+  }, [activeProgramNames]);
+
   async function cargar(p = page) {
     if (loadingMe) return;
 
@@ -536,6 +550,20 @@ export default function AdminUsuariosPage() {
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMe]);
+
+  useEffect(() => {
+    if (loadingMe) return;
+    if (!isAdministrativeRole(actorRole)) return;
+    api
+      .get<Paginated<ProgramRow> | ProgramRow[]>("/api/programas-formacion/")
+      .then((response) => {
+        const payload = response.data;
+        setProgramCatalog(Array.isArray(payload) ? payload : payload?.results ?? []);
+      })
+      .catch(() => {
+        setProgramCatalog([]);
+      });
+  }, [actorRole, loadingMe]);
 
   useEffect(() => {
     if (!isScopedAdminSede) return;
@@ -1102,6 +1130,11 @@ export default function AdminUsuariosPage() {
           type: "error",
           message: "Se detectaron documentos duplicados en el archivo. Debes omitirlos o corregir el archivo antes de importar.",
         });
+      } else if ((Number(resumen?.validos || 0) === 0 && errores.length > 0) || rowNumbers.length === 0) {
+        setImportBanner({
+          type: "error",
+          message: errores[0]?.message || "La validacion encontro errores. Revisa el detalle antes de importar.",
+        });
       } else {
         setImportBanner({
           type: "success",
@@ -1659,6 +1692,12 @@ export default function AdminUsuariosPage() {
         />
       </div>
 
+      <datalist id="programa-catalogo">
+        {activeProgramNames.map((programName) => (
+          <option key={programName} value={programName} />
+        ))}
+      </datalist>
+
       {/* MODAL EDITAR */}
       {selected && (
         <Modal
@@ -1815,6 +1854,7 @@ export default function AdminUsuariosPage() {
                     "command-noir-control w-full rounded-xl p-2 focus:outline-none",
                     editFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
                   )}
+                  list="programa-catalogo"
                   value={programa}
                   aria-invalid={Boolean(editFieldErrors.programa_formacion)}
                   onChange={(e) => {
@@ -2176,13 +2216,14 @@ export default function AdminUsuariosPage() {
 
                 <label className="space-y-1">
                   <div className="text-xs text-[color:var(--color-text-muted)]">Programa</div>
-                  <input
-                    className={cx(
-                      "command-noir-control w-full rounded-xl p-2 focus:outline-none",
-                      createFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
-                    )}
-                    value={c_programa}
-                    aria-invalid={Boolean(createFieldErrors.programa_formacion)}
+                <input
+                  className={cx(
+                    "command-noir-control w-full rounded-xl p-2 focus:outline-none",
+                    createFieldErrors.programa_formacion && "border-[color:rgba(255,107,122,0.45)]",
+                  )}
+                  list="programa-catalogo"
+                  value={c_programa}
+                  aria-invalid={Boolean(createFieldErrors.programa_formacion)}
                     onChange={(e) => {
                       setCPrograma(e.target.value);
                       clearCreateFieldError("programa_formacion");
@@ -2217,7 +2258,8 @@ export default function AdminUsuariosPage() {
                   : "Si cargas Sede, usa el codigo tecnico exacto de una sede activa."}
               </div>
               <div className="mt-1">Tamano maximo recomendado por archivo: {importMaxFileSizeLabel}.</div>
-              <div className="mt-1">Programa debe usar el nombre exacto del catalogo existente cuando el sistema ya tenga programas cargados.</div>
+              <div className="mt-1">Programa debe coincidir exactamente con un programa activo configurado en el Centro de control.</div>
+              <div className="mt-1">Programas aceptados ahora: {acceptedProgramsLabel}</div>
             </div>
 
             {importBanner ? (

@@ -3,6 +3,7 @@ from .allowed_email_domains import AllowedEmailDomainViewSet
 from .equipos import EquipoViewSet
 from .notificaciones import NotificacionViewSet
 from .permissions import PermissionViewSet
+from .programas_formacion import ProgramaFormacionViewSet
 from .role_permissions import RolePermissionViewSet
 from .roles import RoleViewSet
 from .sedes import SedeViewSet
@@ -16,6 +17,7 @@ __all__ = [
     "EquipoViewSet",
     "NotificacionViewSet",
     "PermissionViewSet",
+    "ProgramaFormacionViewSet",
     "RolePermissionViewSet",
     "RoleViewSet",
     "SedeViewSet",

@@ -1,4 +1,5 @@
 import re
+import unicodedata
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models, transaction
@@ -23,6 +24,12 @@ class Sede(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})"
+
+
+def normalize_program_name(value: str) -> str:
+    ascii_value = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    compact = re.sub(r"\s+", " ", ascii_value)
+    return compact.strip().lower()
 
 
 HEX_COLOR_VALIDATOR = RegexValidator(
@@ -216,6 +223,7 @@ class Usuario(AbstractUser):
 
     programa_formacion = models.CharField(max_length=100, null=True, blank=True)
     telefono = models.CharField(max_length=20, null=True, blank=True)
+
     class Jornada(models.TextChoices):
         MAÑANA = "MAÑANA", "MAÑANA"
         TARDE = "TARDE", "Tarde"
@@ -358,17 +366,9 @@ class AllowedEmailDomain(models.Model):
 
     def clean(self):
         domain = (self.domain or "").strip().lower().replace("@", "")
-        domain_re = re.compile(
-            r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
-        )
+        domain_re = re.compile(r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
         if not domain_re.fullmatch(domain):
-            raise ValidationError(
-                {
-                    "domain": (
-                        "Dominio invalido. Usa solo dominio sin @, por ejemplo: empresa.com."
-                    )
-                }
-            )
+            raise ValidationError({"domain": ("Dominio invalido. Usa solo dominio sin @, por ejemplo: empresa.com.")})
         self.domain = domain
 
     @property
@@ -389,6 +389,48 @@ class AllowedEmailDomain(models.Model):
         role_code = getattr(self.role, "code", None) or "GLOBAL"
         sede_code = getattr(self.sede, "code", None) or "GLOBAL"
         return f"{role_code}:{sede_code}:{self.domain}"
+
+
+class ProgramaFormacion(models.Model):
+    name = models.CharField(max_length=120)
+    normalized_name = models.CharField(max_length=120, unique=True, editable=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_programas_formacion",
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_programas_formacion",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def clean(self):
+        super().clean()
+        clean_name = re.sub(r"\s+", " ", str(self.name or "")).strip()
+        if not clean_name:
+            raise ValidationError({"name": "Debes indicar el nombre del programa."})
+        self.name = clean_name
+        self.normalized_name = normalize_program_name(clean_name)
+        if not self.normalized_name:
+            raise ValidationError({"name": "Debes indicar un nombre valido para el programa."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 
 class Equipo(models.Model):
@@ -426,23 +468,15 @@ class Equipo(models.Model):
                 existing_qs = existing_qs.exclude(pk=self.pk)
             if existing_qs.count() >= self.HARD_MAX_PER_APRENDIZ:
                 raise ValidationError(
-                    {
-                        "equipos": (
-                            f"No se pueden registrar mas de {self.HARD_MAX_PER_APRENDIZ} equipos por aprendiz."
-                        )
-                    }
+                    {"equipos": (f"No se pueden registrar mas de {self.HARD_MAX_PER_APRENDIZ} equipos por aprendiz.")}
                 )
 
         if self.pk:
-            previous_estado = (
-                type(self).objects.filter(pk=self.pk).values_list("estado", flat=True).first()
-            )
+            previous_estado = type(self).objects.filter(pk=self.pk).values_list("estado", flat=True).first()
             if previous_estado:
                 allowed = self._ALLOWED_STATE_TRANSITIONS.get(previous_estado, {previous_estado})
                 if self.estado not in allowed:
-                    raise ValidationError(
-                        {"estado": "Transicion de estado no permitida para este equipo."}
-                    )
+                    raise ValidationError({"estado": "Transicion de estado no permitida para este equipo."})
 
         if self.estado == self.Estado.RECHAZADO and not (self.motivo_rechazo or "").strip():
             raise ValidationError({"motivo_rechazo": "Debes indicar el motivo de rechazo."})
@@ -599,6 +633,7 @@ class PasswordResetOTP(models.Model):
     OTP de 6 dígitos para recuperación de contraseña.
     Guardamos hash (no OTP plano), expiración, intentos y uso.
     """
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -764,6 +799,7 @@ class ControlPanelAuditEvent(models.Model):
         DOMAINS = "domains", "Domains"
         POLICIES = "policies", "Policies"
         PERMISSIONS = "permissions", "Permissions"
+        PROGRAMS = "programs", "Programs"
         SEDE_MANAGEMENT = "sede_management", "Sede Management"
 
     actor = models.ForeignKey(
@@ -808,6 +844,7 @@ class ControlPanelQuotaCounter(models.Model):
         DOMAINS = "domains", "Domains"
         POLICIES = "policies", "Policies"
         PERMISSIONS = "permissions", "Permissions"
+        PROGRAMS = "programs", "Programs"
         SEDE_MANAGEMENT = "sede_management", "Sede Management"
 
     user = models.ForeignKey(

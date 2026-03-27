@@ -73,6 +73,7 @@ def control_panel_category_limit(category: str) -> int:
         ControlPanelQuotaCounter.Category.DOMAINS: ("CONTROL_PANEL_DOMAINS_DAILY_LIMIT", 5),
         ControlPanelQuotaCounter.Category.POLICIES: ("CONTROL_PANEL_POLICIES_DAILY_LIMIT", 3),
         ControlPanelQuotaCounter.Category.PERMISSIONS: ("CONTROL_PANEL_PERMISSIONS_DAILY_LIMIT", 2),
+        ControlPanelQuotaCounter.Category.PROGRAMS: ("CONTROL_PANEL_PROGRAMS_DAILY_LIMIT", 5),
         ControlPanelQuotaCounter.Category.SEDE_MANAGEMENT: ("CONTROL_PANEL_SEDE_DAILY_LIMIT", 5),
     }
     setting_name, default = setting_by_category.get(category, ("CONTROL_PANEL_GENERIC_DAILY_LIMIT", 1))
