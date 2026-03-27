@@ -6,7 +6,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Accesos from "../../api/accesos";
 import { toUiErrorMessage } from "../../api/client";
 import { GuardStackParamList } from "../../navigation/GuardStack";
-import { isSignedScanToken, sanitizeDigits, validateScanValue } from "../../lib/validators";
+import { normalizeScanValue, validateScanValue } from "../../lib/validators";
 import { FadeInCard, ModernButton, ModernScreen, NoticeBanner, Pill, TitleBlock } from "../../ui/modern";
 
 type Props = NativeStackScreenProps<GuardStackParamList, "ScanQr">;
@@ -24,11 +24,6 @@ export function ScanQrScreen({ navigation }: Props) {
   const inFlightRef = useRef(false);
 
   const canScan = useMemo(() => !scanned && !loading && !isProcessing, [scanned, loading, isProcessing]);
-
-  function normalizeScanInput(value: string) {
-    const clean = String(value || "").trim();
-    return isSignedScanToken(clean) ? clean : sanitizeDigits(clean).slice(0, 10);
-  }
 
   async function validar(rawValue?: string) {
     if (inFlightRef.current) return;
@@ -120,7 +115,7 @@ export function ScanQrScreen({ navigation }: Props) {
             barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
             onBarcodeScanned={(result) => {
                 if (!canScan) return;
-                const normalized = normalizeScanInput(result.data || "");
+                const normalized = normalizeScanValue(result.data || "");
                 setScanned(true);
                 setIsProcessing(true);
                 setDocumento(normalized);
@@ -147,10 +142,11 @@ export function ScanQrScreen({ navigation }: Props) {
         <TitleBlock title="Documento manual" subtitle="Usa este campo cuando el QR esté dañado o no sea legible." />
         <TextInput
           value={documento}
-          onChangeText={(value) => setDocumento(sanitizeDigits(value).slice(0, 10))}
-          placeholder="Documento (ej: 1053444048)"
-          keyboardType="numeric"
-          maxLength={10}
+          onChangeText={(value) => setDocumento(normalizeScanValue(value))}
+          placeholder="Documento o token firmado"
+          keyboardType="default"
+          autoCapitalize="none"
+          autoCorrect={false}
           style={{
             borderWidth: 1,
             borderColor: "rgba(148,163,184,0.3)",

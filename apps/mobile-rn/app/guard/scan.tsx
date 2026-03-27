@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import * as Accesos from "../../src/api/accesos";
 import { toUiErrorMessage } from "../../src/api/client";
-import { sanitizeDigits, validateDocument6to10 } from "../../src/lib/validators";
+import { normalizeScanValue, validateScanValue } from "../../src/lib/validators";
 import { InputField, ModernButton } from "../../src/ui/modern";
 import { useResolvedThemeMode } from "../../src/store/preferences";
 import GuardBottomDock from "../../src/components/guard/GuardBottomDock";
@@ -43,12 +43,7 @@ export default function ScanScreen() {
 
   async function validar(doc: string) {
     const clean = doc.trim();
-    if (!clean) {
-      setMsg("Ingresa o escanea un documento.");
-      return;
-    }
-
-    const documentError = validateDocument6to10(clean);
+    const documentError = validateScanValue(clean);
     if (documentError) {
       setMsg(documentError);
       setIsProcessing(false);
@@ -88,7 +83,7 @@ export default function ScanScreen() {
 
   const onBarcodeDetected = async (raw: string) => {
     if (!canScan) return;
-    const scannedValue = sanitizeDigits((raw || "").trim()).slice(0, 10);
+    const scannedValue = normalizeScanValue(raw);
     setScanned(true);
     setIsProcessing(true);
     setDocumento(scannedValue);
@@ -219,10 +214,11 @@ export default function ScanScreen() {
             icon="id-card-outline"
             label="Documento"
             value={documento}
-            onChangeText={(v) => setDocumento(sanitizeDigits(v).slice(0, 10))}
-            placeholder="Ingresa el numero de documento"
-            keyboardType="numeric"
-            maxLength={10}
+            onChangeText={(v) => setDocumento(normalizeScanValue(v))}
+            placeholder="Ingresa documento o pega token firmado"
+            keyboardType="default"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
 
           {msg ? (

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isSignedScanToken,
+  normalizeScanValue,
   sanitizeDigits,
   validateDocument6to10,
   validatePhone10,
@@ -16,6 +17,19 @@ describe("mobile validators smoke", () => {
   it("accepts signed QR tokens without document validation", () => {
     expect(isSignedScanToken("SADI1B64:abc123")).toBe(true);
     expect(validateScanValue("SADI1:payload")).toBeNull();
+  });
+
+  it("preserves full signed scan tokens during scanner normalization", () => {
+    expect(normalizeScanValue("  SADI1B64:abc.DEF_123-xyz  ")).toBe("SADI1B64:abc.DEF_123-xyz");
+  });
+
+  it("preserves full signed scan tokens during manual input normalization", () => {
+    expect(normalizeScanValue("SADI1:manual-token-XYZ")).toBe("SADI1:manual-token-XYZ");
+  });
+
+  it("keeps numeric documents compatible during scan normalization", () => {
+    expect(normalizeScanValue("CC 12.345-678")).toBe("12345678");
+    expect(normalizeScanValue("  1234567890123  ")).toBe("1234567890");
   });
 
   it("rejects invalid manual scan values", () => {

@@ -7,6 +7,11 @@ export function isSignedScanToken(value: string): boolean {
   return clean.startsWith("SADI1:") || clean.startsWith("SADI1B64:");
 }
 
+export function normalizeScanValue(value: string): string {
+  const clean = String(value || "").trim();
+  return isSignedScanToken(clean) ? clean : sanitizeDigits(clean).slice(0, 10);
+}
+
 export function validatePhone10(value: string): string | null {
   const clean = String(value || "").trim();
   if (!/^\d{10}$/.test(clean)) {
