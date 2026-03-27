@@ -3960,7 +3960,40 @@ class AccesoViewSet(viewsets.ModelViewSet):
                 message="Este endpoint es exclusivo para aprendices.",
                 status_code=status.HTTP_403_FORBIDDEN,
             )
-        qs = Acceso.objects.filter(usuario=request.user, is_deleted=False).order_by("-fecha")[:100]
+
+        qs = (
+            Acceso.objects.filter(usuario=request.user, is_deleted=False)
+            .select_related("turno", "turno__guarda", "turno__sede", "usuario", "registrado_por", "sede")
+            .prefetch_related("equipos")
+            .order_by("-fecha")
+        )
+
+        tipo = _parse_choice_query_param(
+            request,
+            names=["tipo"],
+            choices=Acceso.Tipo.choices,
+            field="tipo",
+        )
+        if tipo:
+            qs = qs.filter(tipo=tipo)
+
+        date_from = _parse_date_query_param(
+            request,
+            names=["date_from"],
+            field="date_from",
+        )
+        if date_from is not None:
+            qs = qs.filter(fecha__date__gte=date_from)
+
+        date_to = _parse_date_query_param(
+            request,
+            names=["date_to"],
+            field="date_to",
+        )
+        if date_to is not None:
+            qs = qs.filter(fecha__date__lte=date_to)
+
+        qs = qs[:100]
         return Response(AccesoSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path="estado")

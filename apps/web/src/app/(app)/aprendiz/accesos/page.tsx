@@ -84,7 +84,7 @@ export default function AprendizHistorialPage() {
       if (f.dateFrom) params.date_from = f.dateFrom;
       if (f.dateTo) params.date_to = f.dateTo;
 
-      const accesosRes = await api.get("/api/accesos/", { params });
+      const accesosRes = await api.get("/api/accesos/mis_accesos/", { params });
       const data = Array.isArray(accesosRes.data) ? accesosRes.data : accesosRes.data?.results ?? [];
       setAccesos(data);
     } catch (e: unknown) {

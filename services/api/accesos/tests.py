@@ -1403,6 +1403,45 @@ class AprendizEstadoEndpointTests(BaseApiTest):
         self.assertEqual(salida.status_code, status.HTTP_200_OK, salida.data)
         self.assertEqual(salida.data.get("estado"), "FUERA")
 
+    def test_mis_accesos_only_returns_own_history_with_supported_filters(self):
+        now = timezone.now()
+        Acceso.objects.create(
+            usuario=self.aprendiz,
+            tipo=Acceso.Tipo.INGRESO,
+            fecha=now - timedelta(days=3),
+            sede=self.sede("sede-1"),
+        )
+        expected = Acceso.objects.create(
+            usuario=self.aprendiz,
+            tipo=Acceso.Tipo.SALIDA,
+            fecha=now - timedelta(days=1),
+            sede=self.sede("sede-1"),
+        )
+        other_user = self.create_user(
+            username="7070707070",
+            password="Passw0rd!",
+            rol="aprendiz",
+            documento="7070707070",
+            email="otro.historial@sadi.test",
+        )
+        Acceso.objects.create(
+            usuario=other_user,
+            tipo=Acceso.Tipo.SALIDA,
+            fecha=now - timedelta(days=1),
+            sede=self.sede("sede-2"),
+        )
+
+        self.auth(self.aprendiz.username, "Passw0rd!", expected_role="aprendiz")
+        response = self.client.get(
+            "/api/accesos/mis_accesos/?tipo=salida&date_from={}".format((now - timedelta(days=2)).date().isoformat())
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        rows = response.data.get("results", response.data)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], expected.id)
+        self.assertTrue(all(item["usuario"] == self.aprendiz.id for item in rows))
+
 
 class ExceptionHandlerSafetyTests(BaseApiTest):
     def test_unhandled_api_exception_returns_safe_json_payload(self):
