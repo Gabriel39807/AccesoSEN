@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+import requests
 from django.core import mail
 from django.utils import timezone
 from django.test import override_settings
@@ -137,22 +138,19 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
     )
     def test_password_reset_email_uses_resend_provider_when_configured(self):
         response_mock = MagicMock()
-        response_mock.status = 202
-        response_mock.__enter__.return_value = response_mock
-        response_mock.__exit__.return_value = False
+        response_mock.raise_for_status.return_value = None
 
-        with patch("accesos.otp_services.urllib_request.urlopen", return_value=response_mock) as urlopen_mock:
+        with patch("accesos.otp_services.requests.post", return_value=response_mock) as post_mock:
             send_password_reset_email(self.user.email, "12345")
 
-        request = urlopen_mock.call_args.args[0]
-        self.assertEqual(request.full_url, "https://api.resend.com/emails")
-        self.assertEqual(request.get_method(), "POST")
-        self.assertEqual(request.headers["Authorization"], "Bearer resend_test_key")
-        self.assertIn("Mozilla/5.0", request.headers["User-agent"])
-        self.assertIn("SADI-OTP/1.0", request.headers["User-agent"])
-        self.assertIn('"from": "SADI <no-reply@sadi.test>"', request.data.decode("utf-8"))
-        self.assertIn(self.user.email, request.data.decode("utf-8"))
-        self.assertIn("12345", request.data.decode("utf-8"))
+        self.assertEqual(post_mock.call_args.args[0], "https://api.resend.com/emails")
+        self.assertEqual(post_mock.call_args.kwargs["headers"]["Authorization"], "Bearer resend_test_key")
+        self.assertIn("Mozilla/5.0", post_mock.call_args.kwargs["headers"]["User-Agent"])
+        self.assertIn("SADI-OTP/1.0", post_mock.call_args.kwargs["headers"]["User-Agent"])
+        self.assertEqual(post_mock.call_args.kwargs["timeout"], 15)
+        self.assertEqual(post_mock.call_args.kwargs["json"]["from"], "SADI <no-reply@sadi.test>")
+        self.assertEqual(post_mock.call_args.kwargs["json"]["to"], [self.user.email])
+        self.assertEqual(post_mock.call_args.kwargs["json"]["text"].count("12345"), 1)
 
     @override_settings(
         OTP_EMAIL_PROVIDER="resend",
@@ -163,15 +161,27 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
     )
     def test_password_reset_email_allows_resend_user_agent_override(self):
         response_mock = MagicMock()
-        response_mock.status = 202
-        response_mock.__enter__.return_value = response_mock
-        response_mock.__exit__.return_value = False
+        response_mock.raise_for_status.return_value = None
 
-        with patch("accesos.otp_services.urllib_request.urlopen", return_value=response_mock) as urlopen_mock:
+        with patch("accesos.otp_services.requests.post", return_value=response_mock) as post_mock:
             send_password_reset_email(self.user.email, "12345")
 
-        request = urlopen_mock.call_args.args[0]
-        self.assertEqual(request.headers["User-agent"], "SADI-Test-Agent/2.0")
+        self.assertEqual(post_mock.call_args.kwargs["headers"]["User-Agent"], "SADI-Test-Agent/2.0")
+
+    @override_settings(
+        OTP_EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="resend_test_key",
+        RESEND_API_URL="https://api.resend.com/emails",
+        DEFAULT_FROM_EMAIL="SADI <no-reply@sadi.test>",
+    )
+    def test_password_reset_email_raises_runtime_error_when_resend_returns_http_error(self):
+        response_mock = MagicMock(status_code=403, text="cf block")
+        http_error = requests.HTTPError("forbidden", response=response_mock)
+        response_mock.raise_for_status.side_effect = http_error
+
+        with patch("accesos.otp_services.requests.post", return_value=response_mock):
+            with self.assertRaisesMessage(RuntimeError, "Resend OTP email failed with status 403."):
+                send_password_reset_email(self.user.email, "12345")
 
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",

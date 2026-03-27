@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import secrets
 from datetime import timedelta
-from urllib import error as urllib_error
-from urllib import request as urllib_request
+
+import requests
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -142,7 +141,7 @@ def _build_email_connection() -> tuple[object | None, str]:
 
 def _build_resend_payload(
     *, to_email: str, from_email: str, subject: str, text_body: str, html_body: str | None
-) -> bytes:
+) -> dict[str, object]:
     payload = {
         "from": from_email,
         "to": [to_email],
@@ -151,7 +150,7 @@ def _build_resend_payload(
     }
     if html_body:
         payload["html"] = html_body
-    return json.dumps(payload).encode("utf-8")
+    return payload
 
 
 def _build_resend_headers(api_key: str) -> dict[str, str]:
@@ -179,35 +178,37 @@ def _send_via_resend(*, to_email: str, from_email: str, subject: str, text_body:
     if not api_url:
         raise ImproperlyConfigured("RESEND_API_URL is required when OTP_EMAIL_PROVIDER=resend.")
 
-    request = urllib_request.Request(
-        api_url,
-        data=_build_resend_payload(
-            to_email=to_email,
-            from_email=from_email,
-            subject=subject,
-            text_body=text_body,
-            html_body=html_body,
-        ),
-        headers=_build_resend_headers(api_key),
-        method="POST",
+    payload = _build_resend_payload(
+        to_email=to_email,
+        from_email=from_email,
+        subject=subject,
+        text_body=text_body,
+        html_body=html_body,
     )
 
     try:
-        with urllib_request.urlopen(request, timeout=timeout) as response:
-            status_code = getattr(response, "status", None) or response.getcode()
-            if status_code not in {200, 201, 202}:
-                raise RuntimeError(f"Resend OTP email failed with status {status_code}.")
-    except urllib_error.HTTPError as exc:
-        response_body = exc.read(512).decode("utf-8", errors="replace")
+        response = requests.post(
+            api_url,
+            json=payload,
+            headers=_build_resend_headers(api_key),
+            timeout=timeout,
+        )
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        response = exc.response
+        status_code = response.status_code if response is not None else "unknown"
+        response_body = ""
+        if response is not None:
+            response_body = (response.text or "")[:512]
         logger.error(
             "otp_email_resend_http_error recipient=%s status=%s body=%s",
             _mask_email(to_email),
-            exc.code,
+            status_code,
             response_body,
         )
-        raise RuntimeError(f"Resend OTP email failed with status {exc.code}.") from exc
-    except urllib_error.URLError as exc:
-        logger.error("otp_email_resend_network_error recipient=%s reason=%s", _mask_email(to_email), exc.reason)
+        raise RuntimeError(f"Resend OTP email failed with status {status_code}.") from exc
+    except requests.RequestException as exc:
+        logger.error("otp_email_resend_network_error recipient=%s reason=%s", _mask_email(to_email), exc)
         raise RuntimeError("Resend OTP email request failed.") from exc
 
 
