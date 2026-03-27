@@ -1,4 +1,4 @@
-"""Base settings for S.A.D.I backend.
+"""Base settings for SADI backend.
 
 Responsibility:
 - Define shared configuration between development/production.

@@ -1,12 +1,12 @@
-# 🛡️ S.A.D.I — Sistema de Control de Acceso y Activos "Sistema de Acceso Digital Institucional"
+# 🛡️ SADI — Sistema de Control de Acceso y Activos "Sistema de Acceso Digital Institucional"
 
 <p align="center">
   <img src="https://img.shields.io/badge/Estado-En%20Desarrollo-green" />
   <img src="https://img.shields.io/badge/Backend-Django%20%2B%20DRF-blue" />
   <img src="https://img.shields.io/badge/Web-Next.js-black" />
   <img src="https://img.shields.io/badge/Mobile-Expo%20React%20Native-purple" />
-  <a href="https://github.com/Gabriel39807/S.A.D.I/actions/workflows/ci.yml">
-    <img src="https://github.com/Gabriel39807/S.A.D.I/actions/workflows/ci.yml/badge.svg?branch=dev" />
+  <a href="https://github.com/Gabriel39807/SADI/actions/workflows/ci.yml">
+    <img src="https://github.com/Gabriel39807/SADI/actions/workflows/ci.yml/badge.svg?branch=dev" />
   </a>
 </p>
 
@@ -14,7 +14,7 @@
 
 ## 📌 Descripción
 
-**S.A.D.I (Sistema de Acceso Digital Institucional)** es una plataforma institucional para controlar y auditar accesos, diseñada como solución integral:
+**SADI (Sistema de Acceso Digital Institucional)** es una plataforma institucional para controlar y auditar accesos, diseñada como solución integral:
 
 - 👨‍🎓 Aprendices
 - 👮 Personal de Seguridad

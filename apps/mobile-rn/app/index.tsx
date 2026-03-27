@@ -256,7 +256,7 @@ export default function RoleSelection() {
           ]}
         >
           <View style={[styles.panelSheen, { backgroundColor: theme.panelEdge }]} />
-          <Text style={[styles.welcomeTitle, { color: theme.text }]}>Bienvenido a S.A.D.I.</Text>
+          <Text style={[styles.welcomeTitle, { color: theme.text }]}>Bienvenido a SADI.</Text>
           <Text style={[styles.welcomeSubtitle, { color: theme.textSoft }]}>Selecciona tu perfil para ingresar al sistema.</Text>
 
           <View style={styles.roleButtons}>
@@ -278,7 +278,7 @@ export default function RoleSelection() {
 
           <View style={styles.footerRow}>
             <Ionicons name="lock-closed" size={11} color={theme.footer} style={{ marginRight: 6 }} />
-            <Text style={[styles.footerText, { color: theme.footer }]}>Asegurado por S.A.D.I 2026</Text>
+            <Text style={[styles.footerText, { color: theme.footer }]}>Asegurado por SADI 2026</Text>
           </View>
         </View>
       </Animated.View>

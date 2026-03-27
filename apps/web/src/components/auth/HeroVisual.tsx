@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import { BarChart3, Building2, CheckCircle2, ShieldCheck } from "lucide-react";
@@ -31,7 +31,7 @@ export default function HeroVisual({ role }: Props) {
         <div className={styles.brandMark}>
           <Image
             src="/auth/sadi-logo-light.png"
-            alt="S.A.D.I."
+            alt="SADI."
             width={176}
             height={74}
             priority
@@ -49,7 +49,7 @@ export default function HeroVisual({ role }: Props) {
             Control institucional <span className={styles.heroTitleAccent}>seguro</span>
           </h1>
           <p className={styles.heroText}>
-            Accede a la plataforma institucional de S.A.D.I. con trazabilidad clara, validacion por rol y monitoreo
+            Accede a la plataforma institucional de SADI. con trazabilidad clara, validacion por rol y monitoreo
             operativo en tiempo real.
           </p>
         </div>

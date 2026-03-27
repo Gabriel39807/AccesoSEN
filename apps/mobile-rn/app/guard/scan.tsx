@@ -120,7 +120,7 @@ export default function ScanScreen() {
             </View>
             <Text style={[styles.permissionTitle, { color: theme.text }]}>Permite el acceso a la camara</Text>
             <Text style={[styles.permissionText, { color: theme.textSoft }]}>
-              S.A.D.I necesita la camara para escanear codigos y validar accesos de forma inmediata.
+              SADI necesita la camara para escanear codigos y validar accesos de forma inmediata.
             </Text>
             <ModernButton label="Otorgar permiso" tone="guard" icon="camera" onPress={requestPermission} />
           </View>

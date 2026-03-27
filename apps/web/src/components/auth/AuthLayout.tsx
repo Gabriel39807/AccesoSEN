@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 import { motion } from "framer-motion";
@@ -65,7 +65,7 @@ export default function AuthLayout({ role, children }: Props) {
 
           <div className="px-5 pb-5 text-center md:px-7 md:pb-6 xl:px-8 xl:pb-7 xl:text-left">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--text-faint)]">
-              Asegurado por S.A.D.I. · 2026
+              Asegurado por SADI. · 2026
             </p>
           </div>
         </motion.section>

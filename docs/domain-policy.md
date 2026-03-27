@@ -1,7 +1,7 @@
 # Domain Policy (Allowed Email Domains)
 
 ## Objetivo
-Centralizar una politica de dominios de correo permitidos para todo S.A.D.I, configurable por `superadmin` y aplicada **siempre en backend**.
+Centralizar una politica de dominios de correo permitidos para todo SADI, configurable por `superadmin` y aplicada **siempre en backend**.
 
 ## Modelo
 Tabla: `AllowedEmailDomain`

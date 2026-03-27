@@ -89,7 +89,7 @@ export function GuardHeader({ theme }: { theme: GuardHomeTheme }) {
   return (
     <View style={styles.headerRow}>
       <View>
-        <Text style={[styles.brandTitle, { color: theme.text }]}>S.A.D.I.</Text>
+        <Text style={[styles.brandTitle, { color: theme.text }]}>SADI.</Text>
       </View>
     </View>
   );

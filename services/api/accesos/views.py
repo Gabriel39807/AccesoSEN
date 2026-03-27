@@ -1,7 +1,7 @@
 """Business HTTP views for auth, users, shifts and access records.
 
 Responsibility:
-- Expose DRF endpoints for critical S.A.D.I flows.
+- Expose DRF endpoints for critical SADI flows.
 - Apply business rules and UI-friendly responses.
 """
 

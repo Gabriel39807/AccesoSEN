@@ -1,5 +1,5 @@
-﻿/**
- * Login web de S.A.D.I.
+/**
+ * Login web de SADI.
  *
  * Responsabilidad:
  * - Autenticar administradores o aprendices.

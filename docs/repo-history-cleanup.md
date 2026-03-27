@@ -5,7 +5,7 @@ If old commits still contain sensitive files (`.env`, `venv`, `node_modules`, `*
 
 ## 1) Mirror clone (safe workspace)
 ```bash
-git clone --mirror https://github.com/Gabriel39807/S.A.D.I.git sadi-cleanup.git
+git clone --mirror https://github.com/Gabriel39807/SADI.git sadi-cleanup.git
 cd sadi-cleanup.git
 ```
 

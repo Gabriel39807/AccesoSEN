@@ -427,7 +427,7 @@ export default function LoginScreen() {
 
           <View style={styles.footerRow}>
             <Ionicons name="lock-closed" size={12} color={palette.hint} />
-            <Text style={[styles.footerText, { color: palette.hint }]}>© 2026 Asegurado por S.A.D.I</Text>
+            <Text style={[styles.footerText, { color: palette.hint }]}>© 2026 Asegurado por SADI</Text>
           </View>
 
         </Animated.View>

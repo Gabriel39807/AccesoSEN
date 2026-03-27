@@ -2,7 +2,7 @@
 {\fonttbl{\f0 Times New Roman;}}
 \paperw12240\paperh15840\margl1440\margr1440\margt1440\margb1440
 \fs24\sl480\slmult1
-\qc\b SISTEMA DE ACCESO DIGITAL INSTITUCIONAL (S.A.D.I)\b0\par
+\qc\b SISTEMA DE ACCESO DIGITAL INSTITUCIONAL (SADI)\b0\par
 \par
 \qc Diseno, desarrollo e implementacion de una plataforma multi-sede\par
 \qc para el control de accesos y gestion de equipos tecnologicos\par
@@ -16,7 +16,7 @@
 \page
 \ql\b Resumen\b0\par
 \par
-El presente documento expone la formulacion, desarrollo e implementacion de S.A.D.I (Sistema de Acceso Digital Institucional), una solucion orientada al control de accesos de personas y equipos en ambientes institucionales con multiples sedes. La propuesta responde a problemas de operacion manual y sistemas fragmentados, que generan baja trazabilidad, reprocesos y riesgos de seguridad.\par
+El presente documento expone la formulacion, desarrollo e implementacion de SADI (Sistema de Acceso Digital Institucional), una solucion orientada al control de accesos de personas y equipos en ambientes institucionales con multiples sedes. La propuesta responde a problemas de operacion manual y sistemas fragmentados, que generan baja trazabilidad, reprocesos y riesgos de seguridad.\par
 \par
 La arquitectura del proyecto integra backend en Django + DRF, frontend web en Next.js y cliente movil en Expo React Native, bajo un enfoque de seguridad en backend con permisos explicitos, denegacion por defecto y aislamiento por sede. Se aplican mecanismos de autenticacion con JWT, renovacion de sesion por refresh token, flujos OTP para procesos sensibles y lineamientos para QR dinamico firmado y con expiracion.\par
 \par
@@ -26,16 +26,16 @@ Para la validacion funcional se priorizaron pruebas E2E de mayor valor para expo
 \page
 \ql\b Introduccion\b0\par
 \par
-En instituciones con alta circulacion de personas y equipos, el control de acceso es un proceso critico de operacion y seguridad. Cuando la gestion se realiza de forma manual o sin integracion entre herramientas, aparecen problemas de consistencia, demoras en validacion, baja auditabilidad y aumento de incidentes por permisos mal aplicados. Este contexto motiva la construccion de S.A.D.I como plataforma unificada para administrar accesos, sesiones y activos bajo reglas claras de negocio y seguridad.\par
+En instituciones con alta circulacion de personas y equipos, el control de acceso es un proceso critico de operacion y seguridad. Cuando la gestion se realiza de forma manual o sin integracion entre herramientas, aparecen problemas de consistencia, demoras en validacion, baja auditabilidad y aumento de incidentes por permisos mal aplicados. Este contexto motiva la construccion de SADI como plataforma unificada para administrar accesos, sesiones y activos bajo reglas claras de negocio y seguridad.\par
 \par
-S.A.D.I fue concebido para operar en entornos multi-sede, donde el aislamiento de informacion es esencial. El proyecto prioriza que la seguridad no dependa solo de interfaz, sino de controles efectivos en backend. Por ello, el sistema adopta evaluacion explicita de roles, politicas de acceso por sede, trazabilidad de acciones criticas e invariantes funcionales no negociables.\par
+SADI fue concebido para operar en entornos multi-sede, donde el aislamiento de informacion es esencial. El proyecto prioriza que la seguridad no dependa solo de interfaz, sino de controles efectivos en backend. Por ello, el sistema adopta evaluacion explicita de roles, politicas de acceso por sede, trazabilidad de acciones criticas e invariantes funcionales no negociables.\par
 \par
 El documento se organiza siguiendo la estructura de sustentacion academica: problema, objetivos, justificacion, metodologia, fases de analisis-diseno-construccion-pruebas, despliegue, resultados, conclusiones y recomendaciones, adicionando referencias y anexos para soporte.\par
 \page
 \ql\b BLOQUE 2. Objetivos y justificacion\b0\par
 \par
 \b 2.1 Objetivo general\b0\par
-Desarrollar e implementar una plataforma institucional llamada S.A.D.I para gestionar el control de accesos de personas y equipos en multiples sedes, con enfoque en seguridad, trazabilidad, eficiencia operativa y escalabilidad.\par
+Desarrollar e implementar una plataforma institucional llamada SADI para gestionar el control de accesos de personas y equipos en multiples sedes, con enfoque en seguridad, trazabilidad, eficiencia operativa y escalabilidad.\par
 \par
 \b 2.2 Objetivos especificos\b0\par
 1. Disenar una arquitectura tecnologica integrada por backend, frontend web y app movil.\par
@@ -63,13 +63,13 @@ Un sistema de acceso institucional integra identidad, autorizacion y trazabilida
 Permite separacion de responsabilidades entre presentacion y logica de negocio, escalabilidad por componente y centralizacion de seguridad.\par
 \par
 \b 3.3 RBAC\b0\par
-La autorizacion basada en roles organiza permisos por funcion institucional. En S.A.D.I los roles principales son: superadmin, admin_sede, guarda y aprendiz.\par
+La autorizacion basada en roles organiza permisos por funcion institucional. En SADI los roles principales son: superadmin, admin_sede, guarda y aprendiz.\par
 \par
 \b 3.4 Aislamiento por sede\b0\par
 El sistema impone segregacion de datos por sede para evitar lectura o modificacion cruzada no autorizada.\par
 \par
 \b 3.5 JWT y sesiones\b0\par
-S.A.D.I usa access token de corta duracion y refresh token por dispositivo, con capacidad de rotacion/revocacion.\par
+SADI usa access token de corta duracion y refresh token por dispositivo, con capacidad de rotacion/revocacion.\par
 \par
 \b 3.6 OTP\b0\par
 Se incorporan codigos de un solo uso con vencimiento, limites de intentos y control de frecuencia para reducir abuso.\par
@@ -160,7 +160,7 @@ Sin waits arbitrarios, selectores estables, mocks controlados y aserciones por e
 \page
 \ql\b BLOQUE 9. Despliegue e implementacion\b0\par
 \par
-S.A.D.I puede ejecutarse en desarrollo por servicios o mediante Docker Compose. Se manejan variables de entorno por modulo y endpoints de salud para validacion operativa.\par
+SADI puede ejecutarse en desarrollo por servicios o mediante Docker Compose. Se manejan variables de entorno por modulo y endpoints de salud para validacion operativa.\par
 \par
 \b Componentes\b0\par
 API: Django/DRF.\par
@@ -179,7 +179,7 @@ Configurar secretos de produccion, monitorear salud y auditar logs de eventos cr
 \page
 \ql\b BLOQUE 11. Conclusiones\b0\par
 \par
-S.A.D.I aporta una solucion viable y escalable para control de acceso institucional. La centralizacion de reglas en backend y el modelo RBAC por sede reducen riesgos de fuga de informacion y privilegios indebidos. El enfoque incremental y la validacion por pruebas permitieron construir valor demostrable en condiciones reales de presentacion.\par
+SADI aporta una solucion viable y escalable para control de acceso institucional. La centralizacion de reglas en backend y el modelo RBAC por sede reducen riesgos de fuga de informacion y privilegios indebidos. El enfoque incremental y la validacion por pruebas permitieron construir valor demostrable en condiciones reales de presentacion.\par
 \page
 \ql\b BLOQUE 12. Recomendaciones\b0\par
 \par

@@ -1,4 +1,4 @@
-"""HTTP health probes for S.A.D.I runtime checks.
+"""HTTP health probes for SADI runtime checks.
 
 Responsibility:
 - Expose liveness and readiness endpoints for orchestrators/monitors.
