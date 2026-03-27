@@ -429,6 +429,12 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@sadi.local")
 EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT_SEC", 15, min_value=1)
+OTP_EMAIL_PROVIDER = str(os.getenv("OTP_EMAIL_PROVIDER", "smtp") or "smtp").strip().lower()
+RESEND_API_KEY = str(os.getenv("RESEND_API_KEY", "") or "").strip()
+RESEND_API_URL = str(
+    os.getenv("RESEND_API_URL", "https://api.resend.com/emails") or "https://api.resend.com/emails"
+).strip()
+RESEND_TIMEOUT_SEC = env_int("RESEND_TIMEOUT_SEC", EMAIL_TIMEOUT, min_value=1)
 
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", default=[])
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", False)

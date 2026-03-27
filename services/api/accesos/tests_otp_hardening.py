@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.core import mail
 from django.utils import timezone
@@ -130,6 +130,29 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
         self.assertEqual(get_connection_mock.call_args.kwargs["username"], "otp@sadi.test")
 
     @override_settings(
+        OTP_EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="resend_test_key",
+        RESEND_API_URL="https://api.resend.com/emails",
+        DEFAULT_FROM_EMAIL="SADI <no-reply@sadi.test>",
+    )
+    def test_password_reset_email_uses_resend_provider_when_configured(self):
+        response_mock = MagicMock()
+        response_mock.status = 202
+        response_mock.__enter__.return_value = response_mock
+        response_mock.__exit__.return_value = False
+
+        with patch("accesos.otp_services.urllib_request.urlopen", return_value=response_mock) as urlopen_mock:
+            send_password_reset_email(self.user.email, "12345")
+
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(request.full_url, "https://api.resend.com/emails")
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.headers["Authorization"], "Bearer resend_test_key")
+        self.assertIn('"from": "SADI <no-reply@sadi.test>"', request.data.decode("utf-8"))
+        self.assertIn(self.user.email, request.data.decode("utf-8"))
+        self.assertIn("12345", request.data.decode("utf-8"))
+
+    @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
         EMAIL_HOST="smtp.gmail.com",
         EMAIL_PORT=587,
@@ -164,6 +187,23 @@ class PasswordResetOtpHardeningFlowTests(BaseApiTest):
         DEFAULT_FROM_EMAIL="",
     )
     def test_password_reset_request_fails_clearly_when_email_backend_is_not_configured(self):
+        response = self.client.post(
+            "/api/auth/password-reset/request/",
+            {"email": self.user.email},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE, response.data)
+        self.assertEqual(response.data.get("code"), "NETWORK_ERROR")
+        self.assertEqual(response.data.get("message"), "El servicio de correo OTP no esta disponible.")
+        self.assertFalse(PasswordResetOTP.objects.filter(user=self.user, used_at__isnull=True).exists())
+
+    @override_settings(
+        OTP_EMAIL_PROVIDER="resend",
+        RESEND_API_KEY="",
+        DEFAULT_FROM_EMAIL="SADI <no-reply@sadi.test>",
+    )
+    def test_password_reset_request_fails_clearly_when_resend_is_selected_without_api_key(self):
         response = self.client.post(
             "/api/auth/password-reset/request/",
             {"email": self.user.email},

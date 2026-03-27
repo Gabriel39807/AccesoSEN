@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import secrets
 from datetime import timedelta
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -37,6 +40,9 @@ OTP_REQUEST_WINDOW_SEC = _positive_setting("OTP_REQUEST_WINDOW_SEC", 5 * 60, min
 OTP_REQUEST_LOCK_SEC = _positive_setting("OTP_REQUEST_LOCK_SEC", 15 * 60, minimum=60, maximum=24 * 60 * 60)
 logger = logging.getLogger(__name__)
 
+OTP_EMAIL_PROVIDER_SMTP = "smtp"
+OTP_EMAIL_PROVIDER_RESEND = "resend"
+
 
 def _mask_email(value: str) -> str:
     text = (value or "").strip()
@@ -60,6 +66,13 @@ def generate_otp_code() -> str:
 def _smtp_backend_enabled() -> bool:
     backend = str(getattr(settings, "EMAIL_BACKEND", "") or "").strip()
     return backend == "django.core.mail.backends.smtp.EmailBackend"
+
+
+def _get_otp_email_provider() -> str:
+    provider = str(getattr(settings, "OTP_EMAIL_PROVIDER", OTP_EMAIL_PROVIDER_SMTP) or "").strip().lower()
+    if provider not in {OTP_EMAIL_PROVIDER_SMTP, OTP_EMAIL_PROVIDER_RESEND}:
+        raise ImproperlyConfigured("OTP_EMAIL_PROVIDER must be one of: smtp, resend.")
+    return provider
 
 
 def _normalize_smtp_password(password: str) -> str:
@@ -124,6 +137,95 @@ def _build_email_connection() -> tuple[object | None, str]:
     return connection, from_email
 
 
+def _build_resend_payload(
+    *, to_email: str, from_email: str, subject: str, text_body: str, html_body: str | None
+) -> bytes:
+    payload = {
+        "from": from_email,
+        "to": [to_email],
+        "subject": subject,
+        "text": text_body,
+    }
+    if html_body:
+        payload["html"] = html_body
+    return json.dumps(payload).encode("utf-8")
+
+
+def _send_via_resend(*, to_email: str, from_email: str, subject: str, text_body: str, html_body: str | None) -> None:
+    api_key = str(getattr(settings, "RESEND_API_KEY", "") or "").strip()
+    api_url = str(getattr(settings, "RESEND_API_URL", "https://api.resend.com/emails") or "").strip()
+    timeout = int(getattr(settings, "RESEND_TIMEOUT_SEC", getattr(settings, "EMAIL_TIMEOUT", 15)) or 15)
+
+    if not from_email:
+        raise ImproperlyConfigured("DEFAULT_FROM_EMAIL is required for Resend OTP delivery.")
+    if not api_key:
+        raise ImproperlyConfigured("RESEND_API_KEY is required when OTP_EMAIL_PROVIDER=resend.")
+    if not api_url:
+        raise ImproperlyConfigured("RESEND_API_URL is required when OTP_EMAIL_PROVIDER=resend.")
+
+    request = urllib_request.Request(
+        api_url,
+        data=_build_resend_payload(
+            to_email=to_email,
+            from_email=from_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+        ),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib_request.urlopen(request, timeout=timeout) as response:
+            status_code = getattr(response, "status", None) or response.getcode()
+            if status_code not in {200, 201, 202}:
+                raise RuntimeError(f"Resend OTP email failed with status {status_code}.")
+    except urllib_error.HTTPError as exc:
+        response_body = exc.read(512).decode("utf-8", errors="replace")
+        logger.error(
+            "otp_email_resend_http_error recipient=%s status=%s body=%s",
+            _mask_email(to_email),
+            exc.code,
+            response_body,
+        )
+        raise RuntimeError(f"Resend OTP email failed with status {exc.code}.") from exc
+    except urllib_error.URLError as exc:
+        logger.error("otp_email_resend_network_error recipient=%s reason=%s", _mask_email(to_email), exc.reason)
+        raise RuntimeError("Resend OTP email request failed.") from exc
+
+
+def _deliver_otp_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+    provider = _get_otp_email_provider()
+    from_email = str(getattr(settings, "DEFAULT_FROM_EMAIL", "") or "").strip()
+
+    if provider == OTP_EMAIL_PROVIDER_RESEND:
+        _send_via_resend(
+            to_email=to_email,
+            from_email=from_email,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+        )
+        return
+
+    connection, smtp_from_email = _build_email_connection()
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=smtp_from_email,
+        to=[to_email],
+        connection=connection,
+    )
+    if html_body:
+        msg.attach_alternative(html_body, "text/html")
+    msg.send(fail_silently=False)
+
+
 def invalidate_active_password_reset_otps(user: Usuario):
     if not getattr(user, "id", None):
         return 0
@@ -151,7 +253,6 @@ def create_otp_for_user(user: Usuario) -> tuple[PasswordResetOTP, str]:
 
 
 def send_password_reset_email(to_email: str, code: str):
-    connection, from_email = _build_email_connection()
     subject = f"{INSTITUTION_NAME} - Codigo de recuperacion"
     context = {"otp": code, "ttl_minutes": OTP_TTL_MINUTES, "email": to_email, "institution_name": INSTITUTION_NAME}
 
@@ -167,17 +268,8 @@ def send_password_reset_email(to_email: str, code: str):
     except Exception:
         html_body = None
 
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=from_email,
-        to=[to_email],
-        connection=connection,
-    )
-    if html_body:
-        msg.attach_alternative(html_body, "text/html")
     try:
-        msg.send(fail_silently=False)
+        _deliver_otp_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
     except Exception:
         logger.exception("otp_email_send_failed recipient=%s", _mask_email(to_email))
         raise
@@ -185,22 +277,14 @@ def send_password_reset_email(to_email: str, code: str):
 
 
 def send_control_panel_otp_email(to_email: str, code: str):
-    connection, from_email = _build_email_connection()
     subject = f"{INSTITUTION_NAME} - Codigo de verificacion del panel"
     text_body = (
         f"Tu codigo de verificacion del panel de control de {INSTITUTION_NAME} es: {code}\n\n"
         f"Este codigo vence en {OTP_TTL_MINUTES} minutos.\n"
         "Si no solicitaste este acceso, ignora este mensaje."
     )
-    msg = EmailMultiAlternatives(
-        subject=subject,
-        body=text_body,
-        from_email=from_email,
-        to=[to_email],
-        connection=connection,
-    )
     try:
-        msg.send(fail_silently=False)
+        _deliver_otp_email(to_email=to_email, subject=subject, text_body=text_body)
     except Exception:
         logger.exception("control_panel_otp_email_send_failed recipient=%s", _mask_email(to_email))
         raise
