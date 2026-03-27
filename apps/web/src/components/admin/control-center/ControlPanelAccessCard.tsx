@@ -50,37 +50,40 @@ export default function ControlPanelAccessCard({
 
         {!active ? (
           <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={onOpenWithPassword}
-                disabled={busy || !reauthPassword.trim()}
-                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-              >
-                {busy ? "Verificando..." : "Continuar con mi clave"}
-              </button>
-              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
-                Reautenticacion con clave
-              </span>
-            </div>
-            <div>
-              <label htmlFor="control-panel-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-text/70">
-                Reingresa tu clave
-              </label>
-              <input
-                id="control-panel-password"
-                type="password"
-                autoComplete="current-password"
-                value={reauthPassword}
-                onChange={(event) => onReauthPasswordChange(event.target.value)}
-                placeholder="Vuelve a poner tu clave"
-                className="mt-2 w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-              />
-              {reauthError ? <p className="mt-2 text-xs text-rose-600">{reauthError}</p> : null}
+            <div className="grid gap-3 rounded-2xl border border-surface-border bg-surface-muted/60 p-3 sm:grid-cols-[minmax(0,1fr),auto] sm:items-end">
+              <div>
+                <label htmlFor="control-panel-password" className="text-xs font-semibold uppercase tracking-[0.12em] text-text/70">
+                  Paso 1 · Reingresa tu clave
+                </label>
+                <input
+                  id="control-panel-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={reauthPassword}
+                  onChange={(event) => onReauthPasswordChange(event.target.value)}
+                  placeholder="Vuelve a poner tu clave"
+                  className="mt-2 w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
+                />
+                {reauthError ? <p className="mt-2 text-xs text-rose-600">{reauthError}</p> : null}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:items-end">
+                <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
+                  Reautenticacion con clave
+                </span>
+                <button
+                  type="button"
+                  onClick={onOpenWithPassword}
+                  disabled={busy || !reauthPassword.trim()}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {busy ? "Verificando..." : "Paso 2 · Abrir sesión reforzada"}
+                </button>
+              </div>
             </div>
             <p className="rounded-2xl border border-surface-border bg-surface-muted/70 px-3 py-3 text-sm text-text/75">
               {reauthMode === "real"
-                ? "El panel valida la clave actual del usuario autenticado antes de abrir la sesion reforzada. Asi mantenemos la presentacion estable sin depender de OTP ni passkeys."
+                ? "El panel valida la clave actual del usuario autenticado antes de abrir la sesion reforzada y, al completarse, carga las vistas protegidas del centro de control."
                 : "Para la demo el panel usa una confirmacion visual de clave antes de habilitar cambios sensibles. Esto estabiliza la presentacion sin afirmar una proteccion backend adicional distinta a la sesion actual."}
             </p>
           </div>

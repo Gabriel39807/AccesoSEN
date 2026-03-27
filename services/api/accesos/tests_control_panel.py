@@ -7,6 +7,7 @@ from rest_framework import status
 from .control_panel_support import control_panel_otp_cache_key
 from .models import ControlPanelAuditEvent, ControlPanelQuotaCounter, ProgramaFormacion, TenantBrandingConfig, Usuario
 from .tests_support import BaseApiTest
+from .views import ProgramaFormacionViewSet
 
 
 class ControlPanelSessionStepUpTests(BaseApiTest):
@@ -317,6 +318,10 @@ class ControlPanelProgramsTests(BaseApiTest):
         )
         self.assertEqual(deleted.status_code, status.HTTP_204_NO_CONTENT, deleted.data)
         self.assertFalse(ProgramaFormacion.objects.filter(id=program_id).exists())
+
+    def test_programs_list_uses_control_panel_programs_read_permission(self):
+        self.assertEqual(ProgramaFormacionViewSet.permission_map["list"], "control_panel.programs.read")
+        self.assertEqual(ProgramaFormacionViewSet.permission_map["retrieve"], "control_panel.programs.read")
 
     def test_program_delete_is_blocked_when_users_still_reference_program(self):
         program = ProgramaFormacion.objects.create(name="ADSO")

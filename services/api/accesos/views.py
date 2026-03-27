@@ -2021,8 +2021,8 @@ class ProgramaFormacionViewSet(ControlPanelMutationMixin, viewsets.ModelViewSet)
     control_panel_category = ControlPanelQuotaCounter.Category.PROGRAMS
     control_panel_target_type = "programa_formacion"
     permission_map = {
-        "list": "sede.read",
-        "retrieve": "sede.read",
+        "list": "control_panel.programs.read",
+        "retrieve": "control_panel.programs.read",
         "create": "control_panel.programs.update",
         "update": "control_panel.programs.update",
         "partial_update": "control_panel.programs.update",

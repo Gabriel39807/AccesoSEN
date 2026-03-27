@@ -1,6 +1,12 @@
+export { default as AssignmentsSection } from "./AssignmentsSection";
+export { default as AuditSection } from "./AuditSection";
 export { default as BrandingSection } from "./BrandingSection";
 export { default as ControlPanelAccessCard } from "./ControlPanelAccessCard";
+export { default as DominiosManager } from "./DominiosManager";
+export { default as DominiosSection } from "./DominiosSection";
 export { default as PermissionsSection } from "./PermissionsSection";
+export { default as ProgramasManager } from "./ProgramasManager";
 export { default as ProgramasSection } from "./ProgramasSection";
 export { default as RolesSection } from "./RolesSection";
+export { default as SedesManager } from "./SedesManager";
 export { default as SedesSection } from "./SedesSection";

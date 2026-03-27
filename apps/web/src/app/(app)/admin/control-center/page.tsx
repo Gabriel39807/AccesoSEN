@@ -3,12 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/lib/api";
+import Modal from "@/components/ui/Modal";
 import {
+  AssignmentsSection,
+  AuditSection,
   BrandingSection,
   ControlPanelAccessCard,
+  DominiosManager,
+  DominiosSection,
   PermissionsSection,
+  ProgramasManager,
   ProgramasSection,
   RolesSection,
+  SedesManager,
   SedesSection,
 } from "@/components/admin/control-center";
 import {
@@ -160,6 +167,10 @@ function formatDate(value?: string | null): string {
   }).format(date);
 }
 
+function hasActiveControlPanelSession(state?: ControlPanelSessionState | null) {
+  return Boolean(state?.active && state?.session?.id);
+}
+
 export default function SuperadminControlCenterPage() {
   const { me, loadingMe } = useMe();
   const [activeSection, setActiveSection] = useState<SectionKey>("branding");
@@ -190,6 +201,9 @@ export default function SuperadminControlCenterPage() {
   const [programFormId, setProgramFormId] = useState<number | null>(null);
   const [programFormName, setProgramFormName] = useState("");
   const [programFormActive, setProgramFormActive] = useState(true);
+  const [sedeModalOpen, setSedeModalOpen] = useState(false);
+  const [programModalOpen, setProgramModalOpen] = useState(false);
+  const [domainModalOpen, setDomainModalOpen] = useState(false);
 
   const [roleCode, setRoleCode] = useState("");
   const [roleName, setRoleName] = useState("");
@@ -241,8 +255,8 @@ export default function SuperadminControlCenterPage() {
     });
   }
 
-  function controlPanelHeaders(reason?: string) {
-    return buildControlPanelHeaders(controlPanelSession.session?.id, reason ?? actionReason);
+  function controlPanelHeaders(reason?: string, sessionOverride?: ControlPanelSessionState | null) {
+    return buildControlPanelHeaders(sessionOverride?.session?.id ?? controlPanelSession.session?.id, reason ?? actionReason);
   }
 
   function ensureReason(reason?: string): boolean {
@@ -271,28 +285,28 @@ export default function SuperadminControlCenterPage() {
     setSedes(toRows(response.data));
   }
 
-  async function loadRoles() {
+  async function loadRoles(sessionOverride?: ControlPanelSessionState | null) {
     const response = await api.get<RoleRow[] | Paginated<RoleRow>>("/api/roles/", {
-      headers: controlPanelHeaders(),
+      headers: controlPanelHeaders(undefined, sessionOverride),
     });
     setRoles(toRows(response.data));
   }
 
-  async function loadPermissions() {
+  async function loadPermissions(sessionOverride?: ControlPanelSessionState | null) {
     const response = await api.get<PermissionRow[] | Paginated<PermissionRow>>("/api/permisos/", {
-      headers: controlPanelHeaders(),
+      headers: controlPanelHeaders(undefined, sessionOverride),
     });
     setPermissions(toRows(response.data));
   }
 
-  async function loadAssignments() {
+  async function loadAssignments(sessionOverride?: ControlPanelSessionState | null) {
     const response = await api.get<AssignmentRow[] | Paginated<AssignmentRow>>("/api/asignaciones/", {
-      headers: controlPanelHeaders(),
+      headers: controlPanelHeaders(undefined, sessionOverride),
     });
     setAssignments(toRows(response.data));
   }
 
-  async function loadDomains() {
+  async function loadDomains(sessionOverride?: ControlPanelSessionState | null) {
     const params: Record<string, string> = {};
     if (domainFilter.trim()) params.domain = domainFilter.trim();
     if (domainRoleFilter) params.role = domainRoleFilter;
@@ -302,36 +316,36 @@ export default function SuperadminControlCenterPage() {
 
     const response = await api.get<DomainRuleRow[] | Paginated<DomainRuleRow>>("/api/dominios-email/", {
       params,
-      headers: controlPanelHeaders(),
+      headers: controlPanelHeaders(undefined, sessionOverride),
     });
     setDomains(toRows(response.data));
   }
 
-  async function loadPrograms() {
+  async function loadPrograms(sessionOverride?: ControlPanelSessionState | null) {
     const response = await api.get<ProgramRow[] | Paginated<ProgramRow>>("/api/programas-formacion/", {
       params: { include_inactive: "true" },
-      headers: controlPanelHeaders(),
+      headers: controlPanelHeaders(undefined, sessionOverride),
     });
     setProgramas(toRows(response.data));
   }
 
-  async function loadAudit() {
+  async function loadAudit(sessionOverride?: ControlPanelSessionState | null) {
     const response = await api.get<AuditResponse>("/api/auditoria/eventos/", {
-      headers: controlPanelHeaders(),
+      headers: controlPanelHeaders(undefined, sessionOverride),
     });
     setAuditRows(response.data?.results ?? []);
   }
 
-  async function loadBranding() {
+  async function loadBranding(sessionOverride?: ControlPanelSessionState | null) {
     const [presetsResponse, configResponse, quotasResponse] = await Promise.all([
       api.get<{ results: BrandingPresetRow[] }>("/api/control-panel/branding/presets/", {
-        headers: controlPanelHeaders(),
+        headers: controlPanelHeaders(undefined, sessionOverride),
       }),
       api.get<{ configuracion: BrandingConfigRow }>("/api/control-panel/branding/config/", {
-        headers: controlPanelHeaders(),
+        headers: controlPanelHeaders(undefined, sessionOverride),
       }),
       api.get<{ results: QuotaRow[] }>("/api/control-panel/quotas/", {
-        headers: controlPanelHeaders(),
+        headers: controlPanelHeaders(undefined, sessionOverride),
       }),
     ]);
     setBrandingPresets(presetsResponse.data.results ?? []);
@@ -343,19 +357,29 @@ export default function SuperadminControlCenterPage() {
     const response = await api.get<ControlPanelSessionState>("/api/control-panel/session/status/", {
       headers: controlPanelHeaders(),
     });
-    setControlPanelSession({
+    const nextState = {
       active: Boolean(response.data?.active),
       session: response.data?.session ?? null,
-    });
+    };
+    setControlPanelSession(nextState);
+    return nextState;
   }
 
-  async function loadControlCenter() {
+  async function loadControlCenter(sessionOverride?: ControlPanelSessionState | null) {
     setLoading(true);
     clearErrors();
     try {
       await loadSedes();
-      if (controlPanelSession.active && controlPanelSession.session?.id) {
-        await Promise.all([loadBranding(), loadRoles(), loadPermissions(), loadAssignments(), loadDomains(), loadPrograms(), loadAudit()]);
+      if (hasActiveControlPanelSession(sessionOverride ?? controlPanelSession)) {
+        await Promise.all([
+          loadBranding(sessionOverride),
+          loadRoles(sessionOverride),
+          loadPermissions(sessionOverride),
+          loadAssignments(sessionOverride),
+          loadDomains(sessionOverride),
+          loadPrograms(sessionOverride),
+          loadAudit(sessionOverride),
+        ]);
       }
     } catch (error) {
       setApiErrors(error);
@@ -367,23 +391,23 @@ export default function SuperadminControlCenterPage() {
   useEffect(() => {
     if (loadingMe) return;
     if (me?.rol !== "superadmin") return;
+    let mounted = true;
     loadControlPanelSessionStatus()
-      .catch(() => {
-        setControlPanelSession({ active: false, session: null });
+      .then((sessionState) => {
+        if (!mounted) return;
+        return loadControlCenter(sessionState);
       })
-      .finally(() => {
-        loadControlCenter();
-      });
+      .catch(() => {
+        if (!mounted) return;
+        setControlPanelSession({ active: false, session: null });
+        return loadControlCenter({ active: false, session: null });
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMe, me?.rol]);
-
-  useEffect(() => {
-    if (loadingMe) return;
-    if (me?.rol !== "superadmin") return;
-    if (!controlPanelSession.active) return;
-    loadControlCenter();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [controlPanelSession.active, controlPanelSession.session?.id]);
 
   useEffect(() => {
     if (loadingMe) return;
@@ -426,12 +450,13 @@ export default function SuperadminControlCenterPage() {
           password: reauthPassword,
         },
       );
-      setControlPanelSession({
+      const nextSession = {
         active: Boolean(verifyResponse.data?.active),
         session: verifyResponse.data?.session ?? null,
-      });
+      };
+      setControlPanelSession(nextSession);
       setReauthPassword("");
-      await loadControlCenter();
+      await loadControlCenter(nextSession);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -464,6 +489,12 @@ export default function SuperadminControlCenterPage() {
       setAssignments([]);
       setDomains([]);
       setProgramas([]);
+      setSedeModalOpen(false);
+      setProgramModalOpen(false);
+      setDomainModalOpen(false);
+      resetProgramForm();
+      resetDomainForm();
+      setEditingSedeId(null);
       setAuditRows([]);
     } catch (error) {
       setApiErrors(error);
@@ -512,6 +543,7 @@ export default function SuperadminControlCenterPage() {
       setCreateSedeName("");
       await loadSedes();
       notifySedesUpdated();
+      setSedeModalOpen(true);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -525,6 +557,7 @@ export default function SuperadminControlCenterPage() {
     setEditingSedeCode(row.code);
     setEditingSedeName(row.name);
     setEditingSedeActive(row.is_active);
+    setSedeModalOpen(true);
   }
 
   async function submitEditSede() {
@@ -541,6 +574,7 @@ export default function SuperadminControlCenterPage() {
       setEditingSedeId(null);
       await loadSedes();
       notifySedesUpdated();
+      setSedeModalOpen(true);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -559,6 +593,7 @@ export default function SuperadminControlCenterPage() {
       }
       await loadSedes();
       notifySedesUpdated();
+      setSedeModalOpen(true);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -685,6 +720,7 @@ export default function SuperadminControlCenterPage() {
     setDomainFormRole(row.role || "");
     setDomainFormSede(row.sede || "");
     setDomainFormActive(row.is_active);
+    setDomainModalOpen(true);
   }
 
   function buildDomainPayload() {
@@ -717,6 +753,7 @@ export default function SuperadminControlCenterPage() {
       }
       resetDomainForm();
       await loadDomains();
+      setDomainModalOpen(true);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -735,6 +772,7 @@ export default function SuperadminControlCenterPage() {
         { headers: controlPanelHeaders() },
       );
       await loadDomains();
+      setDomainModalOpen(true);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -752,6 +790,7 @@ export default function SuperadminControlCenterPage() {
         resetDomainForm();
       }
       await loadDomains();
+      setDomainModalOpen(true);
     } catch (error) {
       setApiErrors(error);
     } finally {
@@ -765,11 +804,45 @@ export default function SuperadminControlCenterPage() {
     setProgramFormActive(true);
   }
 
+  function openSedeModal() {
+    clearErrors();
+    setSedeModalOpen(true);
+  }
+
+  function closeSedeModal() {
+    if (busy) return;
+    setSedeModalOpen(false);
+    setEditingSedeId(null);
+  }
+
+  function openDomainModal() {
+    clearErrors();
+    setDomainModalOpen(true);
+  }
+
+  function closeDomainModal() {
+    if (busy) return;
+    setDomainModalOpen(false);
+    resetDomainForm();
+  }
+
+  function openProgramModal() {
+    clearErrors();
+    setProgramModalOpen(true);
+  }
+
+  function closeProgramModal() {
+    if (busy) return;
+    setProgramModalOpen(false);
+    resetProgramForm();
+  }
+
   function openEditProgram(row: ProgramRow) {
     clearErrors();
     setProgramFormId(row.id);
     setProgramFormName(row.name);
     setProgramFormActive(row.is_active);
+    setProgramModalOpen(true);
   }
 
   async function submitProgram() {
@@ -897,35 +970,17 @@ export default function SuperadminControlCenterPage() {
                     Sesión reforzada requerida
                   </span>
                   <div>
-                    <h2 className="text-lg font-semibold text-text">Confirma tu clave para continuar</h2>
+                    <h2 className="text-lg font-semibold text-text">Activa el acceso protegido desde la tarjeta superior</h2>
                     <p className="mt-1 max-w-2xl text-sm text-text/75">
-                      La vista de {secureSessionRequiredLabels[activeSection]} queda protegida para la demo. El flujo OTP del panel ya se retiró de esta interfaz y ahora pedimos volver a ingresar la clave del usuario autenticado para abrir la sesión reforzada.
+                      La vista de {secureSessionRequiredLabels[activeSection]} se carga apenas confirmas tu clave en la tarjeta superior. Dejamos un solo punto de reautenticación para evitar duplicidad y hacer el flujo más claro.
                     </p>
                   </div>
                 </div>
-                <div className="w-full max-w-sm space-y-3">
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={reauthPassword}
-                    onChange={(event) => updateReauthPassword(event.target.value)}
-                    placeholder="Vuelve a poner tu clave"
-                    className="w-full rounded-xl border border-surface-border bg-white px-3 py-2 text-sm"
-                  />
-                  {fieldError("password") ? <p className="text-xs text-rose-600">{fieldError("password")}</p> : null}
-                  <button
-                    type="button"
-                    onClick={openControlPanelWithPassword}
-                    disabled={busy || !reauthPassword.trim()}
-                    className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                  >
-                    {busy ? "Verificando..." : "Abrir sesión reforzada"}
-                  </button>
+                <div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-sm text-text/75 shadow-sm">
+                  <p className="font-semibold text-text">Flujo</p>
+                  <p className="mt-1">1. Reingresa tu clave. 2. Se abre la sesión reforzada. 3. Esta sección carga sus opciones protegidas.</p>
                 </div>
               </div>
-              <p className="mt-3 text-sm text-text/70">
-                Esta reautenticacion valida la clave del usuario autenticado antes de abrir la sesion reforzada del panel. No reactiva OTP ni depende de passkeys para la demo.
-              </p>
             </div>
           ) : null}
 
@@ -945,25 +1000,9 @@ export default function SuperadminControlCenterPage() {
             <SedesSection
               busy={busy}
               sedes={sedes}
-              createSedeCode={createSedeCode}
-              createSedeName={createSedeName}
-              editingSedeId={editingSedeId}
-              editingSedeCode={editingSedeCode}
-              editingSedeName={editingSedeName}
-              editingSedeActive={editingSedeActive}
-              fieldError={fieldError}
               formatDate={formatDate}
-              setCreateSedeCode={setCreateSedeCode}
-              setCreateSedeName={setCreateSedeName}
-              setEditingSedeId={setEditingSedeId}
-              setEditingSedeCode={setEditingSedeCode}
-              setEditingSedeName={setEditingSedeName}
-              setEditingSedeActive={setEditingSedeActive}
-              clearFieldErrors={(field) => setFieldErrors((prev) => ({ ...prev, [field]: [] }))}
-              submitCreateSede={submitCreateSede}
-              submitEditSede={submitEditSede}
+              openSedeModal={openSedeModal}
               openEditSede={openEditSede}
-              deactivateSede={deactivateSede}
             />
           ) : null}
 
@@ -971,18 +1010,9 @@ export default function SuperadminControlCenterPage() {
             <ProgramasSection
               busy={busy}
               programas={programas}
-              programFormId={programFormId}
-              programFormName={programFormName}
-              programFormActive={programFormActive}
-              fieldError={fieldError}
               formatDate={formatDate}
-              setProgramFormName={setProgramFormName}
-              setProgramFormActive={setProgramFormActive}
-              resetProgramForm={resetProgramForm}
+              openProgramModal={openProgramModal}
               openEditProgram={openEditProgram}
-              submitProgram={submitProgram}
-              toggleProgram={toggleProgram}
-              deleteProgram={deleteProgram}
             />
           ) : null}
 
@@ -992,6 +1022,7 @@ export default function SuperadminControlCenterPage() {
               roles={roles}
               roleCode={roleCode}
               roleName={roleName}
+              formatDate={formatDate}
               setRoleCode={setRoleCode}
               setRoleName={setRoleName}
               submitCreateRole={submitCreateRole}
@@ -1005,6 +1036,7 @@ export default function SuperadminControlCenterPage() {
               permissionCode={permissionCode}
               permissionName={permissionName}
               permissionDescription={permissionDescription}
+              formatDate={formatDate}
               setPermissionCode={setPermissionCode}
               setPermissionName={setPermissionName}
               setPermissionDescription={setPermissionDescription}
@@ -1013,356 +1045,148 @@ export default function SuperadminControlCenterPage() {
           ) : null}
 
           {controlPanelSession.active && activeSection === "asignaciones" ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={assignmentRole}
-                  onChange={(event) => setAssignmentRole(event.target.value)}
-                >
-                  <option value="">Selecciona rol</option>
-                  {roles.map((row) => (
-                    <option key={row.id} value={row.code}>
-                      {row.name} ({row.code})
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={assignmentPermission}
-                  onChange={(event) => setAssignmentPermission(event.target.value)}
-                >
-                  <option value="">Selecciona permiso</option>
-                  {permissions.map((row) => (
-                    <option key={row.id} value={row.code}>
-                      {row.name} ({row.code})
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={assignmentScope}
-                  onChange={(event) => setAssignmentScope(event.target.value as AssignmentRow["scope"])}
-                >
-                  <option value="GLOBAL">GLOBAL</option>
-                  <option value="SEDE">SEDE</option>
-                  <option value="OWN">OWN</option>
-                </select>
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={submitCreateAssignment}
-                  disabled={busy}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                >
-                  {busy ? "Guardando..." : "Asignar permiso"}
-                </button>
-              </div>
-              <div className="overflow-x-auto rounded-2xl border border-surface-border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-primary/10 text-primary">
-                    <tr className="text-left">
-                      <th className="px-3 py-2">Rol</th>
-                      <th className="px-3 py-2">Permiso</th>
-                      <th className="px-3 py-2">Alcance</th>
-                      <th className="px-3 py-2 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assignments.map((row) => (
-                      <tr key={row.id} className="border-t border-surface-border">
-                        <td className="px-3 py-2">{row.role_name || row.role}</td>
-                        <td className="px-3 py-2">{row.permission_name || row.permission}</td>
-                        <td className="px-3 py-2">{row.scope}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button
-                            type="button"
-                            onClick={() => removeAssignment(row)}
-                            className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                          >
-                            Eliminar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <AssignmentsSection
+              busy={busy}
+              assignments={assignments}
+              roles={roles}
+              permissions={permissions}
+              assignmentRole={assignmentRole}
+              assignmentPermission={assignmentPermission}
+              assignmentScope={assignmentScope}
+              setAssignmentRole={setAssignmentRole}
+              setAssignmentPermission={setAssignmentPermission}
+              setAssignmentScope={setAssignmentScope}
+              submitCreateAssignment={submitCreateAssignment}
+              removeAssignment={removeAssignment}
+            />
           ) : null}
 
           {controlPanelSession.active && activeSection === "dominios" ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
-                Las reglas de dominio activas se aplican en todo el producto.
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <input
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  placeholder="Buscar dominio"
-                  value={domainFilter}
-                  onChange={(event) => setDomainFilter(event.target.value)}
-                />
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={domainScopeFilter}
-                  onChange={(event) => setDomainScopeFilter(event.target.value as "" | DomainScope)}
-                >
-                  <option value="">Todos los alcances</option>
-                  <option value="GLOBAL">GLOBAL</option>
-                  <option value="SEDE">SEDE</option>
-                  <option value="ROLE">ROLE</option>
-                  <option value="ROLE_SEDE">ROLE_SEDE</option>
-                </select>
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={domainRoleFilter}
-                  onChange={(event) => setDomainRoleFilter(event.target.value)}
-                >
-                  <option value="">Todos los roles</option>
-                  {roles.map((row) => (
-                    <option key={row.id} value={row.code}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={domainSedeFilter}
-                  onChange={(event) => setDomainSedeFilter(event.target.value)}
-                >
-                  <option value="">Todas las sedes</option>
-                  {sedes.map((row) => (
-                    <option key={row.id} value={row.code}>
-                      {row.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                  value={domainStatusFilter}
-                  onChange={(event) => setDomainStatusFilter(event.target.value as "" | "true" | "false")}
-                >
-                  <option value="">Todos los estados</option>
-                  <option value="true">Activos</option>
-                  <option value="false">Inactivos</option>
-                </select>
-              </div>
-
-              <div className="rounded-2xl border border-surface-border bg-surface p-4">
-                <h3 className="text-sm font-semibold text-text">
-                  {domainFormId ? `Editar regla #${domainFormId}` : "Nueva regla de dominio"}
-                </h3>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <div className="space-y-1">
-                    <label className="text-xs text-text/70">Dominio</label>
-                    <input
-                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                      placeholder="empresa.com"
-                      value={domainFormValue}
-                      onChange={(event) => setDomainFormValue(event.target.value)}
-                    />
-                    {fieldError("domain") ? <p className="text-xs text-rose-600">{fieldError("domain")}</p> : null}
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-text/70">Alcance</label>
-                    <select
-                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm"
-                      value={domainFormScope}
-                      onChange={(event) => applyDomainScopeDefaults(event.target.value as DomainScope)}
-                    >
-                      <option value="GLOBAL">GLOBAL</option>
-                      <option value="SEDE">SEDE</option>
-                      <option value="ROLE">ROLE</option>
-                      <option value="ROLE_SEDE">ROLE_SEDE</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-text/70">Rol</label>
-                    <select
-                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm disabled:opacity-60"
-                      value={domainFormRole}
-                      onChange={(event) => setDomainFormRole(event.target.value)}
-                      disabled={domainFormScope === "GLOBAL" || domainFormScope === "SEDE"}
-                    >
-                      <option value="">Sin rol</option>
-                      {roles.map((row) => (
-                        <option key={row.id} value={row.code}>
-                          {row.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs text-text/70">Sede</label>
-                    <select
-                      className="w-full rounded-xl border border-surface-border bg-surface px-3 py-2 text-sm disabled:opacity-60"
-                      value={domainFormSede}
-                      onChange={(event) => setDomainFormSede(event.target.value)}
-                      disabled={domainFormScope === "GLOBAL" || domainFormScope === "ROLE"}
-                    >
-                      <option value="">Sin sede</option>
-                      {sedes.map((row) => (
-                        <option key={row.id} value={row.code}>
-                          {row.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <label className="mt-3 inline-flex items-center gap-2 text-sm text-text">
-                  <input
-                    type="checkbox"
-                    checked={domainFormActive}
-                    onChange={(event) => setDomainFormActive(event.target.checked)}
-                  />
-                  Regla activa
-                </label>
-
-                <div className="mt-3 flex justify-end gap-2">
-                  {domainFormId ? (
-                    <button
-                      type="button"
-                      onClick={resetDomainForm}
-                      className="rounded-xl border border-surface-border px-3 py-2 text-sm hover:bg-primary/10"
-                    >
-                      Cancelar edición
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={submitDomainRule}
-                    disabled={busy}
-                    className="rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-60"
-                  >
-                    {busy ? "Guardando..." : domainFormId ? "Guardar regla" : "Crear regla"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-surface-border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-primary/10 text-primary">
-                    <tr className="text-left">
-                      <th className="px-3 py-2">Dominio</th>
-                      <th className="px-3 py-2">Alcance</th>
-                      <th className="px-3 py-2">Rol</th>
-                      <th className="px-3 py-2">Sede</th>
-                      <th className="px-3 py-2">Estado</th>
-                      <th className="px-3 py-2">Actualizada</th>
-                      <th className="px-3 py-2 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {domains.length === 0 ? (
-                      <tr className="border-t border-surface-border">
-                        <td className="px-3 py-4 text-text/70" colSpan={7}>
-                          No hay reglas de dominio para los filtros seleccionados.
-                        </td>
-                      </tr>
-                    ) : (
-                      domains.map((row) => (
-                        <tr key={row.id} className="border-t border-surface-border">
-                          <td className="px-3 py-2 font-mono">{row.domain}</td>
-                          <td className="px-3 py-2">{row.scope}</td>
-                          <td className="px-3 py-2">{row.role_name || row.role || "-"}</td>
-                          <td className="px-3 py-2">{row.sede_name || row.sede || "-"}</td>
-                          <td className="px-3 py-2">
-                            {row.is_active ? (
-                              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">Activa</span>
-                            ) : (
-                              <span className="rounded-full bg-zinc-200 px-2 py-1 text-xs font-semibold text-zinc-700">Inactiva</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">{formatDate(row.updated_at || row.created_at)}</td>
-                          <td className="px-3 py-2 text-right">
-                            <div className="inline-flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => openEditDomain(row)}
-                                className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold hover:bg-primary/10"
-                              >
-                                Editar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => toggleDomainRule(row)}
-                                className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold hover:bg-primary/10"
-                              >
-                                {row.is_active ? "Desactivar" : "Activar"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => deleteDomainRule(row)}
-                                className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
-                              >
-                                Eliminar
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <DominiosSection
+              busy={busy}
+              domains={domains}
+              formatDate={formatDate}
+              openDomainModal={openDomainModal}
+              openEditDomain={openEditDomain}
+            />
           ) : null}
 
           {controlPanelSession.active && activeSection === "auditoria" ? (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={loadAudit}
-                className="rounded-xl border border-surface-border px-3 py-2 text-sm font-semibold hover:bg-primary/10"
-              >
-                Recargar auditoría
-              </button>
-
-              <div className="overflow-x-auto rounded-2xl border border-surface-border">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-primary/10 text-primary">
-                    <tr className="text-left">
-                      <th className="px-3 py-2">Fecha</th>
-                      <th className="px-3 py-2">Tipo</th>
-                      <th className="px-3 py-2">Actor</th>
-                      <th className="px-3 py-2">Sede</th>
-                      <th className="px-3 py-2">Detalle</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditRows.length === 0 ? (
-                      <tr className="border-t border-surface-border">
-                        <td className="px-3 py-4 text-text/70" colSpan={5}>
-                          No hay eventos recientes.
-                        </td>
-                      </tr>
-                    ) : (
-                      auditRows.map((row) => (
-                        <tr key={row.id} className="border-t border-surface-border">
-                          <td className="px-3 py-2">{formatDate(row.timestamp)}</td>
-                          <td className="px-3 py-2">{row.type}</td>
-                          <td className="px-3 py-2">{row.actor || "-"}</td>
-                          <td className="px-3 py-2">
-                            {row.sede ? sedesByCode.get(row.sede) || row.sede : "-"}
-                          </td>
-                          <td className="px-3 py-2">{row.detail}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <AuditSection
+              busy={busy}
+              auditRows={auditRows}
+              sedesByCode={sedesByCode}
+              formatDate={formatDate}
+              reloadAudit={() => {
+                void loadAudit();
+              }}
+            />
           ) : null}
         </section>
       </div>
+
+      <Modal
+        open={sedeModalOpen}
+        title={editingSedeId ? `Editar sede #${editingSedeId}` : "Gestionar sedes"}
+        onClose={closeSedeModal}
+        closeDisabled={busy}
+        maxWidthClassName="max-w-6xl"
+      >
+        <SedesManager
+          busy={busy}
+          sedes={sedes}
+          createSedeCode={createSedeCode}
+          createSedeName={createSedeName}
+          editingSedeId={editingSedeId}
+          editingSedeCode={editingSedeCode}
+          editingSedeName={editingSedeName}
+          editingSedeActive={editingSedeActive}
+          fieldError={fieldError}
+          formatDate={formatDate}
+          setCreateSedeCode={setCreateSedeCode}
+          setCreateSedeName={setCreateSedeName}
+          setEditingSedeId={setEditingSedeId}
+          setEditingSedeCode={setEditingSedeCode}
+          setEditingSedeName={setEditingSedeName}
+          setEditingSedeActive={setEditingSedeActive}
+          clearFieldErrors={(field: "code" | "name") => setFieldErrors((prev) => ({ ...prev, [field]: [] }))}
+          submitCreateSede={submitCreateSede}
+          submitEditSede={submitEditSede}
+          openEditSede={openEditSede}
+          deactivateSede={deactivateSede}
+          closeSedeModal={closeSedeModal}
+        />
+      </Modal>
+
+      <Modal
+        open={programModalOpen}
+        title={programFormId ? `Editar programa #${programFormId}` : "Gestionar programas"}
+        onClose={closeProgramModal}
+        closeDisabled={busy}
+        maxWidthClassName="max-w-6xl"
+      >
+        <ProgramasManager
+          busy={busy}
+          programas={programas}
+          programFormId={programFormId}
+          programFormName={programFormName}
+          programFormActive={programFormActive}
+          fieldError={fieldError}
+          formatDate={formatDate}
+          setProgramFormName={setProgramFormName}
+          setProgramFormActive={setProgramFormActive}
+          resetProgramForm={resetProgramForm}
+          closeProgramModal={closeProgramModal}
+          openEditProgram={openEditProgram}
+          submitProgram={submitProgram}
+          toggleProgram={toggleProgram}
+          deleteProgram={deleteProgram}
+        />
+      </Modal>
+
+      <Modal
+        open={domainModalOpen}
+        title={domainFormId ? `Editar regla de dominio #${domainFormId}` : "Gestionar dominios"}
+        onClose={closeDomainModal}
+        closeDisabled={busy}
+        maxWidthClassName="max-w-7xl"
+      >
+        <DominiosManager
+          busy={busy}
+          domains={domains}
+          roles={roles}
+          sedes={sedes}
+          domainFilter={domainFilter}
+          domainRoleFilter={domainRoleFilter}
+          domainSedeFilter={domainSedeFilter}
+          domainStatusFilter={domainStatusFilter}
+          domainScopeFilter={domainScopeFilter}
+          domainFormId={domainFormId}
+          domainFormValue={domainFormValue}
+          domainFormScope={domainFormScope}
+          domainFormRole={domainFormRole}
+          domainFormSede={domainFormSede}
+          domainFormActive={domainFormActive}
+          fieldError={fieldError}
+          formatDate={formatDate}
+          setDomainFilter={setDomainFilter}
+          setDomainRoleFilter={setDomainRoleFilter}
+          setDomainSedeFilter={setDomainSedeFilter}
+          setDomainStatusFilter={setDomainStatusFilter}
+          setDomainScopeFilter={setDomainScopeFilter}
+          setDomainFormValue={setDomainFormValue}
+          setDomainFormRole={setDomainFormRole}
+          setDomainFormSede={setDomainFormSede}
+          setDomainFormActive={setDomainFormActive}
+          applyDomainScopeDefaults={applyDomainScopeDefaults}
+          resetDomainForm={resetDomainForm}
+          submitDomainRule={submitDomainRule}
+          openEditDomain={openEditDomain}
+          toggleDomainRule={toggleDomainRule}
+          deleteDomainRule={deleteDomainRule}
+          closeDomainModal={closeDomainModal}
+        />
+      </Modal>
     </div>
   );
 }
