@@ -1,4 +1,4 @@
-# 🛡️ S.A.D.I — Sistema de Control de Acceso y Activos "Sistema de Acceso Digital Institucional"
+# 🛡️ SADI —  "Sistema de Acceso Digital Institucional"
 
 <p align="center">
   <img src="https://img.shields.io/badge/Estado-En%20Desarrollo-green" />
